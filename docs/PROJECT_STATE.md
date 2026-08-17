@@ -3,6 +3,40 @@
 > Archivo de checkpoint legible por humanos e IAs.
 > Actualizar este archivo en cada hito relevante del proyecto.
 > Última actualización: 2026-08-17 | Versión app: **2.1.1**
+> **Entorno del usuario (obligatorio tener en cuenta):** Windows 10/11 + **PowerShell 7** + HeidiSQL/MariaDB.
+
+---
+
+## 0. Entorno de desarrollo y ejecución (OBLIGATORIO)
+
+| Elemento | Valor |
+|----------|--------|
+| SO | **Windows** (10 u 11) |
+| Shell | **PowerShell 7** (`pwsh`) — no asumir bash/Linux |
+| Python | 3.10+ (recomendado instalado con `py -3`) |
+| Base de datos | MariaDB + **HeidiSQL** |
+| Repo | https://github.com/ArmandoHoyosfg/fajos_central.git |
+
+### Implicaciones para código y scripts
+- Rutas: preferir `pathlib.Path`; no hardcodear `/home/...`.
+- Activar venv: `.\.venv\Scripts\Activate.ps1`
+- Si falla la política de ejecución: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+- Arranque recomendado: `pwsh -File .\start.ps1` o `python launcher.py`
+- Setup primera vez: `pwsh -File .\setup_windows.ps1`
+- Matar procesos del servidor en Windows: `taskkill` (ya usado en `launcher.py`)
+- No documentar solo comandos Linux; siempre incluir equivalente PowerShell 7.
+
+### Comandos habituales (PowerShell 7)
+
+```powershell
+cd ruta\a\fajos_central
+pwsh -File .\setup_windows.ps1   # primera vez
+pwsh -File .\start.ps1           # launcher GUI
+python launcher.py
+python run.py
+pytest
+git push -u origin main --tags
+```
 
 ---
 
@@ -184,7 +218,7 @@ Tags git: `v2.0.0`, `v2.1.0`, `v2.1.1`
 1. Leer este archivo completo antes de cambiar esquema o UI.
 2. Respetar la regla **nombre+ubic = persona**; no fusionar por nombre solo.
 3. El papel diario es **SUMINISTRO** (gramos del día + folio); la nómina formal es **semanal**.
-4. Entorno del usuario: **Windows + PowerShell 7 + HeidiSQL/MariaDB**.
+4. Entorno del usuario: **Windows + PowerShell 7 + HeidiSQL/MariaDB** (ver sección 0). No asumir bash, Linux ni macOS como entorno principal.
 5. Repo remoto: `https://github.com/ArmandoHoyosfg/fajos_central.git`
 6. Tras cambios relevantes: actualizar `VERSION`, `CHANGELOG.md` y **esta sección 6–8**.
 

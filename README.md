@@ -1,6 +1,7 @@
 # Fajos Central — Sistema de Nóminas
 
 **Versión:** 2.1.1  
+**Entorno principal:** Windows + PowerShell 7 + MariaDB/HeidiSQL  
 
 Sistema de nóminas del **Taller de Fajos Central**.
 
