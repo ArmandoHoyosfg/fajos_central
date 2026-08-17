@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 2.0.0  
+**Versión:** 2.1.0  
 
 Sistema de nóminas del **Taller de Fajos Central**.
 
@@ -23,7 +23,8 @@ fajos_central/
 ├── README.md
 ├── requirements.txt
 ├── pytest.ini
-├── run.py                  # Arranque del servidor web
+├── launcher.py             # Launcher GUI (iniciar/detener servidor)
+├── run.py                  # Arranque del servidor web (CLI)
 ├── .env.example
 ├── app/                    # Aplicación principal (FastAPI + web)
 │   ├── core/               # Config, excepciones, logging
