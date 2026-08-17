@@ -132,7 +132,7 @@ class LauncherApp(tk.Tk):
 
         self.lbl_hint = ttk.Label(
             main,
-            text="Tip: con el servidor activo, otros equipos en la red\npueden entrar a http://TU_IP:{} ".format(PORT),
+            text=("Tip: con el servidor activo, otros PCs en la red pueden entrar a\nhttp://TU_IP:{}  |  Windows: pwsh -File .\\start.ps1".format(PORT)),
             foreground="#6c7086",
             font=("Segoe UI", 8),
             justify=tk.LEFT,
@@ -185,14 +185,20 @@ class LauncherApp(tk.Tk):
             if sys.platform == "win32":
                 creationflags = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
 
+            log_path = ROOT / "logs" / "server_launcher.log"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_f = open(log_path, "a", encoding="utf-8")
+            log_f.write(f"\n--- start {time.strftime("%Y-%m-%d %H:%M:%S")} ---\n")
+            log_f.flush()
             self._server_proc = subprocess.Popen(
                 cmd,
                 cwd=str(ROOT),
                 env=env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
                 creationflags=creationflags,
             )
+            self._server_log = log_f
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo iniciar el servidor:\n{e}")
             self._server_proc = None
@@ -242,6 +248,12 @@ class LauncherApp(tk.Tk):
         except Exception as e:
             messagebox.showwarning("Aviso", f"Al detener el servidor:\n{e}")
         finally:
+            if getattr(self, "_server_log", None):
+                try:
+                    self._server_log.close()
+                except Exception:
+                    pass
+                self._server_log = None
             self._server_proc = None
             self._update_status()
 

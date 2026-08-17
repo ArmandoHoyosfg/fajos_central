@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.1.1] — 2026-08-17
+
+### Añadido
+- Scripts PowerShell 7: `setup_windows.ps1`, `start.ps1`
+- Log del servidor desde el launcher en `logs/server_launcher.log` (útil en Windows)
+
 ## [2.1.0] — 2026-08-17
 
 ### Añadido

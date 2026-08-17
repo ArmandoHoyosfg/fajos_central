@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 2.1.0  
+**Versión:** 2.1.1  
 
 Sistema de nóminas del **Taller de Fajos Central**.
 
@@ -45,6 +45,25 @@ fajos_central/
 
 - Python 3.10+
 - MariaDB con la base `fajos_central`
+
+
+## Windows (PowerShell 7)
+
+```powershell
+# Primera vez
+pwsh -File .\setup_windows.ps1
+
+# Si Activate.ps1 está bloqueado:
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+# Abrir launcher
+pwsh -File .\start.ps1
+# o
+python launcher.py
+```
+
+MariaDB/HeidiSQL debe tener la base `fajos_central` creada (script en `db\schema\001_schema_inicial.sql`).
+Edita `.env` con usuario y contraseña.
 
 ## Instalación
 
