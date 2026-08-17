@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Producción — Fajos Central{% endblock %}
+{% block content %}
+<h1>Producción semanal (Plata)</h1>
+
+<div class="toolbar">
+  <form class="inline" method="get" action="/produccion">
+    <label class="muted">Semana</label>
+    <select name="semana_id" onchange="this.form.submit()">
+      {% for s in semanas %}
+      <option value="{{ s.id }}" {% if s.id == semana_id %}selected{% endif %}>
+        {{ s.codigo }} ({{ s.fecha_inicio }} → {{ s.fecha_fin }})
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if semana_id %}
+  <span class="muted">
+    Líneas: {{ totales.lineas or 0 }} |
+    Gramos: {{ totales.total_gramos or 0 }} |
+    Efectivo: ${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}
+  </span>
+  <a class="btn" href="/api/export/produccion/{{ semana_id }}?fmt=xlsx">Excel</a>
+  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
+  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
+  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=json">JSON</a>
+  {% endif %}
+</div>
+
+{% if semana_id %}
+<table>
+  <thead>
+    <tr>
+      <th>Nombre</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>$/Gr</th>
+      <th>Sáb</th><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th>
+      <th>Total Gr</th><th>Efectivo</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in lineas %}
+    <tr>
+      <td>{{ r.nombre }}</td>
+      <td>{{ r.ubic }}</td>
+      <td>{{ r.folio or '—' }}</td>
+      <td>{{ r.modelo or '—' }}</td>
+      <td>{{ r.material or '—' }}</td>
+      <td>{{ r.tarifa_gr or '—' }}</td>
+      <td>{{ r.gm_sab or '' }}</td>
+      <td>{{ r.gm_dom or '' }}</td>
+      <td>{{ r.gm_lun or '' }}</td>
+      <td>{{ r.gm_mar or '' }}</td>
+      <td>{{ r.gm_mie or '' }}</td>
+      <td>{{ r.gm_jue or '' }}</td>
+      <td>{{ r.gm_vie or '' }}</td>
+      <td>{{ r.total_gramos or 0 }}</td>
+      <td>${{ '%.2f'|format((r.efectivo or 0)|float) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="15" class="muted">Sin líneas en esta semana. Agrega producción desde la API o importa datos.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Crea una semana primero (API o script) para ver producción.</p>
+{% endif %}
+{% endblock %}

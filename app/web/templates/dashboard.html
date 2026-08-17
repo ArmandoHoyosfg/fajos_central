@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Fajos Central{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<p class="muted">Resumen general del taller</p>
+
+<div class="grid" style="margin-top:1rem;">
+  <div class="card">
+    <div class="label">Trabajadores activos</div>
+    <div class="value">{{ kpis.trabajadores_activos }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Activos PLT</div>
+    <div class="value">{{ kpis.trabajadores_plt }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Semanas registradas</div>
+    <div class="value">{{ kpis.total_semanas }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Gramos históricos</div>
+    <div class="value">{{ kpis.total_gramos_historico }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Efectivo producción</div>
+    <div class="value money">${{ '%.2f'|format(kpis.total_efectivo_historico|float) }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Nómina total acumulada</div>
+    <div class="value money">${{ '%.2f'|format(kpis.nomina_total_acumulada|float) }}</div>
+  </div>
+</div>
+
+<h2 style="margin-top:2rem;">Últimas semanas</h2>
+{% if semanas %}
+<table>
+  <thead>
+    <tr>
+      <th>Código</th><th>Inicio</th><th>Fin</th>
+      <th>PLT</th><th>PIT</th><th>TLL</th><th>Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in semanas %}
+    <tr>
+      <td><a href="/produccion?semana_id={{ s.id }}">{{ s.codigo }}</a></td>
+      <td>{{ s.fecha_inicio }}</td>
+      <td>{{ s.fecha_fin }}</td>
+      <td>${{ '%.2f'|format(s.nomina_plt|float) }}</td>
+      <td>${{ '%.2f'|format(s.nomina_pit|float) }}</td>
+      <td>${{ '%.2f'|format(s.nomina_tll|float) }}</td>
+      <td><strong>${{ '%.2f'|format(s.total_semana|float) }}</strong></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Aún no hay semanas registradas.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Trabajadores — Fajos Central{% endblock %}
+{% block content %}
+<h1>Trabajadores</h1>
+
+<div class="toolbar">
+  <form class="inline" method="get" action="/trabajadores">
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar nombre o ubic...">
+    <button class="btn" type="submit">Buscar</button>
+  </form>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+  <form class="inline" method="post" action="/api/trabajadores" id="form-add"
+        onsubmit="return submitTrabajador(event)">
+    <div>
+      <label class="muted">Nombre</label><br>
+      <input name="nombre_mostrar" required placeholder="Nombre">
+    </div>
+    <div>
+      <label class="muted">Ubic</label><br>
+      <input name="ubic" type="number" required style="width:90px;">
+    </div>
+    <div>
+      <label class="muted">Tipo</label><br>
+      <select name="tipo">
+        <option>PLT</option><option>PIT</option><option>TLL</option>
+        <option>PLT/PIT</option><option>Mixto</option>
+      </select>
+    </div>
+    <div>
+      <label class="muted">Puesto</label><br>
+      <input name="puesto" placeholder="(TLL)">
+    </div>
+    <button class="btn btn-success" type="submit">Agregar</button>
+  </form>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>ID</th><th>Nombre</th><th>Ubic</th><th>Tipo</th>
+      <th>Puesto</th><th>Activo</th><th>Incorporación</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in trabajadores %}
+    <tr>
+      <td>{{ t.id }}</td>
+      <td>{{ t.nombre_mostrar }}</td>
+      <td>{{ t.ubic }}</td>
+      <td>{{ t.tipo }}</td>
+      <td>{{ t.puesto or '—' }}</td>
+      <td>{{ 'Sí' if t.activo else 'No' }}</td>
+      <td>{{ t.fecha_incorporacion or '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">Sin trabajadores</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+async function submitTrabajador(e) {
+  e.preventDefault();
+  const form = e.target;
+  const fd = new FormData(form);
+  const res = await fetch('/api/trabajadores', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (res.ok && data.ok) {
+    location.reload();
+  } else {
+    alert(data.user_message || data.message || 'Error al agregar');
+  }
+  return false;
+}
+</script>
+{% endblock %}

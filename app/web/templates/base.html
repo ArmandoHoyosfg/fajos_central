@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Fajos Central{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #1e1e2e; --surface: #181825; --panel: #313244;
+      --text: #cdd6f4; --muted: #a6adc8; --accent: #89b4fa;
+      --green: #a6e3a1; --red: #f38ba8; --yellow: #f9e2af;
+      --border: #45475a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    header .brand { font-weight: 700; font-size: 1.15rem; color: var(--accent); }
+    nav { display: flex; gap: 1rem; flex-wrap: wrap; }
+    nav a {
+      color: var(--muted); padding: 0.35rem 0.75rem; border-radius: 6px;
+    }
+    nav a:hover, nav a.active {
+      background: var(--panel); color: var(--text); text-decoration: none;
+    }
+    main { padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+    h1 { margin: 0 0 1rem; font-size: 1.5rem; }
+    .grid {
+      display: grid; gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1rem 1.25rem;
+    }
+    .card .label { color: var(--muted); font-size: 0.85rem; }
+    .card .value { font-size: 1.5rem; font-weight: 700; margin-top: 0.25rem; }
+    .card .value.money { color: var(--green); }
+    table {
+      width: 100%; border-collapse: collapse; background: var(--surface);
+      border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+    }
+    th, td { padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: #11111b; color: var(--muted); font-size: 0.85rem; }
+    tr:hover td { background: var(--panel); }
+    .btn {
+      display: inline-block; background: var(--accent); color: #1e1e2e;
+      border: none; border-radius: 6px; padding: 0.45rem 1rem;
+      font-weight: 600; cursor: pointer; font-size: 0.9rem;
+    }
+    .btn:hover { filter: brightness(1.08); }
+    .btn-secondary { background: var(--panel); color: var(--text); }
+    .btn-danger { background: var(--red); color: #1e1e2e; }
+    .btn-success { background: var(--green); color: #1e1e2e; }
+    .toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+    input, select {
+      background: var(--panel); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.4rem 0.65rem;
+    }
+    form.inline { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: end; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    footer {
+      text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.8rem;
+    }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header>
+    <div class="brand">Fajos Central</div>
+    <nav>
+      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+      <a href="/trabajadores" class="{% if request.url.path.startswith('/trabajadores') %}active{% endif %}">Trabajadores</a>
+      <a href="/produccion" class="{% if request.url.path.startswith('/produccion') %}active{% endif %}">Producción</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>Taller de Fajos Central · Nóminas v2 · Acceso en red local</footer>
+</body>
+</html>
