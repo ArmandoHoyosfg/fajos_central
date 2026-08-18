@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.2.1] — 2026-08-17
+
+### Añadido
+- Launcher como centro de control: web, escritorio, import Excel, docs, SQL
+- `docs/ARCHIVOS_RAIZ.md` — guía de cada archivo de la carpeta principal
+
 ## [2.2.0] — 2026-08-17
 
 ### Añadido
