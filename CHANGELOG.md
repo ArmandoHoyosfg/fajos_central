@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.2.4] — 2026-08-18
+
+### Corregido / Añadido
+- Launcher: sección BD arriba del todo + scroll (botón Configurar conexión visible)
+- Logo Fajos Piteados Central en web y launcher
+
 ## [2.2.3] — 2026-08-17
 
 ### Corregido
