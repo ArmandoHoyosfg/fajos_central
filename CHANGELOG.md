@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.3.1] — 2026-08-18
+
+### Corregido
+- Launcher: config BD sin pydantic_settings (solo config.ini / stdlib)
+- UI launcher más compacta, centrada y adaptable a la pantalla
+- Ventana de importación maximizada
+
 ## [2.3.0] — 2026-08-18
 
 ### Añadido

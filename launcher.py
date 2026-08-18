@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Launcher GUI — Fajos Central / Fajos Piteados Central
-Centro de control: servidor web, escritorio, import, config BD.
-Windows + PowerShell 7.
+Launcher — Fajos Piteados Central
+Centro de control compacto (Windows + PowerShell 7).
+La config de BD usa solo config.ini (stdlib); no requiere pydantic.
 """
 from __future__ import annotations
 
+import configparser
 import os
 import subprocess
 import sys
@@ -18,6 +19,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+CONFIG_INI = ROOT / "config.ini"
+LOGO_PATH = ROOT / "app" / "web" / "static" / "logo.png"
 
 
 def _load_dotenv() -> None:
@@ -39,54 +43,132 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
-HOST = os.environ.get("FAJOS_APP_HOST", "0.0.0.0")
-PORT = int(os.environ.get("FAJOS_APP_PORT", "8000"))
-LOCAL_URL = f"http://127.0.0.1:{PORT}"
-LOGO_PATH = ROOT / "app" / "web" / "static" / "logo.png"
+
+def _read_db_ini() -> dict:
+    d = {
+        "host": "localhost",
+        "port": 3306,
+        "user": "root",
+        "password": "",
+        "database": "fajos_central",
+        "app_host": "0.0.0.0",
+        "app_port": 8000,
+        "debug": True,
+        "force_https": False,
+        "ssl_certfile": "certs/cert.pem",
+        "ssl_keyfile": "certs/key.pem",
+    }
+    if not CONFIG_INI.exists():
+        # env overrides
+        d["host"] = os.environ.get("FAJOS_DB_HOST", d["host"])
+        d["port"] = int(os.environ.get("FAJOS_DB_PORT", d["port"]))
+        d["user"] = os.environ.get("FAJOS_DB_USER", d["user"])
+        d["password"] = os.environ.get("FAJOS_DB_PASSWORD", d["password"])
+        d["database"] = os.environ.get("FAJOS_DB_NAME", d["database"])
+        d["app_port"] = int(os.environ.get("FAJOS_APP_PORT", d["app_port"]))
+        return d
+    cp = configparser.ConfigParser()
+    cp.read(CONFIG_INI, encoding="utf-8")
+    if cp.has_section("database"):
+        db = cp["database"]
+        d["host"] = db.get("host", d["host"])
+        try:
+            d["port"] = int(db.get("port", str(d["port"])))
+        except ValueError:
+            pass
+        d["user"] = db.get("user", d["user"])
+        d["password"] = db.get("password", d["password"])
+        d["database"] = db.get("database", d["database"])
+    if cp.has_section("server"):
+        srv = cp["server"]
+        d["app_host"] = srv.get("host", d["app_host"])
+        try:
+            d["app_port"] = int(srv.get("port", str(d["app_port"])))
+        except ValueError:
+            pass
+        d["debug"] = srv.get("debug", "true").lower() in ("1", "true", "yes")
+        d["force_https"] = srv.get("force_https", "false").lower() in ("1", "true", "yes")
+        d["ssl_certfile"] = srv.get("ssl_certfile", d["ssl_certfile"])
+        d["ssl_keyfile"] = srv.get("ssl_keyfile", d["ssl_keyfile"])
+    return d
+
+
+def _save_db_ini(
+    *,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    database: str,
+) -> Path:
+    cp = configparser.ConfigParser()
+    if CONFIG_INI.exists():
+        cp.read(CONFIG_INI, encoding="utf-8")
+    if not cp.has_section("database"):
+        cp.add_section("database")
+    if not cp.has_section("server"):
+        cp.add_section("server")
+        cur = _read_db_ini()
+        cp.set("server", "host", cur["app_host"])
+        cp.set("server", "port", str(cur["app_port"]))
+        cp.set("server", "debug", "true" if cur["debug"] else "false")
+        cp.set("server", "force_https", "true" if cur["force_https"] else "false")
+        cp.set("server", "ssl_certfile", cur["ssl_certfile"])
+        cp.set("server", "ssl_keyfile", cur["ssl_keyfile"])
+    cp.set("database", "host", host)
+    cp.set("database", "port", str(port))
+    cp.set("database", "user", user)
+    cp.set("database", "password", password)
+    cp.set("database", "database", database)
+    with open(CONFIG_INI, "w", encoding="utf-8") as f:
+        f.write("; Fajos Piteados Central — configuración local (no subir a Git)\n")
+        cp.write(f)
+    return CONFIG_INI
 
 
 def _ssl_files():
-    """Devuelve (cert, key) si hay certificados configurados o en certs/."""
-    cert = os.environ.get("FAJOS_SSL_CERTFILE", "").strip()
-    key = os.environ.get("FAJOS_SSL_KEYFILE", "").strip()
+    cfg = _read_db_ini()
+    cert = (cfg.get("ssl_certfile") or "").strip()
+    key = (cfg.get("ssl_keyfile") or "").strip()
     if not cert or not key:
         c, k = ROOT / "certs" / "cert.pem", ROOT / "certs" / "key.pem"
-        if c.exists() and k.exists():
-            return str(c), str(k)
-        # config.ini
-        try:
-            import configparser
-            ini = ROOT / "config.ini"
-            if ini.exists():
-                cp = configparser.ConfigParser()
-                cp.read(ini, encoding="utf-8")
-                if cp.has_section("server"):
-                    cert = cp["server"].get("ssl_certfile", "") or ""
-                    key = cp["server"].get("ssl_keyfile", "") or ""
-                    if cert and key:
-                        pc, pk = Path(cert), Path(key)
-                        if not pc.is_absolute():
-                            pc = ROOT / pc
-                        if not pk.is_absolute():
-                            pk = ROOT / pk
-                        if pc.exists() and pk.exists():
-                            return str(pc), str(pk)
-        except Exception:
-            pass
-        return None
+        return (str(c), str(k)) if c.exists() and k.exists() else None
     pc, pk = Path(cert), Path(key)
     if not pc.is_absolute():
         pc = ROOT / pc
     if not pk.is_absolute():
         pk = ROOT / pk
-    if pc.exists() and pk.exists():
-        return str(pc), str(pk)
-    return None
+    return (str(pc), str(pk)) if pc.exists() and pk.exists() else None
+
+
+def _port() -> int:
+    return int(_read_db_ini().get("app_port") or 8000)
+
+
+def _host_bind() -> str:
+    return _read_db_ini().get("app_host") or "0.0.0.0"
 
 
 def _base_url() -> str:
     scheme = "https" if _ssl_files() else "http"
-    return f"{scheme}://127.0.0.1:{PORT}"
+    return f"{scheme}://127.0.0.1:{_port()}"
+
+
+def _center(win, w: int | None = None, h: int | None = None) -> None:
+    win.update_idletasks()
+    if w is None:
+        w = win.winfo_width()
+    if h is None:
+        h = win.winfo_height()
+    if w <= 1:
+        w = win.winfo_reqwidth()
+    if h <= 1:
+        h = win.winfo_reqheight()
+    sw = win.winfo_screenwidth()
+    sh = win.winfo_screenheight()
+    x = max(0, (sw // 2) - (w // 2))
+    y = max(0, (sh // 2) - (h // 2))
+    win.geometry(f"{w}x{h}+{x}+{y}")
 
 
 import tkinter as tk
@@ -97,19 +179,24 @@ class LauncherApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Fajos Piteados Central — Centro de control")
-        self.geometry("500x700")
-        self.minsize(480, 600)
         self.configure(bg="#1e1e2e")
 
         self._server_proc: subprocess.Popen | None = None
         self._server_log = None
         self._poll_job: str | None = None
-        self._desktop_proc: subprocess.Popen | None = None
         self._logo_img = None
 
         self._apply_style()
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Caber en pantalla: alto máximo ~90% y centrar
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        w = min(520, sw - 40)
+        h = min(620, int(sh * 0.88))
+        _center(self, w, h)
+        self.minsize(420, 480)
+
         self._update_status()
 
     def _apply_style(self) -> None:
@@ -118,190 +205,134 @@ class LauncherApp(tk.Tk):
             style.theme_use("clam")
         except Exception:
             pass
-        bg, fg, accent = "#1e1e2e", "#cdd6f4", "#89b4fa"
+        bg, fg, accent = "#1e1e2e", "#cdd6f4", "#c9a227"
         style.configure("TFrame", background=bg)
-        style.configure("TLabel", background=bg, foreground=fg, font=("Segoe UI", 10))
-        style.configure("Title.TLabel", font=("Segoe UI", 13, "bold"), foreground=accent)
-        style.configure("Status.TLabel", font=("Segoe UI", 10, "bold"))
-        style.configure("TButton", font=("Segoe UI", 10), padding=8)
+        style.configure("TLabel", background=bg, foreground=fg, font=("Segoe UI", 9))
+        style.configure("Title.TLabel", font=("Segoe UI", 12, "bold"), foreground=accent)
+        style.configure("Status.TLabel", font=("Segoe UI", 9, "bold"))
+        style.configure("TButton", font=("Segoe UI", 9), padding=5)
         style.configure("TLabelframe", background=bg, foreground=fg)
         style.configure(
             "TLabelframe.Label",
             background=bg,
             foreground=accent,
-            font=("Segoe UI", 9, "bold"),
+            font=("Segoe UI", 8, "bold"),
         )
         style.configure("TEntry", fieldbackground="#313244", foreground=fg)
 
+    def _btn(self, parent, text, command, **kw):
+        b = ttk.Button(parent, text=text, command=command, **kw)
+        b.pack(fill=tk.X, pady=2)
+        return b
+
     def _build_ui(self) -> None:
-        # Canvas + scrollbar para que todo sea visible en pantallas pequeñas
-        container = ttk.Frame(self)
-        container.pack(fill=tk.BOTH, expand=True)
+        main = ttk.Frame(self, padding=12)
+        main.pack(fill=tk.BOTH, expand=True)
 
-        canvas = tk.Canvas(container, bg="#1e1e2e", highlightthickness=0)
-        sb = ttk.Scrollbar(container, orient=tk.VERTICAL, command=canvas.yview)
-        main = ttk.Frame(canvas, padding=16)
-
-        main.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
-        )
-        canvas.create_window((0, 0), window=main, anchor=tk.NW)
-        canvas.configure(yscrollcommand=sb.set)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        sb.pack(side=tk.RIGHT, fill=tk.Y)
-
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-
-        # Logo + título
+        # Cabecera compacta
         head = ttk.Frame(main)
-        head.pack(fill=tk.X, pady=(0, 8))
+        head.pack(fill=tk.X, pady=(0, 6))
         if LOGO_PATH.exists():
             try:
-                from PIL import Image, ImageTk
-                im = Image.open(LOGO_PATH)
-                im.thumbnail((72, 72))
-                self._logo_img = ImageTk.PhotoImage(im)
-                tk.Label(head, image=self._logo_img, bg="#1e1e2e").pack(side=tk.LEFT, padx=(0, 12))
+                img = tk.PhotoImage(file=str(LOGO_PATH))
+                w = img.width()
+                if w > 48:
+                    img = img.subsample(max(1, w // 48), max(1, w // 48))
+                self._logo_img = img
+                tk.Label(head, image=self._logo_img, bg="#1e1e2e").pack(side=tk.LEFT, padx=(0, 8))
             except Exception:
-                try:
-                    self._logo_img = tk.PhotoImage(file=str(LOGO_PATH))
-                    # subsample if huge
-                    w = self._logo_img.width()
-                    if w > 80:
-                        f = max(1, w // 72)
-                        self._logo_img = self._logo_img.subsample(f, f)
-                    tk.Label(head, image=self._logo_img, bg="#1e1e2e").pack(side=tk.LEFT, padx=(0, 12))
-                except Exception:
-                    pass
+                pass
         titles = ttk.Frame(head)
         titles.pack(side=tk.LEFT, fill=tk.X)
         ttk.Label(titles, text="Fajos Piteados Central", style="Title.TLabel").pack(anchor=tk.W)
-        ttk.Label(titles, text="Centro de control — nóminas y producción").pack(anchor=tk.W)
+        ttk.Label(titles, text="Centro de control", foreground="#a6adc8").pack(anchor=tk.W)
 
-        # Estado servidor
-        status_frame = ttk.Frame(main)
-        status_frame.pack(fill=tk.X, pady=(8, 4))
-        ttk.Label(status_frame, text="Servidor web:").pack(side=tk.LEFT)
-        self.lbl_status = ttk.Label(
-            status_frame, text="● Detenido", style="Status.TLabel", foreground="#f38ba8"
-        )
-        self.lbl_status.pack(side=tk.LEFT, padx=(8, 0))
+        # Estado
+        st = ttk.Frame(main)
+        st.pack(fill=tk.X, pady=(0, 4))
+        ttk.Label(st, text="Servidor:").pack(side=tk.LEFT)
+        self.lbl_status = ttk.Label(st, text="● Detenido", style="Status.TLabel", foreground="#f38ba8")
+        self.lbl_status.pack(side=tk.LEFT, padx=(6, 0))
         self.lbl_url = ttk.Label(main, text=f"URL: {_base_url()}", foreground="#a6adc8")
-        self.lbl_url.pack(anchor=tk.W, pady=(0, 8))
+        self.lbl_url.pack(anchor=tk.W, pady=(0, 6))
 
-        # --- BD PRIMERO (visible sin scroll) ---
-        dbframe = ttk.LabelFrame(main, text="  Base de datos (MariaDB)  ", padding=10)
-        dbframe.pack(fill=tk.X, pady=6)
-        ttk.Button(
-            dbframe,
-            text="⚙  Configurar conexión (usuario / contraseña)",
-            command=self._config_db,
-        ).pack(fill=tk.X, pady=3)
-        ttk.Button(dbframe, text="🔌  Probar conexión", command=self._test_db).pack(fill=tk.X, pady=3)
-        self.lbl_db = ttk.Label(dbframe, text="", font=("Segoe UI", 8), foreground="#a6adc8")
-        self.lbl_db.pack(anchor=tk.W, pady=(4, 0))
+        # BD
+        db = ttk.LabelFrame(main, text=" Base de datos ", padding=6)
+        db.pack(fill=tk.X, pady=3)
+        self._btn(db, "⚙  Configurar conexión", self._config_db)
+        self._btn(db, "🔌  Probar conexión", self._test_db)
+        self.lbl_db = ttk.Label(db, text="", font=("Segoe UI", 8), foreground="#a6adc8")
+        self.lbl_db.pack(anchor=tk.W)
         self._refresh_db_label()
 
-        # --- Web ---
-        web = ttk.LabelFrame(main, text="  Aplicación web (red local)  ", padding=10)
-        web.pack(fill=tk.X, pady=6)
-        self.btn_start = ttk.Button(web, text="▶  Iniciar servidor web", command=self._start_server)
-        self.btn_start.pack(fill=tk.X, pady=3)
-        self.btn_stop = ttk.Button(
-            web, text="■  Detener servidor", command=self._stop_server, state=tk.DISABLED
-        )
-        self.btn_stop.pack(fill=tk.X, pady=3)
-        ttk.Button(web, text="🌐  Abrir en el navegador", command=self._open_browser).pack(
-            fill=tk.X, pady=3
-        )
-        ttk.Button(web, text="📖  Documentación API (/docs)", command=self._open_api_docs).pack(
-            fill=tk.X, pady=3
-        )
+        # Web
+        web = ttk.LabelFrame(main, text=" Aplicación web ", padding=6)
+        web.pack(fill=tk.X, pady=3)
+        self.btn_start = self._btn(web, "▶  Iniciar servidor", self._start_server)
+        self.btn_stop = self._btn(web, "■  Detener servidor", self._stop_server)
+        self.btn_stop.configure(state=tk.DISABLED)
+        self._btn(web, "🌐  Abrir navegador", self._open_browser)
+        self._btn(web, "📖  API /docs", self._open_api_docs)
 
-        # --- Escritorio ---
-        desk = ttk.LabelFrame(main, text="  Aplicación de escritorio  ", padding=10)
-        desk.pack(fill=tk.X, pady=6)
-        ttk.Button(desk, text="🖥  Abrir app de escritorio", command=self._run_desktop).pack(
-            fill=tk.X, pady=3
-        )
+        # Escritorio + datos en dos columnas
+        row = ttk.Frame(main)
+        row.pack(fill=tk.X, pady=3)
+        desk = ttk.LabelFrame(row, text=" Escritorio ", padding=6)
+        desk.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 3))
+        self._btn(desk, "🖥  Abrir app", self._run_desktop)
 
-        # --- Datos ---
-        data = ttk.LabelFrame(main, text="  Datos y Excel  ", padding=10)
-        data.pack(fill=tk.X, pady=6)
-        ttk.Button(data, text="📊  Abrir Excel de nóminas", command=self._open_excel).pack(
-            fill=tk.X, pady=3
-        )
-        ttk.Button(
-            data, text="🔍  Importar Excel (simulación)", command=lambda: self._run_import(False)
-        ).pack(fill=tk.X, pady=3)
-        ttk.Button(
-            data, text="⬇  Importar Excel a la BD (aplicar)", command=lambda: self._run_import(True)
-        ).pack(fill=tk.X, pady=3)
+        data = ttk.LabelFrame(row, text=" Datos ", padding=6)
+        data.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(3, 0))
+        self._btn(data, "📊  Excel", self._open_excel)
+        self._btn(data, "🔍  Import (simular)", lambda: self._run_import(False))
+        self._btn(data, "⬇  Import (aplicar)", lambda: self._run_import(True))
 
-        # --- Utilidades ---
-        util = ttk.LabelFrame(main, text="  Utilidades  ", padding=10)
-        util.pack(fill=tk.X, pady=6)
-        row = ttk.Frame(util)
-        row.pack(fill=tk.X)
-        ttk.Button(row, text="📁 Carpeta", command=self._open_folder).pack(
-            side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 4)
-        )
-        ttk.Button(row, text="📘 Guía de uso", command=self._open_uso).pack(
-            side=tk.LEFT, expand=True, fill=tk.X, padx=4
-        )
-        ttk.Button(row, text="🗄 SQL", command=self._open_schema).pack(
-            side=tk.LEFT, expand=True, fill=tk.X, padx=(4, 0)
-        )
-        ttk.Button(util, text="Salir", command=self._on_close).pack(fill=tk.X, pady=(8, 0))
-
-    # ----- BD -----
-    def _refresh_db_label(self) -> None:
-        try:
-            from app.core.config import CONFIG_INI, load_ini_database
-
-            d = load_ini_database()
-            src = "config.ini" if CONFIG_INI.exists() else "por defecto (sin config.ini)"
-            self.lbl_db.configure(
-                text=f"{d['user']}@{d['host']}:{d['port']}/{d['database']}  [{src}]"
+        # Utilidades
+        util = ttk.LabelFrame(main, text=" Utilidades ", padding=6)
+        util.pack(fill=tk.X, pady=3)
+        urow = ttk.Frame(util)
+        urow.pack(fill=tk.X)
+        for txt, cmd in (
+            ("📁 Carpeta", self._open_folder),
+            ("📘 Guía", self._open_uso),
+            ("🗄 SQL", self._open_schema),
+            ("Salir", self._on_close),
+        ):
+            ttk.Button(urow, text=txt, command=cmd).pack(
+                side=tk.LEFT, expand=True, fill=tk.X, padx=2
             )
-        except Exception as e:
-            self.lbl_db.configure(text=f"Config no leída: {e}")
+
+    def _refresh_db_label(self) -> None:
+        d = _read_db_ini()
+        src = "config.ini" if CONFIG_INI.exists() else "por defecto"
+        self.lbl_db.configure(
+            text=f"{d['user']}@{d['host']}:{d['port']}/{d['database']}  [{src}]"
+        )
 
     def _config_db(self) -> None:
-        try:
-            from app.core.config import load_ini_database, save_database_config
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo cargar config:\n{e}")
-            return
-
-        data = load_ini_database()
+        data = _read_db_ini()
         win = tk.Toplevel(self)
-        win.title("Conexión a MariaDB")
-        win.geometry("420x340")
+        win.title("Conexión MariaDB")
         win.configure(bg="#1e1e2e")
         win.transient(self)
         win.grab_set()
+        _center(win, 400, 300)
 
-        frm = ttk.Frame(win, padding=16)
+        frm = ttk.Frame(win, padding=14)
         frm.pack(fill=tk.BOTH, expand=True)
-
         fields = {}
         specs = [
-            ("host", "Servidor (host)", data["host"]),
+            ("host", "Servidor", data["host"]),
             ("port", "Puerto", str(data["port"])),
             ("user", "Usuario", data["user"]),
             ("password", "Contraseña", data["password"]),
             ("database", "Base de datos", data["database"]),
         ]
         for i, (key, label, val) in enumerate(specs):
-            ttk.Label(frm, text=label).grid(row=i, column=0, sticky=tk.W, pady=5)
-            ent = ttk.Entry(frm, width=30, show="*" if key == "password" else "")
+            ttk.Label(frm, text=label).grid(row=i, column=0, sticky=tk.W, pady=4)
+            ent = ttk.Entry(frm, width=28, show="*" if key == "password" else "")
             ent.insert(0, val)
-            ent.grid(row=i, column=1, sticky=tk.EW, pady=5, padx=(10, 0))
+            ent.grid(row=i, column=1, sticky=tk.EW, pady=4, padx=(8, 0))
             fields[key] = ent
         frm.columnconfigure(1, weight=1)
 
@@ -311,7 +342,7 @@ class LauncherApp(tk.Tk):
             except ValueError:
                 messagebox.showerror("Datos", "Puerto inválido", parent=win)
                 return
-            path = save_database_config(
+            path = _save_db_ini(
                 host=fields["host"].get().strip() or "localhost",
                 port=port,
                 user=fields["user"].get().strip() or "root",
@@ -323,58 +354,63 @@ class LauncherApp(tk.Tk):
             os.environ["FAJOS_DB_USER"] = fields["user"].get().strip() or "root"
             os.environ["FAJOS_DB_PASSWORD"] = fields["password"].get()
             os.environ["FAJOS_DB_NAME"] = fields["database"].get().strip() or "fajos_central"
-            try:
-                from app.core.config import get_settings
-
-                get_settings.cache_clear()
-            except Exception:
-                pass
             self._refresh_db_label()
             messagebox.showinfo(
                 "Guardado",
-                f"Guardado en:\n{path}\n\n"
-                "Si el servidor web está activo, deténlo e inícialo de nuevo.",
+                f"Guardado en:\n{path}\n\nReinicia el servidor web si ya estaba activo.",
                 parent=win,
             )
             win.destroy()
 
-        ttk.Button(frm, text="Guardar conexión", command=guardar).grid(
-            row=len(specs), column=0, columnspan=2, sticky=tk.EW, pady=(16, 4)
+        ttk.Button(frm, text="Guardar", command=guardar).grid(
+            row=len(specs), column=0, columnspan=2, sticky=tk.EW, pady=(12, 4)
         )
         ttk.Button(frm, text="Cancelar", command=win.destroy).grid(
             row=len(specs) + 1, column=0, columnspan=2, sticky=tk.EW
         )
 
     def _test_db(self) -> None:
+        d = _read_db_ini()
         try:
-            from app.core.config import _read_ini, get_settings
-
-            for k, v in _read_ini().items():
-                os.environ[f"FAJOS_{k.upper()}"] = str(v)
-            get_settings.cache_clear()
-            settings = get_settings()
             import mysql.connector
-
-            conn = mysql.connector.connect(**settings.db_config)
+        except ImportError:
+            messagebox.showerror(
+                "Dependencia",
+                "Falta mysql-connector-python.\n\n"
+                "En PowerShell:\n"
+                "  .\\.venv\\Scripts\\Activate.ps1\n"
+                "  pip install -r requirements.txt\n\n"
+                "Luego vuelve a abrir el launcher desde el venv:\n"
+                "  python launcher.py",
+            )
+            return
+        try:
+            conn = mysql.connector.connect(
+                host=d["host"],
+                port=d["port"],
+                user=d["user"],
+                password=d["password"],
+                database=d["database"],
+                connection_timeout=5,
+            )
             conn.close()
             messagebox.showinfo(
                 "Conexión OK",
-                f"Conectado a\n{settings.db_user}@{settings.db_host}:{settings.db_port}/{settings.db_name}",
+                f"Conectado a\n{d['user']}@{d['host']}:{d['port']}/{d['database']}",
             )
         except Exception as e:
             messagebox.showerror(
                 "Conexión fallida",
                 f"No se pudo conectar.\n\n{e}\n\n"
-                "Usa «Configurar conexión» y comprueba que MariaDB esté en marcha.",
+                "Revisa usuario/contraseña y que MariaDB esté activo.",
             )
 
-    # ----- Servidor -----
     def _is_running(self) -> bool:
         return self._server_proc is not None and self._server_proc.poll() is None
 
     def _start_server(self) -> None:
         if self._is_running():
-            messagebox.showinfo("Servidor", "El servidor ya está en ejecución.")
+            messagebox.showinfo("Servidor", "Ya está en ejecución.")
             return
         try:
             import fastapi  # noqa: F401
@@ -382,28 +418,34 @@ class LauncherApp(tk.Tk):
         except ImportError:
             messagebox.showerror(
                 "Dependencias",
-                "Faltan paquetes.\n\n"
+                "Faltan paquetes del proyecto.\n\n"
                 "  .\\.venv\\Scripts\\Activate.ps1\n"
-                "  pip install -r requirements.txt",
+                "  pip install -r requirements.txt\n"
+                "  python launcher.py",
             )
             return
 
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+        # Pasar BD desde config.ini al proceso del servidor
+        d = _read_db_ini()
+        env["FAJOS_DB_HOST"] = str(d["host"])
+        env["FAJOS_DB_PORT"] = str(d["port"])
+        env["FAJOS_DB_USER"] = str(d["user"])
+        env["FAJOS_DB_PASSWORD"] = str(d["password"])
+        env["FAJOS_DB_NAME"] = str(d["database"])
+        env["FAJOS_APP_HOST"] = str(d["app_host"])
+        env["FAJOS_APP_PORT"] = str(d["app_port"])
+
         cmd = [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "app.main:app",
-            "--host",
-            HOST,
-            "--port",
-            str(PORT),
+            sys.executable, "-m", "uvicorn", "app.main:app",
+            "--host", _host_bind(),
+            "--port", str(_port()),
         ]
         ssl = _ssl_files()
         if ssl:
             cmd.extend(["--ssl-certfile", ssl[0], "--ssl-keyfile", ssl[1]])
-        elif os.environ.get("FAJOS_DEBUG", "true").lower() in ("1", "true", "yes"):
+        elif d.get("debug", True):
             cmd.append("--reload")
 
         try:
@@ -416,11 +458,8 @@ class LauncherApp(tk.Tk):
             if sys.platform == "win32":
                 creationflags = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore
             self._server_proc = subprocess.Popen(
-                cmd,
-                cwd=str(ROOT),
-                env=env,
-                stdout=log_f,
-                stderr=subprocess.STDOUT,
+                cmd, cwd=str(ROOT), env=env,
+                stdout=log_f, stderr=subprocess.STDOUT,
                 creationflags=creationflags,
             )
             self._server_log = log_f
@@ -429,10 +468,7 @@ class LauncherApp(tk.Tk):
             self._server_proc = None
             return
 
-        try:
-            self.lbl_url.configure(text=f"URL: {_base_url()}")
-        except Exception:
-            pass
+        self.lbl_url.configure(text=f"URL: {_base_url()}")
         self._update_status()
         threading.Thread(target=self._wait_and_maybe_open, daemon=True).start()
 
@@ -447,9 +483,8 @@ class LauncherApp(tk.Tk):
 
     def _port_open(self) -> bool:
         import socket
-
         try:
-            with socket.create_connection(("127.0.0.1", PORT), timeout=0.35):
+            with socket.create_connection(("127.0.0.1", _port()), timeout=0.35):
                 return True
         except OSError:
             return False
@@ -464,8 +499,7 @@ class LauncherApp(tk.Tk):
             if sys.platform == "win32":
                 subprocess.run(
                     ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-                    capture_output=True,
-                    check=False,
+                    capture_output=True, check=False,
                 )
             else:
                 proc.terminate()
@@ -474,7 +508,7 @@ class LauncherApp(tk.Tk):
                 except subprocess.TimeoutExpired:
                     proc.kill()
         except Exception as e:
-            messagebox.showwarning("Aviso", f"Al detener:\n{e}")
+            messagebox.showwarning("Aviso", str(e))
         finally:
             if self._server_log:
                 try:
@@ -509,7 +543,7 @@ class LauncherApp(tk.Tk):
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT / "desktop_legacy") + os.pathsep + env.get("PYTHONPATH", "")
         try:
-            self._desktop_proc = subprocess.Popen(
+            subprocess.Popen(
                 [sys.executable, str(desktop_main)],
                 cwd=str(ROOT / "desktop_legacy"),
                 env=env,
@@ -533,16 +567,24 @@ class LauncherApp(tk.Tk):
         if not path:
             return
         if apply and not messagebox.askyesno(
-            "Confirmar", "Se escribirán datos nuevos en MariaDB.\n¿Continuar?"
+            "Confirmar", "Se escribirán datos en MariaDB.\n¿Continuar?"
         ):
             return
         cmd = [sys.executable, str(ROOT / "scripts" / "import_excel.py"), path]
         if apply:
             cmd.append("--apply")
+
         win = tk.Toplevel(self)
-        win.title("Importación")
-        win.geometry("640x400")
-        txt = tk.Text(win, wrap=tk.WORD, bg="#11111b", fg="#cdd6f4", font=("Consolas", 9))
+        win.title("Importación Excel")
+        win.configure(bg="#11111b")
+        # Maximizada para ver el reporte completo
+        try:
+            win.state("zoomed")  # Windows
+        except Exception:
+            sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+            win.geometry(f"{sw}x{sh}+0+0")
+
+        txt = tk.Text(win, wrap=tk.WORD, bg="#11111b", fg="#cdd6f4", font=("Consolas", 10))
         txt.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         txt.insert(tk.END, "Ejecutando...\n\n")
         win.update()
@@ -551,12 +593,24 @@ class LauncherApp(tk.Tk):
             try:
                 env = os.environ.copy()
                 env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+                d = _read_db_ini()
+                env["FAJOS_DB_HOST"] = str(d["host"])
+                env["FAJOS_DB_PORT"] = str(d["port"])
+                env["FAJOS_DB_USER"] = str(d["user"])
+                env["FAJOS_DB_PASSWORD"] = str(d["password"])
+                env["FAJOS_DB_NAME"] = str(d["database"])
                 proc = subprocess.run(
                     cmd, cwd=str(ROOT), env=env, capture_output=True, text=True,
                     encoding="utf-8", errors="replace",
                 )
                 out = (proc.stdout or "") + (proc.stderr or "")
-                self.after(0, lambda: (txt.insert(tk.END, out + f"\n\nCódigo {proc.returncode}\n"), txt.see(tk.END)))
+                self.after(
+                    0,
+                    lambda: (
+                        txt.insert(tk.END, out + f"\n\nCódigo {proc.returncode}\n"),
+                        txt.see(tk.END),
+                    ),
+                )
             except Exception as e:
                 self.after(0, lambda: txt.insert(tk.END, str(e)))
 
@@ -613,11 +667,6 @@ class LauncherApp(tk.Tk):
 
 def main() -> None:
     app = LauncherApp()
-    app.update_idletasks()
-    w, h = 500, 700
-    x = (app.winfo_screenwidth() // 2) - (w // 2)
-    y = max(0, (app.winfo_screenheight() // 2) - (h // 2))
-    app.geometry(f"{w}x{h}+{x}+{y}")
     app.mainloop()
 
 
