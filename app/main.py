@@ -31,9 +31,25 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(router)
 
 
+def _wants_html(request: Request) -> bool:
+    accept = request.headers.get("accept", "")
+    return "text/html" in accept and "application/json" not in accept.split(",")[0]
+
+
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
     logger.warning("AppError %s: %s", exc.code, exc.message)
+    if _wants_html(request):
+        from fastapi.responses import HTMLResponse
+        html = f"""<!DOCTYPE html><html><head><meta charset=utf-8><title>Error</title>
+        <style>body{{font-family:Segoe UI,sans-serif;background:#1e1e2e;color:#cdd6f4;padding:2rem}}
+        a{{color:#89b4fa}}</style></head><body>
+        <h1>{exc.user_message}</h1>
+        <p><code>{exc.code}</code> — {exc.message}</p>
+        <p><a href="/">Volver al inicio</a></p>
+        <p style="color:#a6adc8;font-size:0.9rem">Si es un error de base de datos, configura la conexión en el launcher (config.ini) y reinicia el servidor.</p>
+        </body></html>"""
+        return HTMLResponse(status_code=exc.http_status, content=html)
     return JSONResponse(status_code=exc.http_status, content=exc.to_dict())
 
 
@@ -52,6 +68,18 @@ async def unhandled_error_handler(request: Request, exc: Exception):
             "exception_type": type(exc).__name__,
         },
     }
+    if _wants_html(request):
+        from fastapi.responses import HTMLResponse
+        html = f"""<!DOCTYPE html><html><head><meta charset=utf-8><title>Error</title>
+        <style>body{{font-family:Segoe UI,sans-serif;background:#1e1e2e;color:#cdd6f4;padding:2rem}}
+        a{{color:#89b4fa}}; code{{color:#f9e2af}}</style></head><body>
+        <h1>Error interno</h1>
+        <p>{payload['user_message']}</p>
+        <p><code>{type(exc).__name__}: {exc}</code></p>
+        <p><a href="/">Volver al inicio</a></p>
+        <p style="color:#a6adc8">Revisa logs/ y la conexión a MariaDB en el launcher.</p>
+        </body></html>"""
+        return HTMLResponse(status_code=500, content=html)
     return JSONResponse(status_code=500, content=payload)
 
 

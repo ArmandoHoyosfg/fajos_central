@@ -37,8 +37,9 @@ async def page_dashboard(
 ):
     data = svc.get_dashboard()
     return templates.TemplateResponse(
+        request,
         "dashboard.html",
-        {"request": request, "kpis": data["kpis"], "semanas": data["ultimas_semanas"]},
+        {"kpis": data["kpis"], "semanas": data["ultimas_semanas"]},
     )
 
 
@@ -50,8 +51,9 @@ async def page_trabajadores(
 ):
     rows = repo.listar(solo_activos=False, busqueda=q)
     return templates.TemplateResponse(
+        request,
         "trabajadores.html",
-        {"request": request, "trabajadores": rows, "q": q or ""},
+        {"trabajadores": rows, "q": q or ""},
     )
 
 
@@ -70,9 +72,9 @@ async def page_produccion(
     totales = prod_repo.totales_semana(semana_id) if semana_id else {}
     trabajadores = trab_repo.listar(solo_plt=True, solo_activos=True)
     return templates.TemplateResponse(
+        request,
         "produccion.html",
         {
-            "request": request,
             "semanas": semanas,
             "semana_id": semana_id,
             "lineas": lineas,

@@ -7,27 +7,27 @@
 <div class="grid" style="margin-top:1rem;">
   <div class="card">
     <div class="label">Trabajadores activos</div>
-    <div class="value">{{ kpis.trabajadores_activos }}</div>
+    <div class="value">{{ kpis.trabajadores_activos | default(0) }}</div>
   </div>
   <div class="card">
     <div class="label">Activos PLT</div>
-    <div class="value">{{ kpis.trabajadores_plt }}</div>
+    <div class="value">{{ kpis.trabajadores_plt | default(0) }}</div>
   </div>
   <div class="card">
     <div class="label">Semanas registradas</div>
-    <div class="value">{{ kpis.total_semanas }}</div>
+    <div class="value">{{ kpis.total_semanas | default(0) }}</div>
   </div>
   <div class="card">
     <div class="label">Gramos históricos</div>
-    <div class="value">{{ kpis.total_gramos_historico }}</div>
+    <div class="value">{{ kpis.total_gramos_historico | default(0) }}</div>
   </div>
   <div class="card">
     <div class="label">Efectivo producción</div>
-    <div class="value money">${{ '%.2f'|format(kpis.total_efectivo_historico|float) }}</div>
+    <div class="value money">${{ '%.2f'|format( (kpis.total_efectivo_historico or 0)|float ) }}</div>
   </div>
   <div class="card">
     <div class="label">Nómina total acumulada</div>
-    <div class="value money">${{ '%.2f'|format(kpis.nomina_total_acumulada|float) }}</div>
+    <div class="value money">${{ '%.2f'|format( (kpis.nomina_total_acumulada or 0)|float ) }}</div>
   </div>
 </div>
 
@@ -46,15 +46,15 @@
       <td><a href="/produccion?semana_id={{ s.id }}">{{ s.codigo }}</a></td>
       <td>{{ s.fecha_inicio }}</td>
       <td>{{ s.fecha_fin }}</td>
-      <td>${{ '%.2f'|format(s.nomina_plt|float) }}</td>
-      <td>${{ '%.2f'|format(s.nomina_pit|float) }}</td>
-      <td>${{ '%.2f'|format(s.nomina_tll|float) }}</td>
-      <td><strong>${{ '%.2f'|format(s.total_semana|float) }}</strong></td>
+      <td>${{ '%.2f'|format( (s.nomina_plt or 0)|float ) }}</td>
+      <td>${{ '%.2f'|format( (s.nomina_pit or 0)|float ) }}</td>
+      <td>${{ '%.2f'|format( (s.nomina_tll or 0)|float ) }}</td>
+      <td><strong>${{ '%.2f'|format( (s.total_semana or 0)|float ) }}</strong></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 {% else %}
-<p class="muted">Aún no hay semanas registradas.</p>
+<p class="muted">Aún no hay semanas registradas. Crea una en Producción o importa el Excel.</p>
 {% endif %}
 {% endblock %}
