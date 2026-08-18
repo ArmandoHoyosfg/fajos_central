@@ -28,10 +28,75 @@
   {% endif %}
 </div>
 
+{# Crear semana #}
+<div class="card" style="margin-bottom:1rem;">
+  <strong>Nueva semana</strong>
+  <form class="inline" style="margin-top:0.5rem;" onsubmit="return crearSemana(event)">
+    <div>
+      <label class="muted">Código</label><br>
+      <input name="codigo" required placeholder="16-22" style="width:90px;">
+    </div>
+    <div>
+      <label class="muted">Inicio</label><br>
+      <input name="fecha_inicio" type="date" required>
+    </div>
+    <div>
+      <label class="muted">Fin</label><br>
+      <input name="fecha_fin" type="date" required>
+    </div>
+    <button class="btn btn-success" type="submit">Crear semana</button>
+  </form>
+</div>
+
 {% if semana_id %}
+{# Alta de línea #}
+<div class="card" style="margin-bottom:1rem;">
+  <strong>Agregar línea de producción</strong>
+  <form class="inline" style="margin-top:0.5rem; flex-wrap:wrap;" onsubmit="return addLinea(event)">
+    <div>
+      <label class="muted">Trabajador</label><br>
+      <select name="trabajador" id="sel-trab" required style="min-width:200px;">
+        <option value="">— elegir —</option>
+        {% for t in trabajadores %}
+        <option value="{{ t.id }}|{{ t.nombre_mostrar }}|{{ t.ubic }}">
+          {{ t.nombre_mostrar }} ({{ t.ubic }})
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="muted">Folio</label><br>
+      <input name="folio" placeholder="ST-149" style="width:100px;">
+    </div>
+    <div>
+      <label class="muted">Modelo</label><br>
+      <input name="modelo" placeholder="SECUENCIA" style="width:110px;">
+    </div>
+    <div>
+      <label class="muted">Material</label><br>
+      <select name="material">
+        <option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option>
+      </select>
+    </div>
+    <div>
+      <label class="muted">$/Gr</label><br>
+      <input name="tarifa_gr" type="number" step="0.01" value="12" style="width:70px;">
+    </div>
+    {% for d, label in [('gm_sab','Sáb'),('gm_dom','Dom'),('gm_lun','Lun'),('gm_mar','Mar'),('gm_mie','Mié'),('gm_jue','Jue'),('gm_vie','Vie')] %}
+    <div>
+      <label class="muted">{{ label }}</label><br>
+      <input name="{{ d }}" type="number" step="0.01" min="0" style="width:64px;" placeholder="">
+    </div>
+    {% endfor %}
+    <button class="btn btn-success" type="submit">Agregar</button>
+  </form>
+  <p class="muted" style="margin:0.5rem 0 0;">Deja vacío el día si no hay gramos (no se guardan ceros).</p>
+</div>
+
 <table>
   <thead>
     <tr>
+      <th></th>
       <th>Nombre</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>$/Gr</th>
       <th>Sáb</th><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th>
       <th>Total Gr</th><th>Efectivo</th>
@@ -40,6 +105,10 @@
   <tbody>
     {% for r in lineas %}
     <tr>
+      <td>
+        <button type="button" class="btn btn-danger" style="padding:0.2rem 0.5rem;font-size:0.75rem;"
+                onclick="delLinea({{ r.id }})">✕</button>
+      </td>
       <td>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td>{{ r.folio or '—' }}</td>
@@ -53,15 +122,60 @@
       <td>{{ r.gm_mie or '' }}</td>
       <td>{{ r.gm_jue or '' }}</td>
       <td>{{ r.gm_vie or '' }}</td>
-      <td>{{ r.total_gramos or 0 }}</td>
-      <td>${{ '%.2f'|format((r.efectivo or 0)|float) }}</td>
+      <td>{{ r.total_gramos or '' }}</td>
+      <td>{% if r.efectivo %}${{ '%.2f'|format(r.efectivo|float) }}{% endif %}</td>
     </tr>
     {% else %}
-    <tr><td colspan="15" class="muted">Sin líneas en esta semana. Agrega producción desde la API o importa datos.</td></tr>
+    <tr><td colspan="16" class="muted">Sin líneas. Agrega producción arriba o importa el Excel.</td></tr>
     {% endfor %}
   </tbody>
 </table>
 {% else %}
-<p class="muted">Crea una semana primero (API o script) para ver producción.</p>
+<p class="muted">Crea o selecciona una semana para capturar producción.</p>
 {% endif %}
+
+<script>
+async function crearSemana(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch('/api/semanas', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (res.ok && data.ok) location.href = '/produccion?semana_id=' + data.id;
+  else alert(data.user_message || data.message || 'Error');
+  return false;
+}
+async function addLinea(e) {
+  e.preventDefault();
+  const form = e.target;
+  const fd = new FormData(form);
+  const raw = fd.get('trabajador');
+  if (!raw) { alert('Elige trabajador'); return false; }
+  const [tid, nombre, ubic] = String(raw).split('|');
+  const body = new FormData();
+  body.set('nombre', nombre);
+  body.set('ubic', ubic);
+  body.set('trabajador_id', tid);
+  body.set('folio', fd.get('folio') || '');
+  body.set('modelo', fd.get('modelo') || '');
+  body.set('material', fd.get('material') || 'AG3');
+  body.set('tarifa_gr', fd.get('tarifa_gr') || '12');
+  for (const d of ['gm_sab','gm_dom','gm_lun','gm_mar','gm_mie','gm_jue','gm_vie']) {
+    const v = fd.get(d);
+    if (v !== null && v !== '') body.set(d, v);
+  }
+  const semanaId = {{ semana_id or 'null' }};
+  const res = await fetch('/api/produccion/' + semanaId, { method: 'POST', body });
+  const data = await res.json();
+  if (res.ok && data.ok) location.reload();
+  else alert(data.user_message || data.message || 'Error al guardar');
+  return false;
+}
+async function delLinea(id) {
+  if (!confirm('¿Eliminar esta línea?')) return;
+  const res = await fetch('/api/produccion/linea/' + id, { method: 'DELETE' });
+  const data = await res.json();
+  if (res.ok && data.ok) location.reload();
+  else alert(data.user_message || data.message || 'Error');
+}
+</script>
 {% endblock %}

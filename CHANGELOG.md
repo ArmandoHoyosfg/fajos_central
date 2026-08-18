@@ -5,6 +5,16 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.2.0] — 2026-08-17
+
+### Añadido
+- **Importación segura Excel → MariaDB** (`app/services/import_service.py`, `scripts/import_excel.py`)
+  - Dry-run por defecto; `--apply` para escribir
+  - No borra datos; upsert trabajadores por (nombre, ubic); evita duplicar producción
+- Migración SQL `db/schema/002_suministro_e_import.sql` (suministro diario + import_log)
+- Captura web de producción mejorada: crear semana, agregar línea, borrar, export
+- Excel: ceros ocultos en captura y formal
+
 ## [2.1.1] — 2026-08-17
 
 ### Añadido

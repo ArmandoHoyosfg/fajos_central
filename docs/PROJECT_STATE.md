@@ -2,7 +2,7 @@
 
 > Archivo de checkpoint legible por humanos e IAs.
 > Actualizar este archivo en cada hito relevante del proyecto.
-> Última actualización: 2026-08-17 | Versión app: **2.1.1**
+> Última actualización: 2026-08-17 | Versión app: **2.2.0**
 > **Entorno del usuario (obligatorio tener en cuenta):** Windows 10/11 + **PowerShell 7** + HeidiSQL/MariaDB.
 
 ---
@@ -30,6 +30,9 @@
 
 ```powershell
 cd ruta\a\fajos_central
+# Import Excel (simulación luego --apply)
+python scripts\import_excel.py .\templates_excel\NOMINA_FAJOS_OPTIMIZADA_2026.xlsx
+
 pwsh -File .\setup_windows.ps1   # primera vez
 pwsh -File .\start.ps1           # launcher GUI
 python launcher.py
@@ -161,6 +164,9 @@ Script: `db/schema/001_schema_inicial.sql` (ejecutar en HeidiSQL sobre la BD ya 
 
 ```powershell
 cd ruta\a\fajos_central
+# Import Excel (simulación luego --apply)
+python scripts\import_excel.py .\templates_excel\NOMINA_FAJOS_OPTIMIZADA_2026.xlsx
+
 pwsh -File .\setup_windows.ps1    # primera vez
 # Si bloquea scripts:
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -187,6 +193,7 @@ API docs: `/docs`
 | 2.0.0 | Consolidación en una carpeta; FastAPI web; export multi-formato; tests; errores estructurados |
 | 2.1.0 | Launcher GUI (tkinter) |
 | 2.1.1 | Scripts PowerShell 7; log de servidor en Windows |
+| 2.2.0 | Import seguro Excel; captura web producción; schema suministro |
 
 Tags git: `v2.0.0`, `v2.1.0`, `v2.1.1`
 
@@ -203,12 +210,14 @@ Tags git: `v2.0.0`, `v2.1.0`, `v2.1.1`
 
 ## 8. Pendientes / roadmap sugerido
 
-- [ ] Captura web completa de gramos (formulario diario alineado a **SUMINISTRO**)
-- [ ] Modelo/tabla explícita de **suministro diario** (fecha + material + lecturas parciales + folio)
+- [x] Captura web de producción semanal (crear semana, alta/baja líneas, export)
+- [ ] Captura diaria tipo **SUMINISTRO** (UI sobre tablas suministro_*)
+- [x] Modelo SQL **suministro_diario / suministro_detalle / import_log** (schema 002)
+- [ ] UI web del suministro diario
 - [ ] PIT y TLL con el mismo rigor que PLT
 - [ ] Cierre de semana + estado de firmas
 - [ ] Auth simple en red local
-- [ ] Importación del Excel histórico a MariaDB
+- [x] Importación segura Excel → MariaDB (dry-run + apply, script PowerShell)
 - [ ] Alinear catálogo trabajadores con nombres/ubic del papel (ej. Trinidad 376, Carlos Abel 416, etc.)
 
 ---

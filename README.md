@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 2.1.1  
+**Versión:** 2.2.0  
 **Entorno principal:** Windows + PowerShell 7 + MariaDB/HeidiSQL  
 
 Sistema de nóminas del **Taller de Fajos Central**.
@@ -47,6 +47,29 @@ fajos_central/
 - Python 3.10+
 - MariaDB con la base `fajos_central`
 
+
+
+## Importar Excel a MariaDB (seguro)
+
+En PowerShell 7, con el venv activado y la migración SQL aplicada:
+
+```powershell
+# 1) En HeidiSQL ejecuta:
+#    db\schema\001_schema_inicial.sql   (si aún no)
+#    db\schema\002_suministro_e_import.sql
+
+# 2) Simulación (no escribe nada)
+python scripts\import_excel.py .\templates_excel\NOMINA_FAJOS_OPTIMIZADA_2026.xlsx
+
+# 3) Aplicar
+python scripts\import_excel.py .\templates_excel\NOMINA_FAJOS_OPTIMIZADA_2026.xlsx --apply --codigo "16-22" --inicio 2026-08-16 --fin 2026-08-22
+```
+
+La importación:
+- **No borra** datos existentes
+- Solo **agrega** trabajadores nuevos (mismo nombre + ubic = ya existe)
+- No duplica líneas de producción con el mismo folio en la semana
+- Por defecto es **dry-run** (simulación)
 
 ## Windows (PowerShell 7)
 
