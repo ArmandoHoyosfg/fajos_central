@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.2.2] — 2026-08-17
+
+### Añadido
+- `config.ini` para usuario/contraseña MariaDB (editable desde el launcher)
+- Botones «Configurar conexión» y «Probar conexión» en el launcher
+- App de escritorio lee el mismo `config.ini`
+
 ## [2.2.1] — 2026-08-17
 
 ### Añadido

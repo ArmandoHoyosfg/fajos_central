@@ -41,7 +41,26 @@ _load_dotenv()
 
 HOST = os.environ.get("FAJOS_APP_HOST", "0.0.0.0")
 PORT = int(os.environ.get("FAJOS_APP_PORT", "8000"))
+
 LOCAL_URL = f"http://127.0.0.1:{PORT}"
+
+def _reload_port_from_config():
+    global PORT, LOCAL_URL, HOST
+    try:
+        from app.core.config import load_ini_database, CONFIG_INI
+        # also read server port from ini
+        import configparser
+        if CONFIG_INI.exists():
+            cp = configparser.ConfigParser()
+            cp.read(CONFIG_INI, encoding="utf-8")
+            if cp.has_section("server") and cp["server"].get("port"):
+                PORT = int(cp["server"]["port"])
+                LOCAL_URL = f"http://127.0.0.1:{PORT}"
+            if cp.has_section("server") and cp["server"].get("host"):
+                HOST = cp["server"]["host"]
+    except Exception:
+        pass
+
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -51,7 +70,7 @@ class LauncherApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Fajos Central — Centro de control")
-        self.geometry("480x560")
+        self.geometry("480x640")
         self.minsize(460, 520)
         self.configure(bg="#1e1e2e")
 
@@ -125,6 +144,15 @@ class LauncherApp(tk.Tk):
         ttk.Button(data, text="⬇  Importar Excel a la BD (aplicar)", command=lambda: self._run_import(apply=True)).pack(fill=tk.X, pady=2)
 
         # --- Utilidades ---
+        # --- Conexión BD ---
+        dbframe = ttk.LabelFrame(main, text="  Base de datos (MariaDB)  ", padding=8)
+        dbframe.pack(fill=tk.X, pady=4)
+        ttk.Button(dbframe, text="⚙  Configurar conexión (usuario / contraseña)", command=self._config_db).pack(fill=tk.X, pady=2)
+        ttk.Button(dbframe, text="🔌  Probar conexión", command=self._test_db).pack(fill=tk.X, pady=2)
+        self.lbl_db = ttk.Label(dbframe, text="", font=("Segoe UI", 8), foreground="#a6adc8")
+        self.lbl_db.pack(anchor=tk.W)
+        self._refresh_db_label()
+
         util = ttk.LabelFrame(main, text="  Utilidades  ", padding=8)
         util.pack(fill=tk.X, pady=4)
         row = ttk.Frame(util)
@@ -344,6 +372,110 @@ class LauncherApp(tk.Tk):
         txt.see(tk.END)
 
     # ----- Utilidades -----
+
+    def _refresh_db_label(self) -> None:
+        try:
+            from app.core.config import load_ini_database, CONFIG_INI
+            d = load_ini_database()
+            src = "config.ini" if CONFIG_INI.exists() else "valores por defecto"
+            self.lbl_db.configure(
+                text=f"Actual: {d['user']}@{d['host']}:{d['port']}/{d['database']}  ({src})"
+            )
+        except Exception:
+            self.lbl_db.configure(text="No se pudo leer la configuración de BD")
+
+    def _config_db(self) -> None:
+        try:
+            from app.core.config import load_ini_database, save_database_config
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo cargar el módulo de config:\n{e}")
+            return
+        data = load_ini_database()
+        win = tk.Toplevel(self)
+        win.title("Conexión a MariaDB")
+        win.geometry("400x320")
+        win.configure(bg="#1e1e2e")
+        win.transient(self)
+        win.grab_set()
+
+        frm = ttk.Frame(win, padding=16)
+        frm.pack(fill=tk.BOTH, expand=True)
+
+        fields = {}
+        specs = [
+            ("host", "Servidor (host)", data["host"]),
+            ("port", "Puerto", str(data["port"])),
+            ("user", "Usuario", data["user"]),
+            ("password", "Contraseña", data["password"]),
+            ("database", "Base de datos", data["database"]),
+        ]
+        for i, (key, label, val) in enumerate(specs):
+            ttk.Label(frm, text=label).grid(row=i, column=0, sticky=tk.W, pady=4)
+            show = "*" if key == "password" else None
+            ent = ttk.Entry(frm, width=28, show=show or "")
+            ent.insert(0, val)
+            ent.grid(row=i, column=1, sticky=tk.EW, pady=4, padx=(8, 0))
+            fields[key] = ent
+        frm.columnconfigure(1, weight=1)
+
+        def guardar():
+            try:
+                port = int(fields["port"].get().strip() or "3306")
+            except ValueError:
+                messagebox.showerror("Datos", "Puerto inválido", parent=win)
+                return
+            path = save_database_config(
+                host=fields["host"].get().strip() or "localhost",
+                port=port,
+                user=fields["user"].get().strip() or "root",
+                password=fields["password"].get(),
+                database=fields["database"].get().strip() or "fajos_central",
+            )
+            # Actualizar env de este proceso para el servidor que se inicie después
+            os.environ["FAJOS_DB_HOST"] = fields["host"].get().strip() or "localhost"
+            os.environ["FAJOS_DB_PORT"] = str(port)
+            os.environ["FAJOS_DB_USER"] = fields["user"].get().strip() or "root"
+            os.environ["FAJOS_DB_PASSWORD"] = fields["password"].get()
+            os.environ["FAJOS_DB_NAME"] = fields["database"].get().strip() or "fajos_central"
+            self._refresh_db_label()
+            messagebox.showinfo(
+                "Guardado",
+                f"Configuración guardada en:\n{path}\n\n"
+                "Si el servidor web ya estaba en marcha, deténlo e inícialo de nuevo.",
+                parent=win,
+            )
+            win.destroy()
+
+        ttk.Button(frm, text="Guardar", command=guardar).grid(row=len(specs), column=0, columnspan=2, sticky=tk.EW, pady=(16, 4))
+        ttk.Button(frm, text="Cancelar", command=win.destroy).grid(row=len(specs)+1, column=0, columnspan=2, sticky=tk.EW)
+
+    def _test_db(self) -> None:
+        try:
+            from app.core.config import get_settings
+            get_settings.cache_clear()
+            # re-apply ini into env
+            from app.core.config import _read_ini
+            import os as _os
+            for k, v in _read_ini().items():
+                _os.environ[f"FAJOS_{k.upper()}"] = str(v)
+            get_settings.cache_clear()
+            settings = get_settings()
+            import mysql.connector
+            conn = mysql.connector.connect(**settings.db_config)
+            conn.close()
+            messagebox.showinfo(
+                "Conexión OK",
+                f"Conectado correctamente a\n"
+                f"{settings.db_user}@{settings.db_host}:{settings.db_port}/{settings.db_name}",
+            )
+        except Exception as e:
+            messagebox.showerror(
+                "Conexión fallida",
+                f"No se pudo conectar a MariaDB.\n\n{e}\n\n"
+                "Revisa usuario, contraseña y que el servicio esté activo.\n"
+                "Usa «Configurar conexión» para corregir los datos.",
+            )
+
     def _open_path(self, path: Path) -> None:
         path = Path(path)
         try:
@@ -398,7 +530,7 @@ class LauncherApp(tk.Tk):
 def main() -> None:
     app = LauncherApp()
     app.update_idletasks()
-    w, h = 480, 560
+    w, h = 480, 640
     x = (app.winfo_screenwidth() // 2) - (w // 2)
     y = (app.winfo_screenheight() // 2) - (h // 2)
     app.geometry(f"{w}x{h}+{x}+{y}")

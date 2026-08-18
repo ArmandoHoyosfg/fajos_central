@@ -56,6 +56,17 @@ python run.py
 Lista de librerías Python de la app web (FastAPI, MariaDB, Excel, PDF, tests…).  
 No instales a mano: usa `setup_windows.ps1` o `pip install -r requirements.txt`.
 
+### `config.ini`  ★ conexión a la base de datos
+Archivo **local** con usuario, contraseña y servidor MariaDB.
+
+- Se crea desde el launcher: **Configurar conexión (usuario / contraseña)**
+- O copia `config.ini.example` → `config.ini` y edítalo
+- **No se sube a Git** (contiene la contraseña)
+- Lo usan la web, el import y la app de escritorio
+
+### `config.ini.example`
+Plantilla sin contraseña. Ejemplo de estructura del `config.ini`.
+
 ### `.env.example`
 Plantilla de configuración (host, puerto, usuario BD…).  
 Cópiala a `.env` y pon tu contraseña de MariaDB. **No subas `.env` a Git.**

@@ -7,7 +7,11 @@ cd ruta\a\fajos_central
 pwsh -File .\setup_windows.ps1
 ```
 
-Edita `.env` con usuario y contraseña de MariaDB.
+Configura la base de datos:
+
+- **Recomendado:** abre `python launcher.py` → **Configurar conexión** → Guardar (crea `config.ini`).
+- Alternativa: copia `config.ini.example` a `config.ini` y pon usuario/contraseña.
+- También puedes usar `.env` (las variables `FAJOS_DB_*` tienen prioridad).
 
 En **HeidiSQL**, sobre la base `fajos_central`, ejecuta en orden:
 

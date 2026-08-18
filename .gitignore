@@ -12,6 +12,7 @@ htmlcov/
 
 # Entorno y secretos
 .env
+config.ini
 *.local
 
 # Logs y exports generados
