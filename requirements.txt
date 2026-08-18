@@ -28,3 +28,6 @@ python-dateutil>=2.9.0
 
 # Launcher logo (opcional)
 Pillow>=10.0.0
+
+# Certificados SSL locales
+cryptography>=42.0.0

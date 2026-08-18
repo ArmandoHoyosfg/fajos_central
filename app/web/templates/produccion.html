@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Producción — Fajos Central{% endblock %}
+{% block title %}Producción — Fajos Piteados Central{% endblock %}
 {% block content %}
 <h1>Producción semanal (Plata)</h1>
 
@@ -93,6 +93,7 @@
   <p class="muted" style="margin:0.5rem 0 0;">Deja vacío el día si no hay gramos (no se guardan ceros).</p>
 </div>
 
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
@@ -125,7 +126,8 @@
       <td>{{ r.total_gramos or '' }}</td>
       <td>{% if r.efectivo %}${{ '%.2f'|format(r.efectivo|float) }}{% endif %}</td>
     </tr>
-    {% else %}
+    </div>
+{% else %}
     <tr><td colspan="16" class="muted">Sin líneas. Agrega producción arriba o importa el Excel.</td></tr>
     {% endfor %}
   </tbody>

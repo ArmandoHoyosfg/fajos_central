@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.3.0] — 2026-08-18
+
+### Añadido
+- UI web rediseñada (CSS dark-first, logo, badges, tablas)
+- HTTPS opcional: certificados locales, redirección HTTP→HTTPS, launcher abre https
+- `scripts/generate_ssl_certs.py`
+
 ## [2.2.4] — 2026-08-18
 
 ### Corregido / Añadido

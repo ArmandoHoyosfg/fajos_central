@@ -31,3 +31,6 @@ Thumbs.db
 dist/
 build/
 *.exe
+
+# Certificados SSL locales
+certs/

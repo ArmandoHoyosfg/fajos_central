@@ -44,6 +44,51 @@ PORT = int(os.environ.get("FAJOS_APP_PORT", "8000"))
 LOCAL_URL = f"http://127.0.0.1:{PORT}"
 LOGO_PATH = ROOT / "app" / "web" / "static" / "logo.png"
 
+
+def _ssl_files():
+    """Devuelve (cert, key) si hay certificados configurados o en certs/."""
+    cert = os.environ.get("FAJOS_SSL_CERTFILE", "").strip()
+    key = os.environ.get("FAJOS_SSL_KEYFILE", "").strip()
+    if not cert or not key:
+        c, k = ROOT / "certs" / "cert.pem", ROOT / "certs" / "key.pem"
+        if c.exists() and k.exists():
+            return str(c), str(k)
+        # config.ini
+        try:
+            import configparser
+            ini = ROOT / "config.ini"
+            if ini.exists():
+                cp = configparser.ConfigParser()
+                cp.read(ini, encoding="utf-8")
+                if cp.has_section("server"):
+                    cert = cp["server"].get("ssl_certfile", "") or ""
+                    key = cp["server"].get("ssl_keyfile", "") or ""
+                    if cert and key:
+                        pc, pk = Path(cert), Path(key)
+                        if not pc.is_absolute():
+                            pc = ROOT / pc
+                        if not pk.is_absolute():
+                            pk = ROOT / pk
+                        if pc.exists() and pk.exists():
+                            return str(pc), str(pk)
+        except Exception:
+            pass
+        return None
+    pc, pk = Path(cert), Path(key)
+    if not pc.is_absolute():
+        pc = ROOT / pc
+    if not pk.is_absolute():
+        pk = ROOT / pk
+    if pc.exists() and pk.exists():
+        return str(pc), str(pk)
+    return None
+
+
+def _base_url() -> str:
+    scheme = "https" if _ssl_files() else "http"
+    return f"{scheme}://127.0.0.1:{PORT}"
+
+
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -145,7 +190,8 @@ class LauncherApp(tk.Tk):
             status_frame, text="● Detenido", style="Status.TLabel", foreground="#f38ba8"
         )
         self.lbl_status.pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Label(main, text=f"URL: {LOCAL_URL}", foreground="#a6adc8").pack(anchor=tk.W, pady=(0, 8))
+        self.lbl_url = ttk.Label(main, text=f"URL: {_base_url()}", foreground="#a6adc8")
+        self.lbl_url.pack(anchor=tk.W, pady=(0, 8))
 
         # --- BD PRIMERO (visible sin scroll) ---
         dbframe = ttk.LabelFrame(main, text="  Base de datos (MariaDB)  ", padding=10)
@@ -354,7 +400,10 @@ class LauncherApp(tk.Tk):
             "--port",
             str(PORT),
         ]
-        if os.environ.get("FAJOS_DEBUG", "true").lower() in ("1", "true", "yes"):
+        ssl = _ssl_files()
+        if ssl:
+            cmd.extend(["--ssl-certfile", ssl[0], "--ssl-keyfile", ssl[1]])
+        elif os.environ.get("FAJOS_DEBUG", "true").lower() in ("1", "true", "yes"):
             cmd.append("--reload")
 
         try:
@@ -380,6 +429,10 @@ class LauncherApp(tk.Tk):
             self._server_proc = None
             return
 
+        try:
+            self.lbl_url.configure(text=f"URL: {_base_url()}")
+        except Exception:
+            pass
         self._update_status()
         threading.Thread(target=self._wait_and_maybe_open, daemon=True).start()
 
@@ -433,10 +486,10 @@ class LauncherApp(tk.Tk):
             self._update_status()
 
     def _open_browser(self) -> None:
-        webbrowser.open(LOCAL_URL)
+        webbrowser.open(_base_url())
 
     def _open_api_docs(self) -> None:
-        webbrowser.open(f"{LOCAL_URL}/docs")
+        webbrowser.open(_base_url() + "/docs")
 
     def _run_desktop(self) -> None:
         desktop_main = ROOT / "desktop_legacy" / "main.py"

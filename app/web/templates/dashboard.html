@@ -1,10 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Fajos Central{% endblock %}
+{% block title %}Dashboard — Fajos Piteados Central{% endblock %}
 {% block content %}
 <h1>Dashboard</h1>
-<p class="muted">Resumen general del taller</p>
+<p class="muted">Resumen del taller · captura y nóminas en un vistazo</p>
 
-<div class="grid" style="margin-top:1rem;">
+<div class="actions">
+  <a class="btn" href="/produccion">Ir a producción</a>
+  <a class="btn btn-secondary" href="/trabajadores">Trabajadores</a>
+  <a class="btn btn-secondary" href="/docs" target="_blank">API /docs</a>
+</div>
+
+<div class="grid">
   <div class="card">
     <div class="label">Trabajadores activos</div>
     <div class="value">{{ kpis.trabajadores_activos | default(0) }}</div>
@@ -14,25 +20,26 @@
     <div class="value">{{ kpis.trabajadores_plt | default(0) }}</div>
   </div>
   <div class="card">
-    <div class="label">Semanas registradas</div>
+    <div class="label">Semanas</div>
     <div class="value">{{ kpis.total_semanas | default(0) }}</div>
   </div>
   <div class="card">
     <div class="label">Gramos históricos</div>
     <div class="value">{{ kpis.total_gramos_historico | default(0) }}</div>
   </div>
-  <div class="card">
+  <div class="card accent">
     <div class="label">Efectivo producción</div>
     <div class="value money">${{ '%.2f'|format( (kpis.total_efectivo_historico or 0)|float ) }}</div>
   </div>
-  <div class="card">
-    <div class="label">Nómina total acumulada</div>
+  <div class="card accent">
+    <div class="label">Nómina acumulada</div>
     <div class="value money">${{ '%.2f'|format( (kpis.nomina_total_acumulada or 0)|float ) }}</div>
   </div>
 </div>
 
-<h2 style="margin-top:2rem;">Últimas semanas</h2>
+<h2>Últimas semanas</h2>
 {% if semanas %}
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
@@ -54,7 +61,8 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
-<p class="muted">Aún no hay semanas registradas. Crea una en Producción o importa el Excel.</p>
+<p class="muted">Aún no hay semanas. Crea una en <a href="/produccion">Producción</a> o importa el Excel desde el launcher.</p>
 {% endif %}
 {% endblock %}

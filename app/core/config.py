@@ -57,6 +57,12 @@ def _read_ini() -> dict:
                 pass
         if "debug" in srv:
             data["debug"] = srv.get("debug", "true").lower() in ("1", "true", "yes")
+        if "force_https" in srv:
+            data["force_https"] = srv.get("force_https", "false").lower() in ("1", "true", "yes")
+        if srv.get("ssl_certfile"):
+            data["ssl_certfile"] = srv.get("ssl_certfile")
+        if srv.get("ssl_keyfile"):
+            data["ssl_keyfile"] = srv.get("ssl_keyfile")
     return data
 
 
@@ -133,6 +139,11 @@ class Settings(BaseSettings):
     debug: bool = True
     secret_key: str = "dev-secret-change-me"
 
+    # HTTPS (opcional en red local; certificados autofirmados)
+    force_https: bool = False
+    ssl_certfile: str = ""
+    ssl_keyfile: str = ""
+
     export_dir: Path = BASE_DIR / "exports"
     log_dir: Path = BASE_DIR / "logs"
 
@@ -170,6 +181,9 @@ def get_settings() -> Settings:
         "app_host": "FAJOS_APP_HOST",
         "app_port": "FAJOS_APP_PORT",
         "debug": "FAJOS_DEBUG",
+        "force_https": "FAJOS_FORCE_HTTPS",
+        "ssl_certfile": "FAJOS_SSL_CERTFILE",
+        "ssl_keyfile": "FAJOS_SSL_KEYFILE",
     }
     for key, env_name in mapping.items():
         if key in ini_defaults and env_name not in os.environ:

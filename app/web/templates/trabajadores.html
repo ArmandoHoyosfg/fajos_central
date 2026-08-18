@@ -1,41 +1,48 @@
 {% extends "base.html" %}
-{% block title %}Trabajadores — Fajos Central{% endblock %}
+{% block title %}Trabajadores — Fajos Piteados Central{% endblock %}
 {% block content %}
 <h1>Trabajadores</h1>
+<p class="muted">Mismo nombre + distinta ubic = personas diferentes</p>
 
 <div class="toolbar">
   <form class="inline" method="get" action="/trabajadores">
-    <input type="text" name="q" value="{{ q }}" placeholder="Buscar nombre o ubic...">
+    <div>
+      <label class="field-label">Buscar</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Nombre o ubic...">
+    </div>
     <button class="btn" type="submit">Buscar</button>
+    {% if q %}<a class="btn btn-secondary" href="/trabajadores">Limpiar</a>{% endif %}
   </form>
 </div>
 
 <div class="card" style="margin-bottom:1rem;">
-  <form class="inline" method="post" action="/api/trabajadores" id="form-add"
+  <strong>Agregar trabajador</strong>
+  <form class="inline" style="margin-top:0.75rem;" method="post" action="/api/trabajadores"
         onsubmit="return submitTrabajador(event)">
     <div>
-      <label class="muted">Nombre</label><br>
+      <label class="field-label">Nombre</label>
       <input name="nombre_mostrar" required placeholder="Nombre">
     </div>
     <div>
-      <label class="muted">Ubic</label><br>
+      <label class="field-label">Ubic</label>
       <input name="ubic" type="number" required style="width:90px;">
     </div>
     <div>
-      <label class="muted">Tipo</label><br>
+      <label class="field-label">Tipo</label>
       <select name="tipo">
         <option>PLT</option><option>PIT</option><option>TLL</option>
         <option>PLT/PIT</option><option>Mixto</option>
       </select>
     </div>
     <div>
-      <label class="muted">Puesto</label><br>
+      <label class="field-label">Puesto</label>
       <input name="puesto" placeholder="(TLL)">
     </div>
     <button class="btn btn-success" type="submit">Agregar</button>
   </form>
 </div>
 
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
@@ -49,16 +56,36 @@
       <td>{{ t.id }}</td>
       <td>{{ t.nombre_mostrar }}</td>
       <td>{{ t.ubic }}</td>
-      <td>{{ t.tipo }}</td>
+      <td>
+        {% set tipo = (t.tipo or '')|upper %}
+        {% if 'PLT' in tipo and 'PIT' in tipo %}
+          <span class="badge badge-mix">{{ t.tipo }}</span>
+        {% elif 'PLT' in tipo %}
+          <span class="badge badge-plt">{{ t.tipo }}</span>
+        {% elif 'PIT' in tipo %}
+          <span class="badge badge-pit">{{ t.tipo }}</span>
+        {% elif 'TLL' in tipo %}
+          <span class="badge badge-tll">{{ t.tipo }}</span>
+        {% else %}
+          <span class="badge badge-mix">{{ t.tipo or '—' }}</span>
+        {% endif %}
+      </td>
       <td>{{ t.puesto or '—' }}</td>
-      <td>{{ 'Sí' if t.activo else 'No' }}</td>
+      <td>
+        {% if t.activo %}
+          <span class="badge badge-ok">Sí</span>
+        {% else %}
+          <span class="badge badge-off">No</span>
+        {% endif %}
+      </td>
       <td>{{ t.fecha_incorporacion or '—' }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="muted">Sin trabajadores</td></tr>
+    <tr><td colspan="7" class="muted">Sin trabajadores. Agrega uno o importa el Excel.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 <script>
 async function submitTrabajador(e) {
@@ -67,11 +94,8 @@ async function submitTrabajador(e) {
   const fd = new FormData(form);
   const res = await fetch('/api/trabajadores', { method: 'POST', body: fd });
   const data = await res.json();
-  if (res.ok && data.ok) {
-    location.reload();
-  } else {
-    alert(data.user_message || data.message || 'Error al agregar');
-  }
+  if (res.ok && data.ok) location.reload();
+  else alert(data.user_message || data.message || 'Error al agregar');
   return false;
 }
 </script>

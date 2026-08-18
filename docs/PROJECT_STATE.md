@@ -2,7 +2,7 @@
 
 > Archivo de checkpoint legible por humanos e IAs.
 > Actualizar este archivo en cada hito relevante del proyecto.
-> Última actualización: 2026-08-17 | Versión app: **2.2.0**
+> Última actualización: 2026-08-17 | Versión app: **2.3.0**
 > **Entorno del usuario (obligatorio tener en cuenta):** Windows 10/11 + **PowerShell 7** + HeidiSQL/MariaDB.
 
 ---
@@ -194,6 +194,7 @@ API docs: `/docs`
 | 2.1.0 | Launcher GUI (tkinter) |
 | 2.1.1 | Scripts PowerShell 7; log de servidor en Windows |
 | 2.2.0 | Import seguro Excel; captura web producción; schema suministro |
+| 2.3.0 | UI dark-first + logo; HTTPS local opcional con redirección |
 
 Tags git: `v2.0.0`, `v2.1.0`, `v2.1.1`
 

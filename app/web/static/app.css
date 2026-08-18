@@ -1,0 +1,260 @@
+/* Fajos Piteados Central — UI dark-first (capa presentación) */
+:root {
+  --bg: #1e1e2e;
+  --bg-elev: #262637;
+  --surface: #313244;
+  --border: #45475a;
+  --text: #cdd6f4;
+  --muted: #a6adc8;
+  --faint: #6c7086;
+  --accent: #c9a227;
+  --accent-dim: #a68520;
+  --blue: #89b4fa;
+  --green: #a6e3a1;
+  --red: #f38ba8;
+  --peach: #fab387;
+  --radius: 12px;
+  --shadow: 0 4px 24px rgba(0,0,0,.25);
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Shell */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.brand img {
+  height: 40px;
+  width: 40px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #fff;
+  padding: 2px;
+}
+.brand:hover { text-decoration: none; color: var(--accent); }
+
+.nav { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.nav a {
+  color: var(--muted);
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+.nav a:hover, .nav a.active {
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+main.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+footer.site-footer {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--faint);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+h1 { font-size: 1.6rem; margin: 0 0 0.35rem; font-weight: 700; }
+h2 { font-size: 1.15rem; margin: 1.75rem 0 0.75rem; font-weight: 600; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); font-size: 0.85rem; }
+
+/* KPI cards */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow);
+}
+.card .label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.card .value {
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.card .value.money { color: var(--green); font-size: 1.25rem; }
+.card.accent { border-color: var(--accent); }
+
+/* Quick actions */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 0.5rem;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: var(--accent);
+  color: #1e1e2e;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+.btn:hover { background: var(--accent-dim); text-decoration: none; color: #1e1e2e; }
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { background: var(--border); color: var(--text); }
+.btn-success { background: #40a02b; color: #fff; }
+.btn-success:hover { background: #2d7a1f; color: #fff; }
+.btn-danger { background: var(--red); color: #1e1e2e; }
+.btn-sm { padding: 0.25rem 0.55rem; font-size: 0.78rem; }
+
+/* Forms */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+form.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+input, select, textarea {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+label.field-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+/* Tables */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+th, td {
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  position: sticky;
+  top: 0;
+}
+tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.badge-plt { background: #1e3a5f; color: var(--blue); }
+.badge-pit { background: #3d2a1a; color: var(--peach); }
+.badge-tll { background: #2a3d2a; color: var(--green); }
+.badge-mix { background: var(--surface); color: var(--muted); }
+.badge-ok { background: #1a3320; color: var(--green); }
+.badge-off { background: #3d2028; color: var(--red); }
+
+/* Status pill */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.status-pill .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--faint);
+}
+.status-pill.ok .dot { background: var(--green); }
+.status-pill.err .dot { background: var(--red); }
+
+@media (max-width: 640px) {
+  .topbar { flex-direction: column; align-items: flex-start; }
+  .card .value { font-size: 1.3rem; }
+  main.container { padding: 1rem; }
+}
