@@ -180,6 +180,7 @@ class LauncherApp(tk.Tk):
         super().__init__()
         self.title("Fajos Piteados Central — Centro de control")
         self.configure(bg="#1e1e2e")
+        self.resizable(False, False)
 
         self._server_proc: subprocess.Popen | None = None
         self._server_log = None
@@ -190,13 +191,15 @@ class LauncherApp(tk.Tk):
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        # Caber en pantalla: alto máximo ~90% y centrar
+        # Tamaño exacto al contenido (sin scroll ni ventana sobrada)
+        self.update_idletasks()
+        w = max(460, self.winfo_reqwidth())
+        h = self.winfo_reqheight()
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        w = min(520, sw - 40)
-        h = min(620, int(sh * 0.88))
+        # Si por DPI no cabe, reducir padding no aplica; limitar al 90% pantalla
+        h = min(h, int(sh * 0.9))
+        w = min(w, sw - 20)
         _center(self, w, h)
-        self.minsize(420, 480)
-
         self._update_status()
 
     def _apply_style(self) -> None:
@@ -210,7 +213,7 @@ class LauncherApp(tk.Tk):
         style.configure("TLabel", background=bg, foreground=fg, font=("Segoe UI", 9))
         style.configure("Title.TLabel", font=("Segoe UI", 12, "bold"), foreground=accent)
         style.configure("Status.TLabel", font=("Segoe UI", 9, "bold"))
-        style.configure("TButton", font=("Segoe UI", 9), padding=5)
+        style.configure("TButton", font=("Segoe UI", 9), padding=(6, 4))
         style.configure("TLabelframe", background=bg, foreground=fg)
         style.configure(
             "TLabelframe.Label",
@@ -220,24 +223,19 @@ class LauncherApp(tk.Tk):
         )
         style.configure("TEntry", fieldbackground="#313244", foreground=fg)
 
-    def _btn(self, parent, text, command, **kw):
-        b = ttk.Button(parent, text=text, command=command, **kw)
-        b.pack(fill=tk.X, pady=2)
-        return b
-
     def _build_ui(self) -> None:
-        main = ttk.Frame(self, padding=12)
+        main = ttk.Frame(self, padding=(10, 8))
         main.pack(fill=tk.BOTH, expand=True)
 
-        # Cabecera compacta
+        # --- Cabecera ---
         head = ttk.Frame(main)
-        head.pack(fill=tk.X, pady=(0, 6))
+        head.pack(fill=tk.X, pady=(0, 4))
         if LOGO_PATH.exists():
             try:
                 img = tk.PhotoImage(file=str(LOGO_PATH))
                 w = img.width()
-                if w > 48:
-                    img = img.subsample(max(1, w // 48), max(1, w // 48))
+                if w > 40:
+                    img = img.subsample(max(1, w // 40), max(1, w // 40))
                 self._logo_img = img
                 tk.Label(head, image=self._logo_img, bg="#1e1e2e").pack(side=tk.LEFT, padx=(0, 8))
             except Exception:
@@ -247,49 +245,69 @@ class LauncherApp(tk.Tk):
         ttk.Label(titles, text="Fajos Piteados Central", style="Title.TLabel").pack(anchor=tk.W)
         ttk.Label(titles, text="Centro de control", foreground="#a6adc8").pack(anchor=tk.W)
 
-        # Estado
         st = ttk.Frame(main)
-        st.pack(fill=tk.X, pady=(0, 4))
+        st.pack(fill=tk.X, pady=(0, 2))
         ttk.Label(st, text="Servidor:").pack(side=tk.LEFT)
-        self.lbl_status = ttk.Label(st, text="● Detenido", style="Status.TLabel", foreground="#f38ba8")
+        self.lbl_status = ttk.Label(
+            st, text="● Detenido", style="Status.TLabel", foreground="#f38ba8"
+        )
         self.lbl_status.pack(side=tk.LEFT, padx=(6, 0))
         self.lbl_url = ttk.Label(main, text=f"URL: {_base_url()}", foreground="#a6adc8")
-        self.lbl_url.pack(anchor=tk.W, pady=(0, 6))
+        self.lbl_url.pack(anchor=tk.W, pady=(0, 4))
 
-        # BD
-        db = ttk.LabelFrame(main, text=" Base de datos ", padding=6)
-        db.pack(fill=tk.X, pady=3)
-        self._btn(db, "⚙  Configurar conexión", self._config_db)
-        self._btn(db, "🔌  Probar conexión", self._test_db)
+        # --- BD: 2 botones en fila ---
+        db = ttk.LabelFrame(main, text=" Base de datos ", padding=4)
+        db.pack(fill=tk.X, pady=2)
+        db_row = ttk.Frame(db)
+        db_row.pack(fill=tk.X)
+        ttk.Button(db_row, text="⚙  Configurar", command=self._config_db).pack(
+            side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 3)
+        )
+        ttk.Button(db_row, text="🔌  Probar", command=self._test_db).pack(
+            side=tk.LEFT, expand=True, fill=tk.X, padx=(3, 0)
+        )
         self.lbl_db = ttk.Label(db, text="", font=("Segoe UI", 8), foreground="#a6adc8")
-        self.lbl_db.pack(anchor=tk.W)
+        self.lbl_db.pack(anchor=tk.W, pady=(2, 0))
         self._refresh_db_label()
 
-        # Web
-        web = ttk.LabelFrame(main, text=" Aplicación web ", padding=6)
-        web.pack(fill=tk.X, pady=3)
-        self.btn_start = self._btn(web, "▶  Iniciar servidor", self._start_server)
-        self.btn_stop = self._btn(web, "■  Detener servidor", self._stop_server)
-        self.btn_stop.configure(state=tk.DISABLED)
-        self._btn(web, "🌐  Abrir navegador", self._open_browser)
-        self._btn(web, "📖  API /docs", self._open_api_docs)
+        # --- Web: 2x2 ---
+        web = ttk.LabelFrame(main, text=" Aplicación web ", padding=4)
+        web.pack(fill=tk.X, pady=2)
+        g = ttk.Frame(web)
+        g.pack(fill=tk.X)
+        self.btn_start = ttk.Button(g, text="▶  Iniciar", command=self._start_server)
+        self.btn_stop = ttk.Button(g, text="■  Detener", command=self._stop_server, state=tk.DISABLED)
+        self.btn_start.grid(row=0, column=0, sticky="ew", padx=(0, 3), pady=2)
+        self.btn_stop.grid(row=0, column=1, sticky="ew", padx=(3, 0), pady=2)
+        ttk.Button(g, text="🌐  Navegador", command=self._open_browser).grid(
+            row=1, column=0, sticky="ew", padx=(0, 3), pady=2
+        )
+        ttk.Button(g, text="📖  API /docs", command=self._open_api_docs).grid(
+            row=1, column=1, sticky="ew", padx=(3, 0), pady=2
+        )
+        g.columnconfigure(0, weight=1)
+        g.columnconfigure(1, weight=1)
 
-        # Escritorio + datos en dos columnas
-        row = ttk.Frame(main)
-        row.pack(fill=tk.X, pady=3)
-        desk = ttk.LabelFrame(row, text=" Escritorio ", padding=6)
+        # --- Escritorio + Datos: 2 columnas ---
+        mid = ttk.Frame(main)
+        mid.pack(fill=tk.X, pady=2)
+        desk = ttk.LabelFrame(mid, text=" Escritorio ", padding=4)
         desk.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 3))
-        self._btn(desk, "🖥  Abrir app", self._run_desktop)
+        ttk.Button(desk, text="🖥  Abrir app", command=self._run_desktop).pack(fill=tk.X)
 
-        data = ttk.LabelFrame(row, text=" Datos ", padding=6)
+        data = ttk.LabelFrame(mid, text=" Datos / Excel ", padding=4)
         data.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(3, 0))
-        self._btn(data, "📊  Excel", self._open_excel)
-        self._btn(data, "🔍  Import (simular)", lambda: self._run_import(False))
-        self._btn(data, "⬇  Import (aplicar)", lambda: self._run_import(True))
+        ttk.Button(data, text="📊  Excel nóminas", command=self._open_excel).pack(fill=tk.X, pady=1)
+        ttk.Button(
+            data, text="🔍  Import simular", command=lambda: self._run_import(False)
+        ).pack(fill=tk.X, pady=1)
+        ttk.Button(
+            data, text="⬇  Import aplicar", command=lambda: self._run_import(True)
+        ).pack(fill=tk.X, pady=1)
 
-        # Utilidades
-        util = ttk.LabelFrame(main, text=" Utilidades ", padding=6)
-        util.pack(fill=tk.X, pady=3)
+        # --- Utilidades: una sola fila ---
+        util = ttk.LabelFrame(main, text=" Utilidades ", padding=4)
+        util.pack(fill=tk.X, pady=2)
         urow = ttk.Frame(util)
         urow.pack(fill=tk.X)
         for txt, cmd in (
