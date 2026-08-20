@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import date
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -142,6 +143,24 @@ class WorkersWidget(QWidget):
             for j, v in enumerate(vals):
                 item = QTableWidgetItem(str(v))
                 item.setTextAlignment(Qt.AlignCenter if j in (0, 3, 4, 6) else Qt.AlignLeft | Qt.AlignVCenter)
+                if j == 4:  # Tipo
+                    t = str(v).upper()
+                    if "PLT" in t and "PIT" in t:
+                        item.setBackground(QBrush(QColor("#313244")))
+                    elif "PLT" in t:
+                        item.setBackground(QBrush(QColor("#1e3a5f")))
+                        item.setForeground(QBrush(QColor("#89b4fa")))
+                    elif "PIT" in t:
+                        item.setBackground(QBrush(QColor("#3d2a1a")))
+                        item.setForeground(QBrush(QColor("#fab387")))
+                    elif "TLL" in t:
+                        item.setBackground(QBrush(QColor("#1a3d2a")))
+                        item.setForeground(QBrush(QColor("#a6e3a1")))
+                if j == 6:  # Activo
+                    if str(v) == "Sí":
+                        item.setForeground(QBrush(QColor("#a6e3a1")))
+                    else:
+                        item.setForeground(QBrush(QColor("#f38ba8")))
                 self.table.setItem(i, j, item)
 
     def _on_add(self):

@@ -121,6 +121,27 @@ QLabel[cssClass="subtitle"] {
     color: #a6adc8;
     font-size: 12px;
 }
+QLabel[cssClass="kpi"] {
+    color: #c9a227;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px;
+    background-color: #313244;
+    border-radius: 8px;
+}
+QGroupBox {
+    border: 1px solid #45475a;
+    border-radius: 10px;
+    margin-top: 14px;
+    padding-top: 12px;
+    font-weight: 600;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 8px;
+    color: #c9a227;
+}
 QScrollBar:vertical {
     background: #1e1e2e;
     width: 10px;

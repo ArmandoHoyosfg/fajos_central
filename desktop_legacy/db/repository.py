@@ -198,6 +198,44 @@ class ProduccionRepo(BaseRepo):
         cur.execute("DELETE FROM produccion_plata WHERE id = %s", (prod_id,))
         cur.close()
 
+    def actualizar_gramos_dia(self, prod_id: int, col: str, gramos) -> None:
+        allowed = {"gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"}
+        if col not in allowed:
+            raise ValueError(f"Columna de día inválida: {col}")
+        val = None
+        if gramos is not None:
+            try:
+                f = float(gramos)
+                val = None if f == 0 else f
+            except (TypeError, ValueError):
+                val = None
+        cur = self.db.cursor()
+        cur.execute(f"UPDATE produccion_plata SET {col} = %s WHERE id = %s", (val, prod_id))
+        cur.close()
+
+    def buscar_linea(
+        self,
+        semana_id: int,
+        nombre: str,
+        ubic: int,
+        folio: str | None = None,
+    ) -> dict | None:
+        cur = self.db.cursor()
+        if folio:
+            cur.execute(
+                "SELECT * FROM produccion_plata WHERE semana_id=%s AND nombre=%s AND ubic=%s AND folio=%s LIMIT 1",
+                (semana_id, nombre, ubic, folio),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM produccion_plata WHERE semana_id=%s AND nombre=%s AND ubic=%s "
+                "AND (folio IS NULL OR folio='') LIMIT 1",
+                (semana_id, nombre, ubic),
+            )
+        row = cur.fetchone()
+        cur.close()
+        return row
+
     def totales_semana(self, semana_id: int) -> dict:
         sql = """
             SELECT
