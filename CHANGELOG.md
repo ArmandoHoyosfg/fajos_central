@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.9.0] — 2026-08-20
+
+### Prioridad media
+- `calendar_util` único (`app.core`; desktop reexporta)
+- Web: edición inline de gramos + toast
+- Filtro «sin firmar» + checkbox firmado
+- Botón ★ Semana actual (web y desktop)
+- Captura incluye trabajadores PIT/TLL (no solo PLT)
+
 ## [2.8.0] — 2026-08-20
 
 ### Alta prioridad

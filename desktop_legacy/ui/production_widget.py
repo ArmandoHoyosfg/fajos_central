@@ -155,6 +155,10 @@ class ProductionWidget(QWidget):
         self.btn_nueva_sem = QPushButton("+ Nueva semana")
         self.btn_nueva_sem.clicked.connect(self._on_nueva_semana)
         top.addWidget(self.btn_nueva_sem)
+        self.btn_semana_actual = QPushButton("★ Semana actual")
+        self.btn_semana_actual.setToolTip("Crea o selecciona la semana sáb–vie de hoy")
+        self.btn_semana_actual.clicked.connect(self._on_semana_actual)
+        top.addWidget(self.btn_semana_actual)
         self.btn_cerrar_sem = QPushButton("🔒 Cerrar semana")
         self.btn_cerrar_sem.setToolTip("Bloquea edición de producción (formal definitivo)")
         self.btn_cerrar_sem.clicked.connect(self._on_cerrar_semana)
@@ -306,6 +310,10 @@ class ProductionWidget(QWidget):
         self.chk_solo_hoy.setToolTip("Muestra líneas que aún no tienen gramos en el día de hoy")
         self.chk_solo_hoy.toggled.connect(lambda: self._apply_filter(self.inp_filter.text()))
         filt.addWidget(self.chk_solo_hoy)
+        self.chk_sin_firma = QCheckBox("Sin firmar")
+        self.chk_sin_firma.setToolTip("Solo líneas pendientes de firma")
+        self.chk_sin_firma.toggled.connect(lambda: self._apply_filter(self.inp_filter.text()))
+        filt.addWidget(self.chk_sin_firma)
         btn_copy = QPushButton("Copiar día → hoy")
         btn_copy.setToolTip("Copia gramos del día anterior al día de hoy en la línea seleccionada")
         btn_copy.clicked.connect(self._on_copy_prev_day)
@@ -415,7 +423,7 @@ class ProductionWidget(QWidget):
         for cmb in (self.cmb_trabajador, self.cmb_dia_trab):
             cmb.clear()
         try:
-            rows = self.trab_repo.listar(solo_plt=True, solo_activos=True)
+            rows = self.trab_repo.listar(solo_plt=False, solo_activos=True)
             for r in rows:
                 label = f"{r['nombre_mostrar']}  (Ubic {r['ubic']})"
                 data = (r["id"], r["nombre_mostrar"], r["ubic"])
@@ -477,6 +485,30 @@ class ProductionWidget(QWidget):
         self._set_edit_enabled(not cerrada)
         self._update_semana_context_label()
         self.refresh_table()
+
+
+    def _on_semana_actual(self) -> None:
+        """Crea o selecciona la semana del calendario que contiene hoy."""
+        try:
+            semanas = self.sem_repo.listar()
+            actual = encontrar_semana_actual(semanas, today())
+            if actual:
+                idx = self.cmb_semana.findData(actual["id"])
+                if idx >= 0:
+                    self.cmb_semana.setCurrentIndex(idx)
+                self._show_toast(f"Semana actual: {actual.get('codigo')}")
+                return
+            codigo, sab, vie = sugerir_codigo_semana(today())
+            new_id = self.sem_repo.crear(
+                codigo, sab, vie, anio=sab.year, notas="Semana actual (auto)",
+            )
+            self._load_semanas()
+            idx = self.cmb_semana.findData(new_id)
+            if idx >= 0:
+                self.cmb_semana.setCurrentIndex(idx)
+            self._show_toast(f"Creada semana {codigo}")
+        except Exception as e:
+            self._show_toast(str(e), error=True)
 
     def _on_nueva_semana(self):
         from PySide6.QtWidgets import QDialog, QDialogButtonBox, QDateEdit
@@ -826,6 +858,8 @@ class ProductionWidget(QWidget):
                     r for r in rows
                     if not r.get(today_key) or float(r.get(today_key) or 0) == 0
                 ]
+            if getattr(self, "chk_sin_firma", None) and self.chk_sin_firma.isChecked():
+                rows = [r for r in rows if not r.get("firmado")]
             self.table.setRowCount(len(rows))
             if not rows:
                 self.lbl_empty.setText(
@@ -998,7 +1032,7 @@ class ProductionWidget(QWidget):
         if not path:
             return
         try:
-            trabs = self.trab_repo.listar(solo_plt=True, solo_activos=True)
+            trabs = self.trab_repo.listar(solo_plt=False, solo_activos=True)
             codigo = self.cmb_semana.currentText().split()[0] if self.cmb_semana.currentText() else ""
             self.excel.exportar_captura(path, trabs, codigo_semana=codigo)
             QMessageBox.information(self, "Exportado", path)

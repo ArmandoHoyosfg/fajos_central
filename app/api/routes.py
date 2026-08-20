@@ -99,7 +99,7 @@ async def page_produccion(
         semana_id = actual["id"] if actual else semanas[0]["id"]
     lineas = prod_repo.listar_por_semana(semana_id) if semana_id else []
     totales = prod_repo.totales_semana(semana_id) if semana_id else {}
-    trabajadores = trab_repo.listar(solo_plt=True, solo_activos=True)
+    trabajadores = trab_repo.listar(solo_plt=False, solo_activos=True)
     return templates.TemplateResponse(
         request,
         "produccion.html",
@@ -118,6 +118,50 @@ async def page_produccion(
 
 
 # ---------- API JSON ----------
+
+
+
+
+@router.post("/api/semanas/actual")
+async def api_crear_semana_actual(
+    repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    """Crea (o devuelve) la semana sáb–vie que contiene hoy."""
+    from app.core.calendar_util import encontrar_semana_actual, sugerir_codigo_semana, today
+
+    existentes = repo.listar()
+    actual = encontrar_semana_actual(existentes, today())
+    if actual:
+        return {"ok": True, "created": False, "semana": actual}
+    codigo, sab, vie = sugerir_codigo_semana(today())
+    new_id = repo.crear({
+        "codigo": codigo,
+        "fecha_inicio": sab.isoformat(),
+        "fecha_fin": vie.isoformat(),
+        "anio": sab.year,
+        "notas": "Creada automáticamente (semana actual)",
+    })
+    return {
+        "ok": True,
+        "created": True,
+        "semana": {
+            "id": new_id,
+            "codigo": codigo,
+            "fecha_inicio": sab.isoformat(),
+            "fecha_fin": vie.isoformat(),
+            "anio": sab.year,
+        },
+    }
+
+
+@router.patch("/api/produccion/linea/{prod_id}/firmado")
+async def api_toggle_firmado(
+    prod_id: int,
+    firmado: int = Form(1),
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+):
+    repo.set_firmado(prod_id, bool(int(firmado)))
+    return {"ok": True, "prod_id": prod_id, "firmado": bool(int(firmado))}
 
 
 @router.get("/api/tarifas")

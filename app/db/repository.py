@@ -232,7 +232,20 @@ class ProduccionRepo(BaseRepo):
             )
             return cur.lastrowid
 
+    def set_firmado(self, prod_id: int, firmado: bool) -> None:
+        with self.db.cursor() as cur:
+            cur.execute(
+                "UPDATE produccion_plata SET firmado = %s WHERE id = %s",
+                (1 if firmado else 0, prod_id),
+            )
+            if cur.rowcount == 0:
+                raise NotFoundError(
+                    f"Línea de producción id={prod_id} no existe.",
+                    details={"produccion_id": prod_id},
+                )
+
     def eliminar(self, prod_id: int) -> None:
+
         with self.db.cursor() as cur:
             cur.execute("DELETE FROM produccion_plata WHERE id = %s", (prod_id,))
             if cur.rowcount == 0:

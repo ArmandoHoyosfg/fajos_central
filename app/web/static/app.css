@@ -270,3 +270,20 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
 @media (max-width: 900px) {
   .topbar-fecha .fecha-larga { display: none; }
 }
+
+.toast-web {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 9999;
+  padding: 0.75rem 1.1rem;
+  border-radius: 8px;
+  background: #313244;
+  color: #a6e3a1;
+  font-weight: 600;
+  box-shadow: 0 8px 24px #0008;
+  max-width: 360px;
+}
+.toast-web.err { color: #f38ba8; }
+.cell-gm:focus { outline: 1px solid #c9a227; }
+.filter-row { display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; margin:0.75rem 0; }
