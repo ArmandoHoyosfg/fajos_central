@@ -166,13 +166,14 @@ class ExportService:
             r for r in lineas
             if r.get("folio") or r.get("modelo") or float(r.get("total_gramos") or 0) > 0
         ]
-        data_rows.sort(
-            key=lambda r: (
-                str(r.get("material") or "").upper(),
-                int(r.get("ubic") or 0) if str(r.get("ubic") or "").replace(".", "").isdigit() else 0,
-                str(r.get("nombre") or "").upper(),
-            )
-        )
+        def _pk(r):
+            try:
+                u = int(float(r.get("ubic") or 0))
+            except (TypeError, ValueError):
+                u = 0
+            return (u, str(r.get("nombre") or "").upper(), str(r.get("folio") or "").upper())
+
+        data_rows.sort(key=_pk)
 
         for i, row in enumerate(data_rows):
             r = 6 + i

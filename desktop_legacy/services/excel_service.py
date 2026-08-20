@@ -43,7 +43,7 @@ class ExcelService:
         codigo_semana: str = "",
         mes: str = "",
         anio: int = 2026,
-        agrupar_material: bool = True,
+        agrupar_material: bool = False,  # por defecto: ubic → nombre (materiales mezclados, color por fila)
         fecha_inicio: str | None = None,
         fecha_fin: str | None = None,
         titulo_extra: str = "",
@@ -146,7 +146,7 @@ class ExcelService:
             cell.font = Font(name="Calibri", bold=True, size=8)
             cell.border = self.THIN
             cell.alignment = Alignment(horizontal="center")
-        ws["F4"] = "Orden: material → ubic → nombre  ·  Ceros ocultos  ·  Columna Firma para pago"
+        ws["F4"] = "Orden: ubic → nombre → folio  ·  Color de fila = material  ·  Ceros ocultos  ·  Firma al pagar"
         ws["F4"].font = Font(name="Calibri", size=8, italic=True, color="666666")
         ws.merge_cells("F4:P4")
 
@@ -316,14 +316,14 @@ class ExcelService:
             ) from e
 
         ruta = Path(ruta)
-        lineas = sorted(
-            list(lineas),
-            key=lambda r: (
-                str(r.get("material") or "").upper(),
-                int(r.get("ubic") or 0) if str(r.get("ubic") or "").isdigit() else 0,
-                str(r.get("nombre") or "").upper(),
-            ),
-        )
+        def _pk(r):
+            try:
+                u = int(r.get("ubic") or 0)
+            except (TypeError, ValueError):
+                u = 0
+            return (u, str(r.get("nombre") or "").upper(), str(r.get("folio") or "").upper())
+
+        lineas = sorted(list(lineas), key=_pk)
         mat_colors = {
             "AG3": colors.HexColor("#D6EAF8"),
             "AG4": colors.HexColor("#D5F5E3"),

@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.7.2] — 2026-08-20
+
+### Corregido
+- Export formal ordena por **ubic → nombre → folio** (materiales pueden intercalarse)
+- Se mantienen los **colores de fila por material**
+
 ## [2.7.1] — 2026-08-20
 
 ### Export formal enriquecido
