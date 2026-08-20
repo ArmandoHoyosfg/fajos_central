@@ -1097,7 +1097,31 @@ class ProductionWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
+    def _on_suministro(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Suministro diario", "suministro_hoy.xlsx", "Excel (*.xlsx)",
+        )
+        if not path:
+            return
+        try:
+            import sys
+            from pathlib import Path as P
+            root = P(__file__).resolve().parents[2]
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from app.services.dia_service import DiaService
+            st = DiaService().estado_hoy()
+            codigo = self.cmb_semana.currentText().split()[0] if self.cmb_semana.currentText() else ""
+            self.excel.exportar_suministro(
+                path, st.get("trabajos") or self._all_rows,
+                fecha=st["fecha"], label_dia=st["label_dia"], codigo_semana=codigo,
+            )
+            self._show_toast(f"Suministro: {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Suministro", str(e))
+
     def _on_export_formal(self):
+
         if not self._semana_id:
             return
         path, _ = QFileDialog.getSaveFileName(

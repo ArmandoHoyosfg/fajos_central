@@ -261,6 +261,90 @@ class ProduccionRepo(BaseRepo):
             )
             return cur.lastrowid
 
+
+    def duplicar_trabajos_a_semana(self, semana_origen_id: int, semana_destino_id: int) -> dict:
+        """
+        Copia trabajos activos con línea de producción (folio/modelo/material) a otra semana.
+        No copia gramos. Reutiliza trabajo_id existentes.
+        """
+        from app.services.audit_service import AuditService
+        AuditService(self.db).assert_semana_abierta(semana_destino_id)
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.trabajador_id, p.trabajo_id, p.nombre, p.ubic, p.folio, p.modelo,
+                       p.material, p.tarifa_gr
+                FROM produccion_plata p
+                WHERE p.semana_id = %s
+                """,
+                (semana_origen_id,),
+            )
+            origen = list(cur.fetchall() or [])
+            # también trabajos activos sin línea esta semana
+            cur.execute(
+                """
+                SELECT t.id AS trabajo_id, t.trabajador_id, tr.nombre_mostrar AS nombre, tr.ubic,
+                       t.folio, t.modelo, t.material, t.tarifa_gr
+                FROM trabajos t
+                JOIN trabajadores tr ON tr.id = t.trabajador_id
+                WHERE t.activo = 1 AND tr.activo = 1
+                """
+            )
+            todos = list(cur.fetchall() or [])
+        # prefer origen lines; supplement with active trabajos
+        seen = set()
+        to_insert = []
+        for r in origen:
+            key = (r.get("trabajador_id"), r.get("trabajo_id") or r.get("folio"), r.get("material"))
+            if key in seen:
+                continue
+            seen.add(key)
+            to_insert.append(r)
+        for r in todos:
+            key = (r.get("trabajador_id"), r.get("trabajo_id") or r.get("folio"), r.get("material"))
+            if key in seen:
+                continue
+            seen.add(key)
+            to_insert.append(r)
+        created = 0
+        skipped = 0
+        for r in to_insert:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id FROM produccion_plata
+                    WHERE semana_id=%s AND trabajador_id=%s
+                      AND COALESCE(folio,'')=COALESCE(%s,'')
+                      AND COALESCE(material,'')=COALESCE(%s,'')
+                    LIMIT 1
+                    """,
+                    (semana_destino_id, r.get("trabajador_id"), r.get("folio"), r.get("material")),
+                )
+                if cur.fetchone():
+                    skipped += 1
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO produccion_plata
+                      (semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo, material, tarifa_gr)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        semana_destino_id,
+                        r.get("trabajador_id"),
+                        r.get("trabajo_id"),
+                        r.get("nombre"),
+                        r.get("ubic"),
+                        r.get("folio"),
+                        r.get("modelo"),
+                        r.get("material"),
+                        r.get("tarifa_gr"),
+                    ),
+                )
+                created += 1
+        return {"created": created, "skipped": skipped, "total_candidates": len(to_insert)}
+
+
     def set_firmado(self, prod_id: int, firmado: bool) -> None:
         with self.db.cursor() as cur:
             cur.execute(

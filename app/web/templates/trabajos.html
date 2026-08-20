@@ -36,7 +36,11 @@
     </select>
   </form>
   <label class="muted"><input type="checkbox" id="flt-sin-hoy"> Solo sin gramos de hoy</label>
+  <button type="button" class="btn btn-secondary" onclick="cerrarHoy()">Cerrar hoy</button>
+  <a class="btn btn-secondary" href="/api/export/suministro">Suministro Excel</a>
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana()">Duplicar → sig. semana</button>
 </div>
+
 
 <div id="toast" class="toast-web" hidden></div>
 
@@ -92,6 +96,44 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+async function cerrarHoy() {
+  const st = await fetch('/api/dia/estado').then(r => r.json());
+  let msg = `Día ${st.label_dia} (${st.fecha})\nTrabajos: ${st.trabajos_total}\nSin gramos: ${st.trabajos_sin_gramos}\nGramos: ${st.total_gramos_hoy}\n$ ${st.total_efectivo_hoy}\n¿Cerrar el día?`;
+  if (!confirm(msg)) return;
+  const fd = new FormData();
+  fd.append('usuario', 'web');
+  const res = await fetch('/api/dia/cerrar', { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    if (window.FajosLive) FajosLive.showToast('Día cerrado');
+    else alert('Día cerrado');
+  } else alert(data.message || 'Error');
+}
+async function duplicarSemana() {
+  if (!SEMANA_ID) return alert('Sin semana');
+  if (!confirm('¿Copiar folios a la semana siguiente (sin gramos)?')) return;
+  const fd = new FormData();
+  const res = await fetch('/api/produccion/' + SEMANA_ID + '/duplicar', { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    alert('Creadas ' + data.created + ', omitidas ' + data.skipped);
+    if (data.destino_id) location.href = '/trabajos?semana_id=' + data.destino_id;
+  } else alert(data.message || 'Error');
+}
+// avisos al cargar
+fetch('/api/dia/avisos').then(r => r.json()).then(d => {
+  if (d.avisos && d.avisos.length) {
+    const box = document.createElement('div');
+    box.className = 'semana-ctx';
+    box.style.borderLeftColor = '#c9a227';
+    box.innerHTML = d.avisos.map(a => '• ' + a).join('<br>');
+    const main = document.querySelector('main.container');
+    if (main) main.insertBefore(box, main.firstChild);
+  }
+}).catch(() => {});
+</script>
+
 <script>
 const COL_HOY = "{{ col_hoy }}";
 const SEMANA_ID = {{ semana_id or 'null' }};

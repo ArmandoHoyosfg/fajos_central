@@ -170,6 +170,7 @@ class MainWindow(QMainWindow):
             self.lbl_db.setStyleSheet("color: #a6e3a1;")
             self.status.showMessage("Conectado a fajos_central")
             self._refresh_all()
+            QTimer.singleShot(600, self._show_startup_avisos)
         except Exception as e:
             self.lbl_db.setText("BD: sin conexión")
             self.lbl_db.setStyleSheet("color: #f38ba8;")
@@ -182,7 +183,24 @@ class MainWindow(QMainWindow):
                 "o en la raíz del proyecto.",
             )
 
+    def _show_startup_avisos(self) -> None:
+        try:
+            import sys
+            from pathlib import Path
+            root = Path(__file__).resolve().parents[2]
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from app.services.dia_service import DiaService
+            msgs = DiaService().avisos_apertura()
+            if not msgs:
+                return
+            texto = "\n\n".join(f"• {m}" for m in msgs)
+            QMessageBox.information(self, "Avisos del día", texto)
+        except Exception as e:
+            self.status.showMessage(f"Avisos: {e}", 4000)
+
     def _on_global_search(self, text: str):
+
         self.workers.apply_filter(text)
 
     def _focus_workers_search(self):

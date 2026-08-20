@@ -150,6 +150,10 @@ class SemanasRepo(BaseRepo):
 
 
 class ProduccionRepo(BaseRepo):
+    def duplicar_trabajos_a_semana(self, semana_origen_id, semana_destino_id):
+        return _duplicar_trabajos_impl(self.db, semana_origen_id, semana_destino_id)
+
+
 
     def listar_por_semana(self, semana_id: int) -> list[dict]:
         sql = """
@@ -440,3 +444,50 @@ class TrabajosRepo(BaseRepo):
         new_id = cur.lastrowid
         cur.close()
         return int(new_id)
+
+
+def _duplicar_trabajos_impl(db, semana_origen_id, semana_destino_id):
+    cur = db.cursor()
+    cur.execute(
+        "SELECT trabajador_id, trabajo_id, nombre, ubic, folio, modelo, material, tarifa_gr "
+        "FROM produccion_plata WHERE semana_id=%s",
+        (semana_origen_id,),
+    )
+    origen = list(cur.fetchall() or [])
+    cur.execute(
+        "SELECT t.id AS trabajo_id, t.trabajador_id, tr.nombre_mostrar AS nombre, tr.ubic, "
+        "t.folio, t.modelo, t.material, t.tarifa_gr FROM trabajos t "
+        "JOIN trabajadores tr ON tr.id=t.trabajador_id WHERE t.activo=1 AND tr.activo=1"
+    )
+    todos = list(cur.fetchall() or [])
+    seen = set()
+    to_insert = []
+    for r in origen + todos:
+        key = (r.get("trabajador_id"), r.get("trabajo_id") or r.get("folio"), r.get("material"))
+        if key in seen:
+            continue
+        seen.add(key)
+        to_insert.append(r)
+    created = skipped = 0
+    for r in to_insert:
+        cur.execute(
+            "SELECT id FROM produccion_plata WHERE semana_id=%s AND trabajador_id=%s "
+            "AND COALESCE(folio,'')=COALESCE(%s,'') AND COALESCE(material,'')=COALESCE(%s,'') LIMIT 1",
+            (semana_destino_id, r.get("trabajador_id"), r.get("folio"), r.get("material")),
+        )
+        if cur.fetchone():
+            skipped += 1
+            continue
+        cur.execute(
+            "INSERT INTO produccion_plata "
+            "(semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo, material, tarifa_gr) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (
+                semana_destino_id, r.get("trabajador_id"), r.get("trabajo_id"),
+                r.get("nombre"), r.get("ubic"), r.get("folio"), r.get("modelo"),
+                r.get("material"), r.get("tarifa_gr"),
+            ),
+        )
+        created += 1
+    cur.close()
+    return {"created": created, "skipped": skipped, "total_candidates": len(to_insert)}

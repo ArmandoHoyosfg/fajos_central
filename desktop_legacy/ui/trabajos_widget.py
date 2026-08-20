@@ -8,6 +8,7 @@ from datetime import date
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QInputDialog,
+    QFileDialog,
     QAbstractItemView,
     QCheckBox,
     QComboBox,
@@ -88,6 +89,18 @@ class TrabajosWidget(QWidget):
         btn = QPushButton("Actualizar")
         btn.clicked.connect(self.reload)
         top.addWidget(btn)
+        btn_cierre = QPushButton("Cerrar hoy")
+        btn_cierre.setToolTip("Marca el día como cerrado y muestra resumen")
+        btn_cierre.clicked.connect(self._on_cerrar_hoy)
+        top.addWidget(btn_cierre)
+        btn_sum = QPushButton("Suministro")
+        btn_sum.setToolTip("Exportar hoja para anotar gramos a mano")
+        btn_sum.clicked.connect(self._on_suministro)
+        top.addWidget(btn_sum)
+        btn_dup = QPushButton("Duplicar → sig. semana")
+        btn_dup.setToolTip("Copia folios/modelos a la semana siguiente (sin gramos)")
+        btn_dup.clicked.connect(self._on_duplicar)
+        top.addWidget(btn_dup)
         self.lbl_totales = QLabel("Totales: —")
         self.lbl_totales.setProperty("cssClass", "kpi")
         top.addWidget(self.lbl_totales)
@@ -329,6 +342,128 @@ class TrabajosWidget(QWidget):
         })
         return int(new_id)
 
+
+
+    def _on_cerrar_hoy(self):
+        try:
+            import sys
+            from pathlib import Path
+            root = Path(__file__).resolve().parents[2]
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from app.services.dia_service import DiaService
+            svc = DiaService()
+            st = svc.estado_hoy()
+            falt = st["trabajos_sin_gramos"]
+            msg = (
+                f"Día: {st['label_dia']} ({st['fecha']})\n"
+                f"Trabajos: {st['trabajos_total']}\n"
+                f"Sin gramos: {falt}\n"
+                f"Gramos hoy: {st['total_gramos_hoy']}\n"
+                f"Efectivo hoy: ${st['total_efectivo_hoy']:,.2f}\n\n"
+            )
+            if falt:
+                names = ", ".join(
+                    f"{x.get('nombre')}[{x.get('folio') or '—'}]" for x in st["faltantes"][:12]
+                )
+                msg += f"Faltan: {names}\n\n"
+            msg += "¿Cerrar el día? (no impide editar; es un registro de control)"
+            if QMessageBox.question(
+                self, "Cerrar hoy", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            ) != QMessageBox.Yes:
+                return
+            st2 = svc.cerrar_hoy(usuario="desktop")
+            QMessageBox.information(
+                self, "Día cerrado",
+                f"Registrado. Sin gramos: {st2['trabajos_sin_gramos']} · "
+                f"{st2['total_gramos_hoy']} g · ${st2['total_efectivo_hoy']:,.2f}",
+            )
+            self._update_reminder()
+        except Exception as e:
+            QMessageBox.critical(self, "Cerrar hoy", str(e))
+
+    def _on_suministro(self):
+        if not self._semana_id:
+            QMessageBox.warning(self, "Semana", "Selecciona una semana.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Suministro diario", "suministro_hoy.xlsx", "Excel (*.xlsx)",
+        )
+        if not path:
+            return
+        try:
+            import sys
+            from pathlib import Path as P
+            root = P(__file__).resolve().parents[2]
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from app.services.dia_service import DiaService
+            from services.excel_service import ExcelService
+            st = DiaService().estado_hoy()
+            codigo = self.cmb_semana.currentText().split()[0] if self.cmb_semana.currentText() else ""
+            ExcelService().exportar_suministro(
+                path, st.get("trabajos") or self._rows,
+                fecha=st["fecha"], label_dia=st["label_dia"], codigo_semana=codigo,
+            )
+            QMessageBox.information(self, "Suministro", f"Guardado:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Suministro", str(e))
+
+    def _on_duplicar(self):
+        if not self._semana_id:
+            QMessageBox.warning(self, "Semana", "Selecciona la semana origen.")
+            return
+        if QMessageBox.question(
+            self, "Duplicar",
+            "Se creará (si no existe) la semana siguiente y se copiarán folios/modelos "
+            "sin gramos. ¿Continuar?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        try:
+            from datetime import date as _d
+            import sys
+            from pathlib import Path as P
+            root = P(__file__).resolve().parents[2]
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from app.services.dia_service import siguiente_rango_semana
+            from app.core.calendar_util import parse_db_date
+
+            sem = None
+            for i in range(self.cmb_semana.count()):
+                if self.cmb_semana.itemData(i) == self._semana_id:
+                    # need fechas from listar
+                    break
+            semanas = self.sem_repo.listar()
+            actual = next((s for s in semanas if s["id"] == self._semana_id), None)
+            if not actual:
+                raise ValueError("Semana no encontrada")
+            ff = parse_db_date(actual.get("fecha_fin"))
+            if not ff:
+                raise ValueError("Sin fecha fin")
+            codigo, sab, vie = siguiente_rango_semana(ff)
+            # buscar o crear
+            dest = next(
+                (s for s in semanas if str(s.get("codigo")) == codigo),
+                None,
+            )
+            if not dest:
+                new_id = self.sem_repo.crear(codigo, sab, vie, anio=sab.year, notas="Auto sig. semana")
+            else:
+                new_id = dest["id"]
+            result = self.prod_repo.duplicar_trabajos_a_semana(self._semana_id, new_id)
+            self.reload()
+            idx = self.cmb_semana.findData(new_id)
+            if idx >= 0:
+                self.cmb_semana.setCurrentIndex(idx)
+            QMessageBox.information(
+                self, "Duplicado",
+                f"Semana {codigo}: creadas {result['created']} líneas, "
+                f"omitidas {result['skipped']} (ya existían).",
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Duplicar", str(e))
 
     def _on_day_dbl(self, row: int, col: int):
         if col < 6 or col > 12:

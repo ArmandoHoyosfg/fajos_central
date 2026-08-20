@@ -235,6 +235,92 @@ async def api_trabajos(
     return repo.listar(solo_activos=solo_activos, trabajador_id=trabajador_id)
 
 
+
+
+@router.get("/api/dia/estado")
+async def api_dia_estado():
+    from app.services.dia_service import DiaService
+    return DiaService().estado_hoy()
+
+
+@router.post("/api/dia/cerrar")
+async def api_dia_cerrar(usuario: str | None = Form("web")):
+    from app.services.dia_service import DiaService
+    return DiaService().cerrar_hoy(usuario=usuario or "web")
+
+
+@router.get("/api/dia/avisos")
+async def api_dia_avisos():
+    from app.services.dia_service import DiaService
+    return {"avisos": DiaService().avisos_apertura()}
+
+
+@router.post("/api/produccion/{semana_id}/duplicar")
+async def api_duplicar(
+    semana_id: int,
+    destino_id: int | None = Form(None),
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    from app.services.dia_service import siguiente_rango_semana
+    from app.core.calendar_util import parse_db_date
+
+    origen = sem_repo.obtener(semana_id)
+    if destino_id is None:
+        ff = parse_db_date(origen.get("fecha_fin"))
+        if not ff:
+            from app.core.exceptions import ValidationAppError
+            raise ValidationAppError("Semana origen sin fecha_fin")
+        codigo, sab, vie = siguiente_rango_semana(ff)
+        existentes = sem_repo.listar()
+        dest = next((s for s in existentes if s.get("codigo") == codigo), None)
+        if dest:
+            destino_id = dest["id"]
+        else:
+            destino_id = sem_repo.crear({
+                "codigo": codigo,
+                "fecha_inicio": sab.isoformat(),
+                "fecha_fin": vie.isoformat(),
+                "anio": sab.year,
+                "notas": "Duplicada desde " + str(origen.get("codigo")),
+            })
+    result = repo.duplicar_trabajos_a_semana(semana_id, int(destino_id))
+    result["destino_id"] = destino_id
+    return result
+
+
+@router.get("/api/export/suministro")
+async def api_export_suministro():
+    from app.services.dia_service import DiaService
+    from app.services.export_service import ExportService
+    from fastapi.responses import Response
+    st = DiaService().estado_hoy()
+    # simple xlsx via openpyxl in export or reuse bytes
+    from openpyxl import Workbook
+    from io import BytesIO
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Suministro"
+    ws["A1"] = "SUMINISTRO DIARIO — " + st["fecha"] + " — " + st["label_dia"]
+    headers = ["#", "Nombre", "Ubic", "Folio", "Modelo", "Mat", "Gramos", "Notas"]
+    for c, h in enumerate(headers, 1):
+        ws.cell(row=3, column=c, value=h)
+    for i, r in enumerate(st.get("trabajos") or []):
+        ws.cell(row=4+i, column=1, value=i+1)
+        ws.cell(row=4+i, column=2, value=r.get("nombre"))
+        ws.cell(row=4+i, column=3, value=r.get("ubic"))
+        ws.cell(row=4+i, column=4, value=r.get("folio"))
+        ws.cell(row=4+i, column=5, value=r.get("modelo"))
+        ws.cell(row=4+i, column=6, value=r.get("material"))
+    buf = BytesIO()
+    wb.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="suministro.xlsx"'},
+    )
+
+
 @router.get("/api/tarifas")
 async def api_tarifas():
     from app.services.tarifas_service import TarifasService

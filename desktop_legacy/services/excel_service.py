@@ -47,6 +47,7 @@ class ExcelService:
         fecha_inicio: str | None = None,
         fecha_fin: str | None = None,
         titulo_extra: str = "",
+        solo_con_gramos: bool = True,
     ) -> Path:
         """
         Exporta la nómina formal lista para imprimir y firmar.
@@ -71,12 +72,15 @@ class ExcelService:
 
         # Solo líneas con contenido útil (como formal de pago)
         def _util(r: dict) -> bool:
+            try:
+                has_gr = float(r.get("total_gramos") or 0) > 0
+            except (TypeError, ValueError):
+                has_gr = False
+            if solo_con_gramos:
+                return has_gr
             if r.get("folio") or r.get("modelo"):
                 return True
-            try:
-                return float(r.get("total_gramos") or 0) > 0
-            except (TypeError, ValueError):
-                return False
+            return has_gr
 
         lineas = [r for r in lineas if _util(r)]
         lineas.sort(key=_sort_key)
@@ -294,6 +298,78 @@ class ExcelService:
         ws.oddFooter.center.font = "Calibri"
         ws.oddFooter.center.size = 8
 
+        wb.save(ruta)
+        return ruta
+
+
+    def exportar_suministro(
+        self,
+        ruta: str | Path,
+        trabajos: list[dict],
+        *,
+        fecha: str = "",
+        label_dia: str = "",
+        codigo_semana: str = "",
+    ) -> Path:
+        """Hoja de suministro diario para anotar a mano (una página)."""
+        from datetime import datetime
+        ruta = Path(ruta)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Suministro"
+        ws["A1"] = "TALLER DE FAJOS CENTRAL — SUMINISTRO DIARIO"
+        ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+        ws.merge_cells("A1:H1")
+        ws["A2"] = f"Fecha: {fecha}  ·  Día: {label_dia}  ·  Semana: {codigo_semana}"
+        ws["A2"].font = Font(name="Calibri", size=10)
+        ws.merge_cells("A2:H2")
+        ws["A3"] = "Anotar gramos a mano → luego digitalizar en la app"
+        ws["A3"].font = Font(name="Calibri", size=9, italic=True, color="666666")
+        headers = ["#", "Nombre", "Ubic", "Folio", "Modelo", "Mat", "Gramos", "Notas"]
+        for c, h in enumerate(headers, 1):
+            cell = ws.cell(row=5, column=c, value=h)
+            cell.font = self.HEADER_FONT
+            cell.fill = self.HEADER_FILL
+            cell.border = self.THIN
+        # sort ubic, nombre
+        rows = sorted(
+            list(trabajos),
+            key=lambda r: (
+                int(r.get("ubic") or 0) if str(r.get("ubic") or "").replace(".","").isdigit() else 0,
+                str(r.get("nombre") or "").upper(),
+                str(r.get("folio") or ""),
+            ),
+        )
+        for i, r in enumerate(rows):
+            rr = 6 + i
+            vals = [
+                i + 1,
+                r.get("nombre"),
+                r.get("ubic"),
+                r.get("folio"),
+                r.get("modelo"),
+                r.get("material"),
+                "",  # gramos empty for handwriting
+                "",
+            ]
+            mat = str(r.get("material") or "").upper()
+            fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else None)
+            for c, v in enumerate(vals, 1):
+                cell = ws.cell(row=rr, column=c, value=v)
+                cell.border = self.THIN
+                if fill is not None:
+                    cell.fill = fill
+            ws.row_dimensions[rr].height = 22
+        last = 5 + max(len(rows), 1)
+        ws.cell(row=last + 2, column=1, value="Total gramos (a sumar): ________")
+        ws.cell(row=last + 3, column=1, value=f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        for col, w in zip("ABCDEFGH", [5, 22, 7, 12, 14, 8, 10, 18]):
+            ws.column_dimensions[col].width = w
+        ws.page_setup.orientation = "portrait"
+        ws.page_setup.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 1
+        ws.print_title_rows = "5:5"
         wb.save(ruta)
         return ruta
 
