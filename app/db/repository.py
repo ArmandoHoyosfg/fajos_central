@@ -180,7 +180,7 @@ class SemanasRepo(BaseRepo):
 class ProduccionRepo(BaseRepo):
     def listar_por_semana(self, semana_id: int) -> list[dict]:
         sql = """
-            SELECT id, semana_id, trabajador_id, nombre, ubic, folio, modelo,
+            SELECT id, semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo,
                    material, tarifa_gr,
                    gm_sab, gm_dom, gm_lun, gm_mar, gm_mie, gm_jue, gm_vie,
                    total_gramos, efectivo, firmado, notas
@@ -199,12 +199,40 @@ class ProduccionRepo(BaseRepo):
             raise ValidationAppError("El nombre es obligatorio.", details={"field": "nombre"})
         if data.get("ubic") is None:
             raise ValidationAppError("La ubicación es obligatoria.", details={"field": "ubic"})
+
+        trabajador_id = data.get("trabajador_id")
+        if not trabajador_id:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM trabajadores WHERE nombre_mostrar=%s AND ubic=%s LIMIT 1",
+                    (data["nombre"], data["ubic"]),
+                )
+                row = cur.fetchone()
+            if not row:
+                raise ValidationAppError(
+                    f"No hay trabajador en catálogo: {data['nombre']} (ubic {data['ubic']}). "
+                    "Agrégalo primero en Trabajadores.",
+                    details={"nombre": data["nombre"], "ubic": data["ubic"]},
+                )
+            trabajador_id = int(row["id"])
+
+        trabajo_id = data.get("trabajo_id")
+        if not trabajo_id and (data.get("folio") or data.get("modelo") or data.get("material")):
+            trabajo_id = TrabajosRepo(self.db).asegurar(
+                trabajador_id,
+                folio=data.get("folio"),
+                modelo=data.get("modelo"),
+                material=data.get("material"),
+                tarifa_gr=data.get("tarifa_gr"),
+                notas=data.get("notas"),
+            )
+
         sql = """
             INSERT INTO produccion_plata (
-                semana_id, trabajador_id, nombre, ubic, folio, modelo, material, tarifa_gr,
+                semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo, material, tarifa_gr,
                 gm_sab, gm_dom, gm_lun, gm_mar, gm_mie, gm_jue, gm_vie, notas
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
@@ -213,7 +241,8 @@ class ProduccionRepo(BaseRepo):
                 sql,
                 (
                     semana_id,
-                    data.get("trabajador_id"),
+                    trabajador_id,
+                    trabajo_id,
                     data["nombre"],
                     data["ubic"],
                     data.get("folio"),
@@ -320,6 +349,73 @@ class ProduccionRepo(BaseRepo):
             cur.execute(sql, (semana_id,))
             row = cur.fetchone()
         return row or {"lineas": 0, "total_gramos": Decimal("0"), "total_efectivo": Decimal("0")}
+
+
+
+
+class TrabajosRepo(BaseRepo):
+    """Trabajos en progreso: folio/modelo/material ligados a trabajador."""
+
+    def listar(self, solo_activos: bool = True, trabajador_id: int | None = None) -> list[dict]:
+        sql = """
+            SELECT t.*, tr.nombre_mostrar, tr.ubic, tr.tipo
+            FROM trabajos t
+            JOIN trabajadores tr ON tr.id = t.trabajador_id
+            WHERE 1=1
+        """
+        params: list = []
+        if solo_activos:
+            sql += " AND t.activo = 1 AND tr.activo = 1"
+        if trabajador_id is not None:
+            sql += " AND t.trabajador_id = %s"
+            params.append(trabajador_id)
+        sql += " ORDER BY tr.nombre_mostrar, tr.ubic, t.folio"
+        with self.db.cursor() as cur:
+            cur.execute(sql, params)
+            return list(cur.fetchall() or [])
+
+    def asegurar(
+        self,
+        trabajador_id: int,
+        folio: str | None = None,
+        modelo: str | None = None,
+        material: str | None = None,
+        tarifa_gr: float | None = None,
+        notas: str | None = None,
+    ) -> int:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id FROM trabajos
+                WHERE trabajador_id = %s
+                  AND COALESCE(folio,'') = COALESCE(%s,'')
+                  AND COALESCE(material,'') = COALESCE(%s,'')
+                LIMIT 1
+                """,
+                (trabajador_id, folio, material),
+            )
+            row = cur.fetchone()
+            if row:
+                cur.execute(
+                    """
+                    UPDATE trabajos SET
+                      modelo = COALESCE(%s, modelo),
+                      tarifa_gr = COALESCE(%s, tarifa_gr),
+                      activo = 1,
+                      notas = COALESCE(%s, notas)
+                    WHERE id = %s
+                    """,
+                    (modelo, tarifa_gr, notas, row["id"]),
+                )
+                return int(row["id"])
+            cur.execute(
+                """
+                INSERT INTO trabajos (trabajador_id, folio, modelo, material, tarifa_gr, activo, notas)
+                VALUES (%s, %s, %s, %s, %s, 1, %s)
+                """,
+                (trabajador_id, folio, modelo, material, tarifa_gr, notas),
+            )
+            return int(cur.lastrowid)
 
 
 class ResumenRepo(BaseRepo):

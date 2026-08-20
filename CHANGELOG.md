@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.0.0] — 2026-08-20
+
+### Mayor
+- Tabla `trabajos` liga folio/modelo/material al trabajador
+- `produccion_plata.trabajador_id` obligatorio + `trabajo_id`
+- Un solo SQL: `000_fajos_central_completo.sql` (Excel V3)
+- API `/api/trabajos`
+
 ## [2.9.0] — 2026-08-20
 
 ### Prioridad media

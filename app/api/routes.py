@@ -164,6 +164,12 @@ async def api_toggle_firmado(
     return {"ok": True, "prod_id": prod_id, "firmado": bool(int(firmado))}
 
 
+@router.get("/api/trabajos")
+async def api_trabajos(solo_activos: bool = True, trabajador_id: int | None = None):
+    from app.db.repository import TrabajosRepo
+    return TrabajosRepo().listar(solo_activos=solo_activos, trabajador_id=trabajador_id)
+
+
 @router.get("/api/tarifas")
 async def api_tarifas():
     from app.services.tarifas_service import TarifasService

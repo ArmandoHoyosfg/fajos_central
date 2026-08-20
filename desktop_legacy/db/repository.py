@@ -153,7 +153,7 @@ class ProduccionRepo(BaseRepo):
 
     def listar_por_semana(self, semana_id: int) -> list[dict]:
         sql = """
-            SELECT id, semana_id, trabajador_id, nombre, ubic, folio, modelo,
+            SELECT id, semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo,
                    material, tarifa_gr,
                    gm_sab, gm_dom, gm_lun, gm_mar, gm_mie, gm_jue, gm_vie,
                    total_gramos, efectivo, firmado, notas
@@ -174,13 +174,32 @@ class ProduccionRepo(BaseRepo):
         if sem and sem.get("cerrada"):
             cur.close()
             raise ValueError("La semana está cerrada; no se puede agregar producción.")
+        tid = data.get("trabajador_id")
+        if not tid:
+            cur.execute(
+                "SELECT id FROM trabajadores WHERE nombre_mostrar=%s AND ubic=%s LIMIT 1",
+                (data["nombre"], data["ubic"]),
+            )
+            row = cur.fetchone()
+            if not row:
+                cur.close()
+                raise ValueError(
+                    "Trabajador no está en catálogo: %s (ubic %s)" % (data["nombre"], data["ubic"])
+                )
+            tid = row["id"]
+        trabajo_id = data.get("trabajo_id")
         cur.close()
+        if not trabajo_id and (data.get("folio") or data.get("modelo")):
+            trabajo_id = TrabajosRepo(self.db).asegurar(
+                tid, data.get("folio"), data.get("modelo"),
+                data.get("material"), data.get("tarifa_gr"), data.get("notas"),
+            )
         sql = """
             INSERT INTO produccion_plata (
-                semana_id, trabajador_id, nombre, ubic, folio, modelo, material, tarifa_gr,
+                semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo, material, tarifa_gr,
                 gm_sab, gm_dom, gm_lun, gm_mar, gm_mie, gm_jue, gm_vie, notas
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
@@ -188,27 +207,17 @@ class ProduccionRepo(BaseRepo):
         cur.execute(
             sql,
             (
-                semana_id,
-                data.get("trabajador_id"),
-                data["nombre"],
-                data["ubic"],
-                data.get("folio"),
-                data.get("modelo"),
-                data.get("material"),
-                data.get("tarifa_gr"),
-                data.get("gm_sab"),
-                data.get("gm_dom"),
-                data.get("gm_lun"),
-                data.get("gm_mar"),
-                data.get("gm_mie"),
-                data.get("gm_jue"),
-                data.get("gm_vie"),
-                data.get("notas"),
+                semana_id, tid, trabajo_id, data["nombre"], data["ubic"],
+                data.get("folio"), data.get("modelo"), data.get("material"), data.get("tarifa_gr"),
+                data.get("gm_sab"), data.get("gm_dom"), data.get("gm_lun"),
+                data.get("gm_mar"), data.get("gm_mie"), data.get("gm_jue"),
+                data.get("gm_vie"), data.get("notas"),
             ),
         )
         new_id = cur.lastrowid
         cur.close()
         return new_id
+
 
     def actualizar(self, prod_id: int, data: dict) -> None:
         allowed = {
@@ -359,3 +368,49 @@ class TarifasRepo(BaseRepo):
             }
         except Exception:
             return {"AG3": 12.0, "AG4": 13.0, "DOL": 13.0, "DLO": 13.0}
+
+
+class TrabajosRepo(BaseRepo):
+    def listar(self, solo_activos: bool = True, trabajador_id=None):
+        sql = """
+            SELECT t.*, tr.nombre_mostrar, tr.ubic, tr.tipo
+            FROM trabajos t
+            JOIN trabajadores tr ON tr.id = t.trabajador_id
+            WHERE 1=1
+        """
+        params = []
+        if solo_activos:
+            sql += " AND t.activo = 1 AND tr.activo = 1"
+        if trabajador_id is not None:
+            sql += " AND t.trabajador_id = %s"
+            params.append(trabajador_id)
+        sql += " ORDER BY tr.nombre_mostrar, t.folio"
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        rows = list(cur.fetchall() or [])
+        cur.close()
+        return rows
+
+    def asegurar(self, trabajador_id, folio=None, modelo=None, material=None, tarifa_gr=None, notas=None):
+        cur = self.db.cursor()
+        cur.execute(
+            "SELECT id FROM trabajos WHERE trabajador_id=%s "
+            "AND COALESCE(folio,'')=COALESCE(%s,'') AND COALESCE(material,'')=COALESCE(%s,'') LIMIT 1",
+            (trabajador_id, folio, material),
+        )
+        row = cur.fetchone()
+        if row:
+            cur.execute(
+                "UPDATE trabajos SET modelo=COALESCE(%s,modelo), tarifa_gr=COALESCE(%s,tarifa_gr), activo=1 WHERE id=%s",
+                (modelo, tarifa_gr, row["id"]),
+            )
+            cur.close()
+            return int(row["id"])
+        cur.execute(
+            "INSERT INTO trabajos (trabajador_id, folio, modelo, material, tarifa_gr, activo, notas) "
+            "VALUES (%s,%s,%s,%s,%s,1,%s)",
+            (trabajador_id, folio, modelo, material, tarifa_gr, notas),
+        )
+        new_id = cur.lastrowid
+        cur.close()
+        return int(new_id)
