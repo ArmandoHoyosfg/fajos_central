@@ -27,6 +27,9 @@ from PySide6.QtWidgets import (
     QWidget,
     QFileDialog,
     QAbstractItemView,
+    QScrollArea,
+    QSizePolicy,
+    QFrame,
 )
 
 from db import ProduccionRepo, SemanasRepo, TrabajadoresRepo
@@ -90,9 +93,29 @@ class ProductionWidget(QWidget):
         self._load_semanas()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollBar:vertical { background: #1e1e2e; width: 12px; margin: 0; }"
+            "QScrollBar::handle:vertical { background: #45475a; border-radius: 6px; min-height: 40px; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+            "QScrollBar:horizontal { background: #1e1e2e; height: 12px; }"
+            "QScrollBar::handle:horizontal { background: #45475a; border-radius: 6px; min-width: 40px; }"
+        )
+
+        content = QWidget()
+        content.setObjectName("prodContent")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(14)
 
         title = QLabel("Producción semanal — Plata")
         title.setProperty("cssClass", "title")
@@ -119,14 +142,17 @@ class ProductionWidget(QWidget):
 
         # --- Un solo día ---
         box_day = QGroupBox("📅  Registrar un solo día")
-        day_form = QHBoxLayout(box_day)
+        day_outer = QVBoxLayout(box_day)
+        day_outer.setSpacing(10)
+        row1 = QHBoxLayout()
+        row2 = QHBoxLayout()
         self.cmb_dia_trab = QComboBox()
-        self.cmb_dia_trab.setMinimumWidth(180)
+        self.cmb_dia_trab.setMinimumWidth(200)
+        self.cmb_dia_trab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_dia_trab.setEditable(True)
         self.cmb_dia = QComboBox()
         for key, label in DAY_KEYS:
             self.cmb_dia.addItem(label, key)
-        # Preselect today
         today_key = DAY_BY_WEEKDAY.get(date.today().weekday(), "gm_lun")
         idx = self.cmb_dia.findData(today_key)
         if idx >= 0:
@@ -134,37 +160,44 @@ class ProductionWidget(QWidget):
         self.spin_dia_gr = QDoubleSpinBox()
         self.spin_dia_gr.setRange(0, 9999)
         self.spin_dia_gr.setDecimals(2)
-        self.spin_dia_gr.setPrefix("")
-        self.spin_dia_gr.setSpecialValueText("")
+        self.spin_dia_gr.setMinimumWidth(90)
         self.inp_dia_folio = QLineEdit()
-        self.inp_dia_folio.setPlaceholderText("Folio")
-        self.inp_dia_folio.setMaximumWidth(100)
+        self.inp_dia_folio.setPlaceholderText("Folio (opcional)")
+        self.inp_dia_folio.setMinimumWidth(110)
         self.inp_dia_modelo = QLineEdit()
-        self.inp_dia_modelo.setPlaceholderText("Modelo")
-        self.inp_dia_modelo.setMaximumWidth(110)
+        self.inp_dia_modelo.setPlaceholderText("Modelo (opcional)")
+        self.inp_dia_modelo.setMinimumWidth(120)
         self.cmb_dia_mat = QComboBox()
         self.cmb_dia_mat.addItems(["AG3", "AG4", "DOL", "DLO"])
         self.spin_dia_tarifa = QDoubleSpinBox()
         self.spin_dia_tarifa.setRange(0, 100)
         self.spin_dia_tarifa.setValue(12.0)
         self.spin_dia_tarifa.setDecimals(2)
-        self.spin_dia_tarifa.setMaximumWidth(80)
+        self.spin_dia_tarifa.setMinimumWidth(90)
         btn_dia = QPushButton("Guardar día")
         btn_dia.setProperty("cssClass", "success")
+        btn_dia.setMinimumHeight(32)
         btn_dia.clicked.connect(self._on_guardar_dia)
-        for w, lab in [
-            (self.cmb_dia_trab, "Trabajador"),
-            (self.cmb_dia, "Día"),
-            (self.spin_dia_gr, "Gramos"),
-            (self.inp_dia_folio, ""),
-            (self.inp_dia_modelo, ""),
-            (self.cmb_dia_mat, "Mat"),
-            (self.spin_dia_tarifa, "$/Gr"),
+        for lab, w in [
+            ("Trabajador", self.cmb_dia_trab),
+            ("Día", self.cmb_dia),
+            ("Gramos", self.spin_dia_gr),
+            ("", btn_dia),
         ]:
             if lab:
-                day_form.addWidget(QLabel(lab))
-            day_form.addWidget(w)
-        day_form.addWidget(btn_dia)
+                row1.addWidget(QLabel(lab))
+            row1.addWidget(w)
+        for lab, w in [
+            ("Folio", self.inp_dia_folio),
+            ("Modelo", self.inp_dia_modelo),
+            ("Material", self.cmb_dia_mat),
+            ("$/Gr", self.spin_dia_tarifa),
+        ]:
+            row2.addWidget(QLabel(lab))
+            row2.addWidget(w)
+        row2.addStretch(1)
+        day_outer.addLayout(row1)
+        day_outer.addLayout(row2)
         layout.addWidget(box_day)
 
         # --- Línea completa ---
@@ -243,6 +276,8 @@ class ProductionWidget(QWidget):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.itemChanged.connect(self._on_cell_changed)
+        self.table.setMinimumHeight(280)
+        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # Highlight today column header
         today_col = {v: k for k, v in self._day_cols.items()}.get(today_key)
         layout.addWidget(self.table)
@@ -268,6 +303,10 @@ class ProductionWidget(QWidget):
         bottom.addWidget(btn_export_captura)
         bottom.addWidget(btn_export_formal)
         layout.addLayout(bottom)
+        layout.addStretch(1)
+
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
 
         self._load_trabajadores()
 

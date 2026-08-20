@@ -21,6 +21,14 @@ class ExcelService:
     HEADER_FONT = Font(name="Calibri", bold=True, size=10, color="FFFFFF")
     ALT_FILL = PatternFill("solid", fgColor="E8F4FD")
     GREEN_FILL = PatternFill("solid", fgColor="C6EFCE")
+    # Colores por material (impresión formal) — mismos tonos que la UI
+    MAT_FILLS = {
+        "AG3": PatternFill("solid", fgColor="D6EAF8"),
+        "AG4": PatternFill("solid", fgColor="D5F5E3"),
+        "DOL": PatternFill("solid", fgColor="FCF3CF"),
+        "DLO": PatternFill("solid", fgColor="FAD7A0"),
+    }
+    MAT_DEFAULT = PatternFill("solid", fgColor="E8DAEF")
     THIN = Border(
         left=Side(style="thin", color="808080"),
         right=Side(style="thin", color="808080"),
@@ -57,6 +65,14 @@ class ExcelService:
         ws["A3"] = f"Semana: {codigo_semana}"
         ws["C3"] = f"Mes: {mes}"
         ws["E3"] = f"Año: {anio}"
+        ws["A4"] = "Color por material:"
+        ws["A4"].font = Font(name="Calibri", size=8, italic=True, color="666666")
+        for col, (code, fill) in enumerate(self.MAT_FILLS.items(), start=2):
+            cell = ws.cell(row=4, column=col, value=code)
+            cell.fill = fill
+            cell.font = Font(name="Calibri", bold=True, size=8)
+            cell.border = self.THIN
+            cell.alignment = Alignment(horizontal="center")
 
         headers = [
             "Nombre", "Ubic", "Folio", "Modelo", "Material", "$/Gr",
@@ -90,12 +106,23 @@ class ExcelService:
                 row.get("efectivo"),
                 "",  # firma
             ]
+            mat = str(row.get("material") or "").strip().upper()
+            fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else None)
             for col, val in enumerate(values, 1):
+                # ocultar ceros en gramos / tarifa
+                if col >= 6 and col <= 14 and val is not None:
+                    try:
+                        if float(val) == 0:
+                            val = None
+                    except (TypeError, ValueError):
+                        pass
                 cell = ws.cell(row=r, column=col, value=val)
                 cell.border = self.THIN
-                cell.alignment = Alignment(horizontal="center")
-                if i % 2 == 0:
-                    cell.fill = self.ALT_FILL
+                cell.alignment = Alignment(horizontal="center" if col > 1 else "left")
+                if fill is not None:
+                    cell.fill = fill
+                if col in (6, 7, 8, 9, 10, 11, 12, 13, 14) and val is not None:
+                    cell.number_format = "0.##"
                 if col == 15 and val is not None:
                     cell.number_format = '$#,##0.00'
 

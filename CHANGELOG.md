@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.5.2] — 2026-08-20
+
+### Corregido / Mejorado
+- Desktop: scroll suave y más aire en Producción (deja de verse aplastado)
+- Formal Excel: color por material en cada fila + leyenda (impresión)
+- Export web xlsx formal: mismos colores de material
+
 ## [2.5.1] — 2026-08-20
 
 ### Añadido (app escritorio)

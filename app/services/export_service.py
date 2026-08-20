@@ -34,6 +34,13 @@ class ExportService:
     HEADER_FILL = PatternFill("solid", fgColor="1F4E79")
     HEADER_FONT = Font(name="Calibri", bold=True, size=10, color="FFFFFF")
     ALT_FILL = PatternFill("solid", fgColor="E8F4FD")
+    MAT_FILLS = {
+        "AG3": PatternFill("solid", fgColor="D6EAF8"),
+        "AG4": PatternFill("solid", fgColor="D5F5E3"),
+        "DOL": PatternFill("solid", fgColor="FCF3CF"),
+        "DLO": PatternFill("solid", fgColor="FAD7A0"),
+    }
+    MAT_DEFAULT = PatternFill("solid", fgColor="E8DAEF")
     GREEN_FILL = PatternFill("solid", fgColor="C6EFCE")
     THIN = Border(
         left=Side(style="thin", color="808080"),
@@ -127,8 +134,10 @@ class ExportService:
                 cell = ws.cell(row=r, column=col, value=float(val) if isinstance(val, Decimal) else val)
                 cell.border = self.THIN
                 cell.alignment = Alignment(horizontal="center")
-                if i % 2 == 0:
-                    cell.fill = self.ALT_FILL
+                mat = str(row.get("material") or "").upper()
+                fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else (self.ALT_FILL if i % 2 == 0 else None))
+                if fill is not None:
+                    cell.fill = fill
                 if key == "efectivo" and val is not None:
                     cell.number_format = '$#,##0.00'
             # Firma vacía
