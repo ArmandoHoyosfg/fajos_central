@@ -10,10 +10,10 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- TARIFAS
-INSERT INTO tarifas_material (material, tarifa_gr, descripcion) VALUES ('AG3', 12.0, 'Plata AG3 estándar') ON DUPLICATE KEY UPDATE tarifa_gr=VALUES(tarifa_gr), descripcion=VALUES(descripcion);
-INSERT INTO tarifas_material (material, tarifa_gr, descripcion) VALUES ('AG4', 13.0, 'Plata AG4') ON DUPLICATE KEY UPDATE tarifa_gr=VALUES(tarifa_gr), descripcion=VALUES(descripcion);
-INSERT INTO tarifas_material (material, tarifa_gr, descripcion) VALUES ('DOL', 13.0, 'Dorado / Metal dorado') ON DUPLICATE KEY UPDATE tarifa_gr=VALUES(tarifa_gr), descripcion=VALUES(descripcion);
-INSERT INTO tarifas_material (material, tarifa_gr, descripcion) VALUES ('DLO', 13.0, 'Dorado (variante)') ON DUPLICATE KEY UPDATE tarifa_gr=VALUES(tarifa_gr), descripcion=VALUES(descripcion);
+INSERT INTO tarifas_material (material, tarifa_por_gramo, descripcion) VALUES ('AG3', 12.0, 'Plata AG3 estándar') ON DUPLICATE KEY UPDATE tarifa_gr=VALUES(tarifa_gr), descripcion=VALUES(descripcion);
+INSERT INTO tarifas_material (material, tarifa_por_gramo, descripcion) VALUES ('AG4', 13.0, 'Plata AG4') ON DUPLICATE KEY UPDATE tarifa_gr=VALUES(tarifa_gr), descripcion=VALUES(descripcion);
+INSERT INTO tarifas_material (material, tarifa_por_gramo, descripcion) VALUES ('DOL', 13.0, 'Dorado / Metal dorado') ON DUPLICATE KEY UPDATE tarifa_gr=VALUES(tarifa_gr), descripcion=VALUES(descripcion);
+INSERT INTO tarifas_material (material, tarifa_por_gramo, descripcion) VALUES ('DLO', 13.0, 'Dorado (variante)') ON DUPLICATE KEY UPDATE tarifa_gr=VALUES(tarifa_gr), descripcion=VALUES(descripcion);
 
 -- MODELOS
 INSERT INTO modelos (modelo, tipo, material_default, tarifa_default, notas) VALUES ('SECUENCIA', 'PLT', 'AG3', 12.0, 'Por gramo') ON DUPLICATE KEY UPDATE material_default=VALUES(material_default), tarifa_default=VALUES(tarifa_default), notas=VALUES(notas);

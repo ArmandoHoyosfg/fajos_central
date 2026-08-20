@@ -201,10 +201,10 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
-INSERT INTO tarifas_material (material, tarifa_gr, descripcion) VALUES ('AG3', 12.0, 'Plata AG3 estándar');
-INSERT INTO tarifas_material (material, tarifa_gr, descripcion) VALUES ('AG4', 13.0, 'Plata AG4');
-INSERT INTO tarifas_material (material, tarifa_gr, descripcion) VALUES ('DOL', 13.0, 'Dorado / Metal dorado');
-INSERT INTO tarifas_material (material, tarifa_gr, descripcion) VALUES ('DLO', 13.0, 'Dorado (variante)');
+INSERT INTO tarifas_material (material, tarifa_por_gramo, descripcion) VALUES ('AG3', 12.0, 'Plata AG3 estándar');
+INSERT INTO tarifas_material (material, tarifa_por_gramo, descripcion) VALUES ('AG4', 13.0, 'Plata AG4');
+INSERT INTO tarifas_material (material, tarifa_por_gramo, descripcion) VALUES ('DOL', 13.0, 'Dorado / Metal dorado');
+INSERT INTO tarifas_material (material, tarifa_por_gramo, descripcion) VALUES ('DLO', 13.0, 'Dorado (variante)');
 
 INSERT INTO modelos (modelo, tipo, material_default, tarifa_default, notas) VALUES ('SECUENCIA', 'PLT', 'AG3', 12.0, 'Por gramo');
 INSERT INTO modelos (modelo, tipo, material_default, tarifa_default, notas) VALUES ('CUBOS', 'PLT', 'AG3', 12.0, 'Por gramo');
