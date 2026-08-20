@@ -25,6 +25,7 @@ from ui.production_widget import ProductionWidget
 from ui.styles import DARK_QSS
 from ui.summary_widget import SummaryWidget
 from ui.workers_widget import WorkersWidget
+from ui.trabajos_widget import TrabajosWidget
 from ui.calendar_util import format_fecha_larga, format_fecha_corta, today
 
 
@@ -64,11 +65,14 @@ class MainWindow(QMainWindow):
         m_view = menubar.addMenu("&Ver")
         act_w = QAction("Trabajadores", self)
         act_w.triggered.connect(lambda: self.tabs.setCurrentIndex(0))
+        act_j = QAction("Trabajos activos", self)
+        act_j.triggered.connect(lambda: self.tabs.setCurrentIndex(1))
         act_p = QAction("Producción", self)
-        act_p.triggered.connect(lambda: self.tabs.setCurrentIndex(1))
+        act_p.triggered.connect(lambda: self.tabs.setCurrentIndex(2))
         act_s = QAction("Resumen", self)
-        act_s.triggered.connect(lambda: self.tabs.setCurrentIndex(2))
+        act_s.triggered.connect(lambda: self.tabs.setCurrentIndex(3))
         m_view.addAction(act_w)
+        m_view.addAction(act_j)
         m_view.addAction(act_p)
         m_view.addAction(act_s)
 
@@ -119,12 +123,15 @@ class MainWindow(QMainWindow):
     def _build_tabs(self):
         self.tabs = QTabWidget()
         self.workers = WorkersWidget()
+        self.trabajos = TrabajosWidget()
         self.production = ProductionWidget()
         self.summary = SummaryWidget()
 
         self.workers.data_changed.connect(self._refresh_all)
+        self.trabajos.data_changed.connect(self._refresh_all)
 
         self.tabs.addTab(self.workers, "  Trabajadores  ")
+        self.tabs.addTab(self.trabajos, "  Trabajos activos  ")
         self.tabs.addTab(self.production, "  Producción / Nómina  ")
         self.tabs.addTab(self.summary, "  Resumen  ")
         self.setCentralWidget(self.tabs)
@@ -185,6 +192,7 @@ class MainWindow(QMainWindow):
     def _refresh_all(self):
         try:
             self.workers.refresh()
+            self.trabajos.reload()
             self.production._load_semanas()
             self.production._load_trabajadores()
             self.production.refresh_table()

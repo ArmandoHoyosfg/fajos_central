@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Trabajos activos — Fajos Piteados Central{% endblock %}
+{% block content %}
+<div class="semana-ctx">
+  <strong>Hoy:</strong> {{ fecha_hoy_larga }}
+  {% if col_hoy_label %} · Día de nómina: <span class="badge-actual">{{ col_hoy_label }}</span>{% endif %}
+</div>
+
+{% if recordatorio %}
+<div class="semana-ctx" style="border-left-color:#c9a227;color:#c9a227;">
+  ⚠ {{ recordatorio }}
+</div>
+{% endif %}
+
+<div class="page-head">
+  <div>
+    <h1>Trabajos activos</h1>
+    <p class="muted">Folio / modelo ligados a cada trabajador. Edita el progreso del día; el formal usa estos datos.</p>
+  </div>
+</div>
+
+<div class="toolbar">
+  <form class="inline" method="get" action="/trabajos">
+    <label class="muted">Semana</label>
+    <select name="semana_id" onchange="this.form.submit()">
+      {% for s in semanas %}
+      <option value="{{ s.id }}" {% if s.id == semana_id %}selected{% endif %}>
+        {{ s.codigo }}{% if s.es_actual %} ★{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+  <label class="muted"><input type="checkbox" id="flt-sin-hoy"> Solo sin gramos de hoy</label>
+</div>
+
+<div id="toast" class="toast-web" hidden></div>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Trabajador</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>$/Gr</th>
+      <th>Sáb</th><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th>
+      <th>Total</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in trabajos %}
+    <tr data-sin-hoy="{{ 1 if r.sin_hoy else 0 }}" class="mat-{{ (r.material or '')|lower }}">
+      <td>{{ r.nombre }}</td>
+      <td>{{ r.ubic }}</td>
+      <td>{{ r.folio or '—' }}</td>
+      <td>{{ r.modelo or '—' }}</td>
+      <td>{{ r.material or '—' }}</td>
+      <td>{{ r.tarifa_gr or '—' }}</td>
+      {% for d in day_cols %}
+      <td>
+        {% if semana_cerrada %}
+          {{ r[d] or '' }}
+        {% else %}
+          <input class="cell-gm" type="number" step="0.01" min="0"
+                 data-trabajo="{{ r.trabajo_id }}"
+                 data-prod="{{ r.produccion_id or '' }}"
+                 data-tid="{{ r.trabajador_id }}"
+                 data-nombre="{{ r.nombre }}"
+                 data-ubic="{{ r.ubic }}"
+                 data-folio="{{ r.folio or '' }}"
+                 data-modelo="{{ r.modelo or '' }}"
+                 data-material="{{ r.material or '' }}"
+                 data-tarifa="{{ r.tarifa_gr or '' }}"
+                 data-dia="{{ d }}"
+                 data-old="{{ r[d] if r[d] else 0 }}"
+                 value="{{ r[d] if r[d] else '' }}"
+                 style="width:3.4rem;padding:0.15rem;background:#11111b;border:1px solid #45475a;color:#cdd6f4;border-radius:4px;">
+        {% endif %}
+      </td>
+      {% endfor %}
+      <td>{{ r.total_gramos or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="14" class="muted">No hay trabajos activos. Importa el Excel o captura producción con folio.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COL_HOY = "{{ col_hoy }}";
+const SEMANA_ID = {{ semana_id or 'null' }};
+const DAY_ORDER = ["gm_sab","gm_dom","gm_lun","gm_mar","gm_mie","gm_jue","gm_vie"];
+const DAY_LABEL = {gm_sab:"Sábado",gm_dom:"Domingo",gm_lun:"Lunes",gm_mar:"Martes",gm_mie:"Miércoles",gm_jue:"Jueves",gm_vie:"Viernes"};
+
+function showToast(msg, err) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = msg;
+  el.classList.toggle('err', !!err);
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => el.hidden = true, 3000);
+}
+
+function isPast(col) {
+  return DAY_ORDER.indexOf(col) < DAY_ORDER.indexOf(COL_HOY);
+}
+
+async function saveCell(inp) {
+  const col = inp.dataset.dia;
+  const old = parseFloat(inp.dataset.old || '0') || 0;
+  const val = inp.value === '' ? 0 : parseFloat(inp.value);
+  if (isPast(col) && old > 0) {
+    if (!confirm('Vas a modificar el ' + (DAY_LABEL[col]||col) + ' que ya tiene ' + old + ' g.\\n¿Confirmas editar un día pasado con información?')) {
+      inp.value = old > 0 ? old : '';
+      return;
+    }
+  }
+  let prodId = inp.dataset.prod;
+  if (!prodId) {
+    // crear línea de producción para este trabajo
+    const fd = new FormData();
+    fd.append('nombre', inp.dataset.nombre);
+    fd.append('ubic', inp.dataset.ubic);
+    fd.append('trabajador_id', inp.dataset.tid);
+    if (inp.dataset.trabajo) fd.append('trabajo_id', inp.dataset.trabajo);
+    if (inp.dataset.folio) fd.append('folio', inp.dataset.folio);
+    if (inp.dataset.modelo) fd.append('modelo', inp.dataset.modelo);
+    if (inp.dataset.material) fd.append('material', inp.dataset.material);
+    if (inp.dataset.tarifa) fd.append('tarifa_gr', inp.dataset.tarifa);
+    const dayMap = {gm_sab:'gm_sab',gm_dom:'gm_dom',gm_lun:'gm_lun',gm_mar:'gm_mar',gm_mie:'gm_mie',gm_jue:'gm_jue',gm_vie:'gm_vie'};
+    // POST produccion then patch day
+    const res0 = await fetch('/api/produccion/' + SEMANA_ID, { method: 'POST', body: fd });
+    const data0 = await res0.json().catch(() => ({}));
+    if (!res0.ok) { showToast(data0.message || 'No se pudo crear línea', true); return; }
+    prodId = data0.id;
+    inp.dataset.prod = prodId;
+  }
+  const map = {gm_sab:'sab',gm_dom:'dom',gm_lun:'lun',gm_mar:'mar',gm_mie:'mie',gm_jue:'jue',gm_vie:'vie'};
+  const fd = new FormData();
+  fd.append('dia', map[col] || col);
+  fd.append('gramos', val);
+  const res = await fetch('/api/produccion/linea/' + prodId + '/dia', { method: 'PATCH', body: fd });
+  if (res.ok) {
+    inp.dataset.old = val;
+    showToast('Guardado ' + (DAY_LABEL[col]||col) + ': ' + (val || 'vacío'));
+  } else {
+    const data = await res.json().catch(() => ({}));
+    showToast(data.user_message || data.message || 'Error', true);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('input.cell-gm').forEach(inp => {
+    inp.addEventListener('change', () => saveCell(inp));
+  });
+  const flt = document.getElementById('flt-sin-hoy');
+  if (flt) flt.addEventListener('change', () => {
+    document.querySelectorAll('tr[data-sin-hoy]').forEach(tr => {
+      tr.style.display = (flt.checked && tr.dataset.sinHoy === '0') ? 'none' : '';
+    });
+  });
+});
+</script>
+{% endblock %}

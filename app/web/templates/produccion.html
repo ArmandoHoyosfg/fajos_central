@@ -304,7 +304,11 @@ async function toggleFirmado(id, checked) {
   else showToast(checked ? 'Marcado firmado' : 'Firma quitada');
 }
 
+const DAY_ORDER = ["gm_sab","gm_dom","gm_lun","gm_mar","gm_mie","gm_jue","gm_vie"];
+const COL_HOY = DAY_ORDER[new Date().getDay() === 6 ? 0 : new Date().getDay() === 0 ? 1 : new Date().getDay() + 1] || "gm_lun";
+// Note: getDay Sun=0; our map uses Python weekday — server-side preferred for critical ops
 async function saveGramCell(inp) {
+
   const id = inp.dataset.id;
   const dia = inp.dataset.dia; // gm_sab -> need sab
   const map = {gm_sab:'sab',gm_dom:'dom',gm_lun:'lun',gm_mar:'mar',gm_mie:'mie',gm_jue:'jue',gm_vie:'vie'};

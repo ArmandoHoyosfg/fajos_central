@@ -371,6 +371,32 @@ class TarifasRepo(BaseRepo):
 
 
 class TrabajosRepo(BaseRepo):
+    def listar_con_semana(self, semana_id: int, solo_activos: bool = True):
+        sql = """
+            SELECT
+              t.id AS trabajo_id, t.folio, t.modelo, t.material,
+              t.tarifa_gr AS tarifa_trabajo, t.activo AS trabajo_activo,
+              tr.id AS trabajador_id, tr.nombre_mostrar AS nombre, tr.ubic, tr.tipo,
+              p.id AS produccion_id, p.semana_id,
+              p.gm_sab, p.gm_dom, p.gm_lun, p.gm_mar, p.gm_mie, p.gm_jue, p.gm_vie,
+              p.total_gramos, p.efectivo, p.firmado,
+              COALESCE(p.tarifa_gr, t.tarifa_gr) AS tarifa_gr
+            FROM trabajos t
+            JOIN trabajadores tr ON tr.id = t.trabajador_id
+            LEFT JOIN produccion_plata p ON p.trabajo_id = t.id AND p.semana_id = %s
+            WHERE 1=1
+        """
+        params = [semana_id]
+        if solo_activos:
+            sql += " AND t.activo = 1 AND tr.activo = 1"
+        sql += " ORDER BY tr.ubic, tr.nombre_mostrar, t.folio"
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        rows = list(cur.fetchall() or [])
+        cur.close()
+        return rows
+
+
     def listar(self, solo_activos: bool = True, trabajador_id=None):
         sql = """
             SELECT t.*, tr.nombre_mostrar, tr.ubic, tr.tipo

@@ -117,6 +117,62 @@ async def page_produccion(
     )
 
 
+
+
+@router.get("/trabajos", response_class=HTMLResponse)
+async def page_trabajos(
+    request: Request,
+    semana_id: int | None = None,
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    from app.core.calendar_util import encontrar_semana_actual, marcar_semanas, today
+    from app.core.dias import DAY_LABELS, col_hoy, trabajos_sin_gramos_hoy
+    from app.db.repository import TrabajosRepo
+
+    semanas_raw = sem_repo.listar()
+    semanas = marcar_semanas(semanas_raw)
+    if semana_id is None and semanas:
+        actual = encontrar_semana_actual(semanas_raw, today())
+        semana_id = actual["id"] if actual else semanas[0]["id"]
+    trabajos = []
+    recordatorio = None
+    cerrada = False
+    if semana_id:
+        trabajos = TrabajosRepo().listar_con_semana(semana_id, solo_activos=True)
+        col = col_hoy()
+        for r in trabajos:
+            try:
+                g = float(r.get(col) or 0)
+            except (TypeError, ValueError):
+                g = 0
+            r["sin_hoy"] = g <= 0
+        sin = [r for r in trabajos if r["sin_hoy"]]
+        if sin:
+            names = ", ".join(f"{x.get('nombre')}[{x.get('folio') or '—'}]" for x in sin[:8])
+            extra = f" (+{len(sin)-8})" if len(sin) > 8 else ""
+            recordatorio = (
+                f"Aún no hay gramos de {DAY_LABELS[col]} en {len(sin)} trabajo(s): {names}{extra}"
+            )
+        cerrada = bool(
+            next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")
+        )
+    return templates.TemplateResponse(
+        request,
+        "trabajos.html",
+        _ctx(
+            request,
+            semanas=semanas,
+            semana_id=semana_id,
+            trabajos=trabajos,
+            recordatorio=recordatorio,
+            col_hoy=col_hoy(),
+            col_hoy_label=DAY_LABELS[col_hoy()],
+            day_cols=["gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"],
+            semana_cerrada=cerrada,
+        ),
+    )
+
+
 # ---------- API JSON ----------
 
 
@@ -165,9 +221,16 @@ async def api_toggle_firmado(
 
 
 @router.get("/api/trabajos")
-async def api_trabajos(solo_activos: bool = True, trabajador_id: int | None = None):
+async def api_trabajos(
+    solo_activos: bool = True,
+    trabajador_id: int | None = None,
+    semana_id: int | None = None,
+):
     from app.db.repository import TrabajosRepo
-    return TrabajosRepo().listar(solo_activos=solo_activos, trabajador_id=trabajador_id)
+    repo = TrabajosRepo()
+    if semana_id is not None:
+        return repo.listar_con_semana(semana_id, solo_activos=solo_activos)
+    return repo.listar(solo_activos=solo_activos, trabajador_id=trabajador_id)
 
 
 @router.get("/api/tarifas")
@@ -339,6 +402,7 @@ async def api_add_produccion(
     gm_jue: float | None = Form(None),
     gm_vie: float | None = Form(None),
     trabajador_id: int | None = Form(None),
+    trabajo_id: int | None = Form(None),
     repo: ProduccionRepo = Depends(get_produccion_repo),
 ):
     from app.core.normalize import canonical_name
@@ -357,6 +421,7 @@ async def api_add_produccion(
         "gm_jue": gm_jue,
         "gm_vie": gm_vie,
         "trabajador_id": trabajador_id,
+        "trabajo_id": trabajo_id,
     })
     return {"id": new_id, "ok": True}
 

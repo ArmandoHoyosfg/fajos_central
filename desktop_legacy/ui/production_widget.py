@@ -923,6 +923,35 @@ class ProductionWidget(QWidget):
             QMessageBox.warning(self, "Valor", "Gramos inválidos.")
             self.refresh_table()
             return
+        # Confirmación día pasado con datos
+        ordered = ["gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"]
+        labels = {"gm_sab": "Sábado", "gm_dom": "Domingo", "gm_lun": "Lunes",
+                  "gm_mar": "Martes", "gm_mie": "Miércoles", "gm_jue": "Jueves", "gm_vie": "Viernes"}
+        hoy_key = DAY_BY_WEEKDAY.get(date.today().weekday(), "gm_lun")
+        old_val = 0.0
+        try:
+            id_item = self.table.item(row, 0)
+            # find previous display
+            old_text = item.text()  # already new - need from all_rows
+            for r in self._all_rows:
+                if r.get("id") == prod_id:
+                    old_val = float(r.get(col_name) or 0)
+                    break
+        except Exception:
+            old_val = 0.0
+        try:
+            is_past = ordered.index(col_name) < ordered.index(hoy_key)
+        except ValueError:
+            is_past = False
+        if is_past and old_val > 0:
+            if QMessageBox.question(
+                self, "Día pasado",
+                f"Vas a modificar el {labels.get(col_name, col_name)}, que ya tiene {old_val:g} g.\n"
+                "¿Confirmas editar un día pasado con información?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            ) != QMessageBox.Yes:
+                self.refresh_table()
+                return
         try:
             self.prod_repo.actualizar_gramos_dia(int(prod_id), col_name, gramos)
             self.refresh_table()
