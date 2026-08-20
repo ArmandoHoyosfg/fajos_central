@@ -20,6 +20,7 @@ from typing import Any
 import openpyxl
 
 from app.core.exceptions import ExportError, ValidationAppError
+from app.core.normalize import canonical_name, fold_name
 from app.core.logging_config import get_logger
 from app.db.connection import get_db
 from app.db.repository import ProduccionRepo, SemanasRepo, TrabajadoresRepo
@@ -161,7 +162,7 @@ class ImportService:
         # Encabezados en fila 4 típica
         header_row = 4
         for r in range(5, (ws.max_row or 5) + 1):
-            nombre = _str(ws.cell(r, 2).value)
+            nombre = canonical_name(_str(ws.cell(r, 2).value) or "") or None
             ubic_v = ws.cell(r, 4).value
             if not nombre or ubic_v is None or ubic_v == "":
                 continue
@@ -214,13 +215,18 @@ class ImportService:
                     )
 
     def _find_trabajador(self, nombre: str, ubic: int) -> dict | None:
+        """Busca por ubic y nombre normalizado (ignora acentos/mayúsculas)."""
         with self.db.cursor() as cur:
             cur.execute(
-                "SELECT id, nombre_mostrar, ubic FROM trabajadores "
-                "WHERE nombre_mostrar = %s AND ubic = %s LIMIT 1",
-                (nombre, ubic),
+                "SELECT id, nombre_mostrar, ubic FROM trabajadores WHERE ubic = %s",
+                (ubic,),
             )
-            return cur.fetchone()
+            rows = list(cur.fetchall() or [])
+        target = fold_name(nombre)
+        for row in rows:
+            if fold_name(row.get("nombre_mostrar") or "") == target:
+                return row
+        return None
 
     def _insert_trabajador(self, data: dict) -> int:
         sql = """
@@ -279,7 +285,7 @@ class ImportService:
     def _import_produccion(self, ws, semana_id: int | None, report: dict, dry_run: bool) -> None:
         # Headers fila 5; datos desde 6
         for r in range(6, (ws.max_row or 6) + 1):
-            nombre = _str(ws.cell(r, 1).value)
+            nombre = canonical_name(_str(ws.cell(r, 1).value) or "") or None
             ubic_v = ws.cell(r, 2).value
             folio = _str(ws.cell(r, 3).value)
             # Saltar filas vacías de grupo (sin nombre ni folio ni gramos)

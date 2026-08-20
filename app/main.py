@@ -19,6 +19,9 @@ from app.core.logging_config import get_logger, setup_logging
 setup_logging()
 logger = get_logger(__name__)
 
+# Se activa en run() si hay certificados SSL
+_FORCE_HTTPS_RUNTIME = False
+
 app = FastAPI(
     title="Fajos Piteados Central — Nóminas",
     version=__version__,
@@ -51,7 +54,7 @@ async def https_and_slash_middleware(request: Request, call_next):
     """
     path = request.url.path
 
-    if settings.force_https and not _is_secure(request):
+    if (settings.force_https or _FORCE_HTTPS_RUNTIME) and not _is_secure(request):
         # Construir URL https conservando host/path/query
         host = request.headers.get("host") or f"127.0.0.1:{settings.app_port}"
         qs = f"?{request.url.query}" if request.url.query else ""
@@ -162,7 +165,9 @@ def run():
 
     ssl_kw = _ssl_kwargs()
     if ssl_kw:
-        logger.info("Iniciando con HTTPS (certificados SSL)")
+        global _FORCE_HTTPS_RUNTIME
+        _FORCE_HTTPS_RUNTIME = True
+        logger.info("Iniciando con HTTPS (certificados SSL; redirección HTTP→HTTPS activa)")
     uvicorn.run(
         "app.main:app",
         host=settings.app_host,

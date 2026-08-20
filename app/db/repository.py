@@ -205,6 +205,41 @@ class ProduccionRepo(BaseRepo):
                     details={"produccion_id": prod_id},
                 )
 
+
+    DAY_COLS = {
+        "sab": "gm_sab", "dom": "gm_dom", "lun": "gm_lun",
+        "mar": "gm_mar", "mie": "gm_mie", "jue": "gm_jue", "vie": "gm_vie",
+        "gm_sab": "gm_sab", "gm_dom": "gm_dom", "gm_lun": "gm_lun",
+        "gm_mar": "gm_mar", "gm_mie": "gm_mie", "gm_jue": "gm_jue", "gm_vie": "gm_vie",
+    }
+
+    def actualizar_gramos_dia(self, prod_id: int, dia: str, gramos: float | None) -> None:
+        """Actualiza un solo día de una línea existente (None o 0 = vacío)."""
+        col = self.DAY_COLS.get((dia or "").strip().lower())
+        if not col:
+            raise ValidationAppError(
+                f"Día no válido: {dia}. Use sab/dom/lun/mar/mie/jue/vie.",
+                details={"dia": dia},
+            )
+        val = None
+        if gramos is not None:
+            try:
+                f = float(gramos)
+                val = None if f == 0 else f
+            except (TypeError, ValueError):
+                raise ValidationAppError("Gramos inválidos.", details={"gramos": gramos})
+        with self.db.cursor() as cur:
+            cur.execute(
+                f"UPDATE produccion_plata SET {col} = %s WHERE id = %s",
+                (val, prod_id),
+            )
+            if cur.rowcount == 0:
+                raise NotFoundError(
+                    f"Línea de producción id={prod_id} no existe.",
+                    details={"produccion_id": prod_id},
+                )
+        logger.info("Producción id=%s día %s = %s", prod_id, col, val)
+
     def totales_semana(self, semana_id: int) -> dict:
         sql = """
             SELECT

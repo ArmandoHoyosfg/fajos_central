@@ -34,6 +34,53 @@
 </div>
 
 {# Crear semana #}
+
+<div class="card" style="margin-bottom:1rem;">
+  <strong><i data-lucide="calendar-plus" style="width:16px;height:16px;vertical-align:middle"></i> Registrar un solo día</strong>
+  <p class="muted" style="margin:0.25rem 0 0.5rem;">Útil cuando solo hay avance de un día. El resto de la semana queda vacío.</p>
+  <form class="inline" id="form-un-dia" onsubmit="return submitUnDia(event)">
+    <div>
+      <label class="field-label">Trabajador</label>
+      <select name="trabajador_sel" id="dia-trab" required style="min-width:160px;">
+        <option value="">— elegir —</option>
+        {% for t in trabajadores %}
+        <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}">{{ t.nombre_mostrar }} ({{ t.ubic }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="field-label">Día</label>
+      <select name="dia" required>
+        <option value="sab">Sáb</option><option value="dom">Dom</option>
+        <option value="lun">Lun</option><option value="mar">Mar</option>
+        <option value="mie">Mié</option><option value="jue">Jue</option>
+        <option value="vie">Vie</option>
+      </select>
+    </div>
+    <div>
+      <label class="field-label">Gramos</label>
+      <input name="gramos" type="number" step="0.01" min="0.01" required style="width:80px;">
+    </div>
+    <div>
+      <label class="field-label">Folio</label>
+      <input name="folio" style="width:100px;" placeholder="opcional">
+    </div>
+    <div>
+      <label class="field-label">Modelo</label>
+      <input name="modelo" style="width:100px;" placeholder="opcional">
+    </div>
+    <div>
+      <label class="field-label">Material</label>
+      <select name="material"><option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option></select>
+    </div>
+    <div>
+      <label class="field-label">$/Gr</label>
+      <input name="tarifa_gr" type="number" step="0.01" value="12" style="width:70px;">
+    </div>
+    <button class="btn btn-success" type="submit" {% if not semana_id %}disabled{% endif %}>Guardar día</button>
+  </form>
+</div>
+
 <div class="card" style="margin-bottom:1rem;">
   <strong>Nueva semana</strong>
   <form class="inline" style="margin-top:0.5rem;" onsubmit="return crearSemana(event)">

@@ -74,7 +74,8 @@
       <td><strong>${{ '%.2f'|format( (s.total_semana or 0)|float ) }}</strong></td>
       <td>
         <a class="btn btn-sm btn-secondary" href="/produccion?semana_id={{ s.id }}">Ver</a>
-        <a class="btn btn-sm" href="/api/export/produccion/{{ s.id }}?fmt=xlsx&formal=1">Formal</a>
+        <a class="btn btn-sm" href="/api/export/produccion/{{ s.id }}?fmt=xlsx&formal=1">Excel</a>
+        <a class="btn btn-sm btn-secondary" href="/api/export/produccion/{{ s.id }}?fmt=pdf&formal=1">PDF</a>
       </td>
     </tr>
     {% endfor %}

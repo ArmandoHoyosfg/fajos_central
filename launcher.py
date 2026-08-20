@@ -463,6 +463,7 @@ class LauncherApp(tk.Tk):
         ssl = _ssl_files()
         if ssl:
             cmd.extend(["--ssl-certfile", ssl[0], "--ssl-keyfile", ssl[1]])
+            env["FAJOS_FORCE_HTTPS"] = "true"
         elif d.get("debug", True):
             cmd.append("--reload")
 
@@ -584,55 +585,114 @@ class LauncherApp(tk.Tk):
         )
         if not path:
             return
-        if apply and not messagebox.askyesno(
-            "Confirmar", "Se escribirán datos en MariaDB.\n¿Continuar?"
-        ):
-            return
-        cmd = [sys.executable, str(ROOT / "scripts" / "import_excel.py"), path]
-        if apply:
-            cmd.append("--apply")
+
+        # 1) Siempre simular primero y mostrar vista previa
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+        d = _read_db_ini()
+        env["FAJOS_DB_HOST"] = str(d["host"])
+        env["FAJOS_DB_PORT"] = str(d["port"])
+        env["FAJOS_DB_USER"] = str(d["user"])
+        env["FAJOS_DB_PASSWORD"] = str(d["password"])
+        env["FAJOS_DB_NAME"] = str(d["database"])
+
+        script = ROOT / "scripts" / "import_excel.py"
+        if not script.exists():
+            script = ROOT / "scripts" / "importar_excel.py"
 
         win = tk.Toplevel(self)
-        win.title("Importación Excel")
-        win.configure(bg="#11111b")
-        # Maximizada para ver el reporte completo
+        win.title("Vista previa — Importación Excel")
+        win.configure(bg="#1e1e2e")
         try:
-            win.state("zoomed")  # Windows
+            win.state("zoomed")
         except Exception:
             sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-            win.geometry(f"{sw}x{sh}+0+0")
+            win.geometry(f"{min(900, sw)}x{min(600, sh)}")
+        _center(win, min(900, win.winfo_screenwidth()), min(560, win.winfo_screenheight()))
 
-        txt = tk.Text(win, wrap=tk.WORD, bg="#11111b", fg="#cdd6f4", font=("Consolas", 10))
-        txt.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
-        txt.insert(tk.END, "Ejecutando...\n\n")
+        frm = ttk.Frame(win, padding=8)
+        frm.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(
+            frm,
+            text="Simulación (no escribe en BD). Revisa el resumen y confirma si aplica.",
+            foreground="#a6adc8",
+        ).pack(anchor=tk.W)
+
+        txt = tk.Text(frm, wrap=tk.WORD, bg="#11111b", fg="#cdd6f4", font=("Consolas", 10), height=24)
+        txt.pack(fill=tk.BOTH, expand=True, pady=6)
+        txt.insert(tk.END, f"Archivo: {path}\nEjecutando simulación...\n\n")
         win.update()
 
-        def worker():
+        btn_row = ttk.Frame(frm)
+        btn_row.pack(fill=tk.X)
+        btn_apply = ttk.Button(btn_row, text="⬇  Aplicar a la base de datos", state=tk.DISABLED)
+        btn_apply.pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_row, text="Cerrar", command=win.destroy).pack(side=tk.RIGHT, padx=4)
+
+        def run_cmd(do_apply: bool):
+            cmd = [sys.executable, str(script)]
+            # import_excel.py uses positional excel; importar_excel uses --excel
+            if script.name == "importar_excel.py":
+                cmd += ["--excel", path]
+                if do_apply:
+                    cmd.append("--aplicar")
+            else:
+                cmd.append(path)
+                if do_apply:
+                    cmd.append("--apply")
             try:
-                env = os.environ.copy()
-                env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
-                d = _read_db_ini()
-                env["FAJOS_DB_HOST"] = str(d["host"])
-                env["FAJOS_DB_PORT"] = str(d["port"])
-                env["FAJOS_DB_USER"] = str(d["user"])
-                env["FAJOS_DB_PASSWORD"] = str(d["password"])
-                env["FAJOS_DB_NAME"] = str(d["database"])
                 proc = subprocess.run(
                     cmd, cwd=str(ROOT), env=env, capture_output=True, text=True,
                     encoding="utf-8", errors="replace",
                 )
                 out = (proc.stdout or "") + (proc.stderr or "")
-                self.after(
-                    0,
-                    lambda: (
-                        txt.insert(tk.END, out + f"\n\nCódigo {proc.returncode}\n"),
-                        txt.see(tk.END),
-                    ),
-                )
+                return proc.returncode, out
             except Exception as e:
-                self.after(0, lambda: txt.insert(tk.END, str(e)))
+                return 1, str(e)
 
-        threading.Thread(target=worker, daemon=True).start()
+        def after_preview(code: int, out: str):
+            txt.insert(tk.END, out + f"\n\nCódigo {code}\n")
+            txt.see(tk.END)
+            if code == 0:
+                btn_apply.configure(state=tk.NORMAL)
+            else:
+                txt.insert(tk.END, "\n⚠ Simulación con errores — no se habilita aplicar.\n")
+
+        def worker_preview():
+            code, out = run_cmd(False)
+            self.after(0, lambda: after_preview(code, out))
+
+        def do_apply():
+            if not messagebox.askyesno(
+                "Confirmar",
+                "Se escribirán datos en MariaDB.\n"
+                "Trabajadores nuevos se insertan; producción de la semana se agrega "
+                "(duplicados se omiten).\n¿Continuar?",
+                parent=win,
+            ):
+                return
+            btn_apply.configure(state=tk.DISABLED)
+            txt.insert(tk.END, "\n--- APLICANDO ---\n")
+            win.update()
+
+            def worker_apply():
+                code, out = run_cmd(True)
+                def done():
+                    txt.insert(tk.END, out + f"\n\nCódigo {code}\n")
+                    txt.see(tk.END)
+                    if code == 0:
+                        messagebox.showinfo("Importación", "Datos aplicados correctamente.", parent=win)
+                    else:
+                        messagebox.showerror("Importación", "Hubo errores al aplicar. Revisa el log.", parent=win)
+                self.after(0, done)
+
+            threading.Thread(target=worker_apply, daemon=True).start()
+
+        btn_apply.configure(command=do_apply)
+        # Si el usuario eligió "aplicar" desde el menú, tras preview puede confirmar
+        if apply:
+            txt.insert(tk.END, "(Solicitaste aplicar: primero verás la simulación.)\n\n")
+        threading.Thread(target=worker_preview, daemon=True).start()
 
     def _open_path(self, path: Path) -> None:
         path = Path(path)

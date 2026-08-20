@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.5.0] — 2026-08-20
+
+### Añadido
+- Import Excel con vista previa obligatoria antes de aplicar (launcher)
+- PDF nómina formal con color por material y totales
+- Normalización de nombres (acentos) en import y alta
+- Captura de un solo día de trabajo por empleado (API + web)
+- HTTPS: con certificados, redirección HTTP→HTTPS automática
+
 ## [2.4.1] — 2026-08-20
 
 ### Corregido / Mejorado

@@ -211,8 +211,9 @@ async def api_add_produccion(
     trabajador_id: int | None = Form(None),
     repo: ProduccionRepo = Depends(get_produccion_repo),
 ):
+    from app.core.normalize import canonical_name
     new_id = repo.insertar(semana_id, {
-        "nombre": nombre,
+        "nombre": canonical_name(nombre),
         "ubic": ubic,
         "folio": folio,
         "modelo": modelo,
@@ -228,6 +229,63 @@ async def api_add_produccion(
         "trabajador_id": trabajador_id,
     })
     return {"id": new_id, "ok": True}
+
+
+
+
+@router.patch("/api/produccion/linea/{prod_id}/dia")
+async def api_patch_dia(
+    prod_id: int,
+    dia: str = Form(...),
+    gramos: float | None = Form(None),
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+):
+    """Registra o corrige un solo día de trabajo en una línea existente."""
+    repo.actualizar_gramos_dia(prod_id, dia, gramos)
+    return {"ok": True, "prod_id": prod_id, "dia": dia, "gramos": gramos}
+
+
+@router.post("/api/produccion/{semana_id}/dia")
+async def api_add_un_dia(
+    semana_id: int,
+    nombre: str = Form(...),
+    ubic: int = Form(...),
+    dia: str = Form(...),
+    gramos: float = Form(...),
+    folio: str | None = Form(None),
+    modelo: str | None = Form(None),
+    material: str | None = Form("AG3"),
+    tarifa_gr: float | None = Form(12.0),
+    trabajador_id: int | None = Form(None),
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+):
+    """
+    Alta rápida: una línea con un solo día lleno (resto vacío).
+    Ideal para capturar el avance del día sin rellenar la semana completa.
+    """
+    from app.core.normalize import canonical_name
+    day_map = {
+        "sab": "gm_sab", "dom": "gm_dom", "lun": "gm_lun", "mar": "gm_mar",
+        "mie": "gm_mie", "jue": "gm_jue", "vie": "gm_vie",
+    }
+    col = day_map.get(dia.strip().lower())
+    if not col:
+        from app.core.exceptions import ValidationAppError
+        raise ValidationAppError(f"Día inválido: {dia}")
+    payload = {
+        "nombre": canonical_name(nombre),
+        "ubic": ubic,
+        "folio": folio,
+        "modelo": modelo,
+        "material": material,
+        "tarifa_gr": tarifa_gr,
+        "trabajador_id": trabajador_id,
+        "gm_sab": None, "gm_dom": None, "gm_lun": None,
+        "gm_mar": None, "gm_mie": None, "gm_jue": None, "gm_vie": None,
+    }
+    payload[col] = gramos
+    new_id = repo.insertar(semana_id, payload)
+    return {"id": new_id, "ok": True, "dia": dia, "gramos": gramos}
 
 
 @router.delete("/api/produccion/linea/{prod_id}")
