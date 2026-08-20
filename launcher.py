@@ -16,6 +16,15 @@ import time
 import webbrowser
 from pathlib import Path
 
+def _app_version() -> str:
+    vf = Path(__file__).resolve().parent / 'VERSION'
+    try:
+        return vf.read_text(encoding='utf-8').strip() or '0.0.0'
+    except Exception:
+        return '0.0.0'
+
+APP_VERSION = _app_version()
+
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -178,7 +187,7 @@ from tkinter import filedialog, messagebox, ttk
 class LauncherApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Fajos Piteados Central — Centro de control")
+        self.title(f"Fajos Piteados Central — Centro de control  ·  v{APP_VERSION}")
         self.configure(bg="#1e1e2e")
         self.resizable(False, False)
 
@@ -243,7 +252,7 @@ class LauncherApp(tk.Tk):
         titles = ttk.Frame(head)
         titles.pack(side=tk.LEFT, fill=tk.X)
         ttk.Label(titles, text="Fajos Piteados Central", style="Title.TLabel").pack(anchor=tk.W)
-        ttk.Label(titles, text="Centro de control", foreground="#a6adc8").pack(anchor=tk.W)
+        ttk.Label(titles, text=f"Centro de control  ·  v{APP_VERSION}", foreground="#a6adc8").pack(anchor=tk.W)
 
         st = ttk.Frame(main)
         st.pack(fill=tk.X, pady=(0, 2))

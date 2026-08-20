@@ -99,6 +99,14 @@ class MainWindow(QMainWindow):
             "padding: 4px 14px; background: #313244; border-radius: 8px; }"
         )
         tb.addWidget(self.lbl_fecha)
+        self.lbl_ver_tb = QLabel(f"v{APP_VERSION}")
+        self.lbl_ver_tb.setStyleSheet(
+            "QLabel { color: #a6adc8; font-weight: 600; font-size: 12px; "
+            "padding: 4px 10px; background: #181825; border-radius: 8px; "
+            "border: 1px solid #45475a; }"
+        )
+        self.lbl_ver_tb.setToolTip(f"{APP_NAME} {APP_VERSION}")
+        tb.addWidget(self.lbl_ver_tb)
         tb.addSeparator()
 
         # Búsqueda global (trabajadores)
@@ -140,8 +148,14 @@ class MainWindow(QMainWindow):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
         self.lbl_fecha_status = QLabel()
+        self.lbl_version = QLabel(f"  v{APP_VERSION}  ")
+        self.lbl_version.setStyleSheet(
+            "color: #c9a227; font-weight: 700; padding: 0 8px;"
+        )
+        self.lbl_version.setToolTip(f"{APP_NAME} versión {APP_VERSION}")
         self.lbl_db = QLabel("BD: —")
         self.status.addPermanentWidget(self.lbl_fecha_status)
+        self.status.addPermanentWidget(self.lbl_version)
         self.status.addPermanentWidget(self.lbl_db)
         self.status.showMessage("Listo")
         self._update_fecha_label()
