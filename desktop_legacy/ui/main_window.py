@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -25,6 +25,7 @@ from ui.production_widget import ProductionWidget
 from ui.styles import DARK_QSS
 from ui.summary_widget import SummaryWidget
 from ui.workers_widget import WorkersWidget
+from ui.calendar_util import format_fecha_larga, format_fecha_corta, today
 
 
 class MainWindow(QMainWindow):
@@ -86,6 +87,16 @@ class MainWindow(QMainWindow):
         tb.addAction(act_refresh)
         tb.addSeparator()
 
+        # Fecha actual (siempre visible)
+        self.lbl_fecha = QLabel()
+        self.lbl_fecha.setProperty("cssClass", "fecha")
+        self.lbl_fecha.setStyleSheet(
+            "QLabel { color: #c9a227; font-weight: 700; font-size: 13px; "
+            "padding: 4px 14px; background: #313244; border-radius: 8px; }"
+        )
+        tb.addWidget(self.lbl_fecha)
+        tb.addSeparator()
+
         # Búsqueda global (trabajadores)
         wrap = QWidget()
         row = QHBoxLayout(wrap)
@@ -99,6 +110,11 @@ class MainWindow(QMainWindow):
         self.search_box.returnPressed.connect(self._focus_workers_search)
         row.addWidget(self.search_box)
         tb.addWidget(wrap)
+
+        self._update_fecha_label()
+        self._fecha_timer = QTimer(self)
+        self._fecha_timer.timeout.connect(self._update_fecha_label)
+        self._fecha_timer.start(30_000)  # cada 30 s por si cruza medianoche
 
     def _build_tabs(self):
         self.tabs = QTabWidget()
@@ -116,11 +132,31 @@ class MainWindow(QMainWindow):
     def _build_statusbar(self):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
+        self.lbl_fecha_status = QLabel()
         self.lbl_db = QLabel("BD: —")
+        self.status.addPermanentWidget(self.lbl_fecha_status)
         self.status.addPermanentWidget(self.lbl_db)
         self.status.showMessage("Listo")
+        self._update_fecha_label()
+
+    def _update_fecha_label(self) -> None:
+        d = today()
+        larga = format_fecha_larga(d)
+        corta = format_fecha_corta(d)
+        if hasattr(self, "lbl_fecha"):
+            self.lbl_fecha.setText(f"📅  Hoy: {larga}")
+            self.lbl_fecha.setToolTip(f"Fecha del sistema: {corta}")
+        if hasattr(self, "lbl_fecha_status"):
+            self.lbl_fecha_status.setText(f"  {corta}  ")
+        # Propagar a producción por si cambió el día
+        if hasattr(self, "production"):
+            try:
+                self.production.on_fecha_sistema_changed(d)
+            except Exception:
+                pass
 
     def _try_connect(self):
+
         try:
             self._db.connect()
             self.lbl_db.setText("BD: conectada")

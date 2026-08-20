@@ -36,6 +36,13 @@ from PySide6.QtWidgets import (
 
 from db import ProduccionRepo, SemanasRepo, TrabajadoresRepo
 from services.excel_service import ExcelService
+from ui.calendar_util import (
+    encontrar_semana_actual,
+    etiqueta_semana,
+    format_fecha_larga,
+    sugerir_codigo_semana,
+    today,
+)
 
 DAY_KEYS = [
     ("gm_sab", "Sáb"),
@@ -150,6 +157,10 @@ class ProductionWidget(QWidget):
         self.lbl_totales.setProperty("cssClass", "kpi")
         top.addWidget(self.lbl_totales)
         layout.addLayout(top)
+        self.lbl_semana_ctx = QLabel("")
+        self.lbl_semana_ctx.setProperty("cssClass", "subtitle")
+        self.lbl_semana_ctx.setWordWrap(True)
+        layout.addWidget(self.lbl_semana_ctx)
 
         # --- Un solo día ---
         box_day = QGroupBox("📅  Registrar un solo día")
@@ -358,21 +369,36 @@ class ProductionWidget(QWidget):
     def _load_semanas(self):
         self.cmb_semana.blockSignals(True)
         self.cmb_semana.clear()
+        actual_id = None
         try:
             semanas = self.sem_repo.listar()
+            actual = encontrar_semana_actual(semanas, today())
+            if actual:
+                actual_id = actual.get("id")
             for s in semanas:
-                self.cmb_semana.addItem(
-                    f"{s['codigo']}  ({s['fecha_inicio']} → {s['fecha_fin']})",
-                    s["id"],
-                )
+                self.cmb_semana.addItem(etiqueta_semana(s, today()), s["id"])
         except Exception as e:
             QMessageBox.warning(self, "Semanas", f"No se pudieron cargar semanas:\n{e}")
         self.cmb_semana.blockSignals(False)
+
+        # Seleccionar semana que contiene la fecha de hoy
+        if actual_id is not None:
+            idx = self.cmb_semana.findData(actual_id)
+            if idx >= 0:
+                self.cmb_semana.setCurrentIndex(idx)
+        elif self.cmb_semana.count():
+            self.cmb_semana.setCurrentIndex(0)
+
+        self._update_semana_context_label()
         if self.cmb_semana.count():
             self._on_semana_changed()
         else:
-            self.lbl_empty.setText("No hay semanas. Crea una con «Nueva semana».")
+            self.lbl_empty.setText(
+                "No hay semanas. Crea una con «Nueva semana» "
+                "(se sugerirá el rango sáb–vie actual)."
+            )
             self.lbl_totales.setText("Totales: —")
+
 
     def _load_trabajadores(self):
         for cmb in (self.cmb_trabajador, self.cmb_dia_trab):
@@ -387,8 +413,49 @@ class ProductionWidget(QWidget):
         except Exception:
             pass
 
+
+    def _update_semana_context_label(self) -> None:
+        hoy = today()
+        texto_hoy = format_fecha_larga(hoy)
+        sid = self.cmb_semana.currentData()
+        if sid is None:
+            self.lbl_semana_ctx.setText(
+                f"Hoy es {texto_hoy}. No hay semana seleccionada."
+            )
+            return
+        # recuperar fechas del ítem actual desde listar es costoso; parse etiqueta
+        label = self.cmb_semana.currentText()
+        if "★ ACTUAL" in label:
+            estado = "Estás en la <b>semana actual</b> del calendario."
+        else:
+            estado = (
+                "La semana seleccionada <b>no incluye hoy</b>. "
+                "Cambia a la marcada ★ ACTUAL o crea la semana correspondiente."
+            )
+        self.lbl_semana_ctx.setText(f"📅 Hoy: {texto_hoy}.  {estado}")
+
+    def on_fecha_sistema_changed(self, d=None) -> None:
+        """Llamado desde MainWindow cuando cambia el día del sistema."""
+        self._update_semana_context_label()
+        # Re-evaluar selección de semana actual
+        try:
+            semanas = self.sem_repo.listar()
+            actual = encontrar_semana_actual(semanas, d or today())
+            if actual and self.cmb_semana.currentData() != actual.get("id"):
+                # solo auto-cambiar si el usuario estaba en una semana que ya no es "hoy"
+                # Evitar sorpresas: solo actualizar etiquetas y sugerir
+                for i in range(self.cmb_semana.count()):
+                    txt = self.cmb_semana.itemText(i)
+                    if "★ ACTUAL" in txt or self.cmb_semana.itemData(i) == actual.get("id"):
+                        # refresh labels without forcing switch every 30s
+                        break
+                self._load_semanas()
+        except Exception:
+            pass
+
     def _on_semana_changed(self):
         self._semana_id = self.cmb_semana.currentData()
+        self._update_semana_context_label()
         self.refresh_table()
 
     def _on_nueva_semana(self):
@@ -398,11 +465,13 @@ class ProductionWidget(QWidget):
         dlg.setWindowTitle("Nueva semana")
         fl = QFormLayout(dlg)
         codigo = QLineEdit()
-        codigo.setPlaceholderText("16-22")
+        sug_cod, sug_ini, sug_fin = sugerir_codigo_semana(today())
+        codigo.setPlaceholderText(sug_cod)
+        codigo.setText(sug_cod)
         ini = QDateEdit(calendarPopup=True)
         fin = QDateEdit(calendarPopup=True)
-        ini.setDate(date.today())
-        fin.setDate(date.today())
+        ini.setDate(sug_ini)
+        fin.setDate(sug_fin)
         fl.addRow("Código:", codigo)
         fl.addRow("Inicio:", ini)
         fl.addRow("Fin:", fin)

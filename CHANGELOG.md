@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.6.1] — 2026-08-20
+
+### Añadido
+- Fecha actual visible en barra principal y status bar
+- Comparación de semanas con el calendario (marca ★ ACTUAL)
+- Auto-selección de la semana que contiene hoy
+- Nueva semana sugiere rango sáb–vie de la semana corriente
+
 ## [2.6.0] — 2026-08-20
 
 ### Desktop UX
