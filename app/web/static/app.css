@@ -287,3 +287,25 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
 .toast-web.err { color: #f38ba8; }
 .cell-gm:focus { outline: 1px solid #c9a227; }
 .filter-row { display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center; margin:0.75rem 0; }
+
+/* KPI sticky — siempre visibles al editar */
+.kpi-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  padding: 0.65rem 1rem;
+  margin-bottom: 0.75rem;
+  background: #1e1e2e;
+  border: 1px solid #45475a;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px #0005;
+}
+.kpi-bar .kpi-item { color: #cdd6f4; font-size: 0.95rem; }
+.kpi-bar .kpi-item b { color: #c9a227; font-size: 1.1rem; }
+.kpi-bar .money b { color: #a6e3a1; }
+.kpi-bar .muted { color: #a6adc8; font-size: 0.85rem; }
+.cell-total, .cell-efectivo { font-weight: 600; }

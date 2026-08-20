@@ -87,6 +87,9 @@ class TrabajosWidget(QWidget):
         btn = QPushButton("Actualizar")
         btn.clicked.connect(self.reload)
         top.addWidget(btn)
+        self.lbl_totales = QLabel("Totales: —")
+        self.lbl_totales.setProperty("cssClass", "kpi")
+        top.addWidget(self.lbl_totales)
         lay.addLayout(top)
 
         self.lbl_reminder = QLabel()
@@ -271,6 +274,16 @@ class TrabajosWidget(QWidget):
             pid.setFlags(pid.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(i, 14, pid)
         self._updating = False
+        self._recalc_totales()
+
+    def _recalc_totales(self):
+        rows = self._rows
+        gr = sum(float(r.get("total_gramos") or 0) for r in rows)
+        ef = sum(float(r.get("efectivo") or 0) for r in rows)
+        sin = sum(1 for r in rows if _gramos(r, _col_hoy()) <= 0)
+        self.lbl_totales.setText(
+            f"Trabajos: {len(rows)}  ·  Gramos: {gr:g}  ·  Efectivo: ${ef:,.2f}  ·  Sin hoy: {sin}"
+        )
 
     def _confirm_past(self, col: str, old: float) -> bool:
         hoy = _col_hoy()

@@ -19,6 +19,11 @@
   </div>
 </div>
 
+<div class="kpi-bar" id="kpi-live">
+  <span class="kpi-item"><b>{{ trabajos|length }}</b> trabajos</span>
+  <span class="muted">Totales se recalculan al editar</span>
+</div>
+
 <div class="toolbar">
   <form class="inline" method="get" action="/trabajos">
     <label class="muted">Semana</label>
@@ -46,7 +51,7 @@
   </thead>
   <tbody>
   {% for r in trabajos %}
-    <tr data-sin-hoy="{{ 1 if r.sin_hoy else 0 }}" class="mat-{{ (r.material or '')|lower }}">
+    <tr data-sin-hoy="{{ 1 if r.sin_hoy else 0 }}" class="mat-{{ (r.material or '')|lower }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
       <td>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td>{{ r.folio or '—' }}</td>
@@ -75,7 +80,7 @@
         {% endif %}
       </td>
       {% endfor %}
-      <td>{{ r.total_gramos or '' }}</td>
+      <td class="cell-total">{{ r.total_gramos or '' }}</td>
     </tr>
   {% else %}
     <tr><td colspan="14" class="muted">No hay trabajos activos. Importa el Excel o captura producción con folio.</td></tr>
@@ -151,8 +156,15 @@ async function saveCell(inp) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (window.FajosLive) {
+    FajosLive.bindGramInputs({
+      tableSel: '.table-wrap table',
+      kpiSel: '#kpi-live',
+      onSave: async (inp) => { await saveCell(inp); },
+    });
+  }
   document.querySelectorAll('input.cell-gm').forEach(inp => {
-    inp.addEventListener('change', () => saveCell(inp));
+    // bindGramInputs handles change
   });
   const flt = document.getElementById('flt-sin-hoy');
   if (flt) flt.addEventListener('change', () => {

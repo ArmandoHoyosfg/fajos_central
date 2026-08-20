@@ -817,6 +817,26 @@ class ProductionWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
+
+    def _recalc_totales_ui(self, rows: list | None = None) -> None:
+        """Recalcula KPIs en pantalla a partir de las filas visibles (tiempo real)."""
+        rows = rows if rows is not None else getattr(self, "_all_rows", [])
+        n = len(rows)
+        gr = 0.0
+        ef = 0.0
+        for r in rows:
+            try:
+                gr += float(r.get("total_gramos") or 0)
+            except (TypeError, ValueError):
+                pass
+            try:
+                ef += float(r.get("efectivo") or 0)
+            except (TypeError, ValueError):
+                pass
+        self.lbl_totales.setText(
+            f"Líneas: {n}   ·   Gramos: {gr:g}   ·   Efectivo: ${ef:,.2f}"
+        )
+
     def refresh_table(self):
         self._updating_cell = True
         try:

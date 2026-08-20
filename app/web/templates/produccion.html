@@ -46,11 +46,12 @@
   </form>
 
   {% if semana_id %}
-  <span class="muted">
-    Líneas: {{ totales.lineas or 0 }} |
-    Gramos: {{ totales.total_gramos or 0 }} |
-    Efectivo: ${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}
-  </span>
+  <div class="kpi-bar" id="kpi-live">
+    <span class="kpi-item"><b>{{ totales.lineas or 0 }}</b> líneas</span>
+    <span class="kpi-item"><b>{{ totales.total_gramos or 0 }}</b> g</span>
+    <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}</b></span>
+    <span class="muted">se actualiza al editar gramos</span>
+  </div>
   <a class="btn" href="/api/export/produccion/{{ semana_id }}?fmt=xlsx&formal=1">Formal Excel</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
@@ -186,7 +187,7 @@
   </thead>
   <tbody>
     {% for r in lineas %}
-    <tr class="mat-{{ (r.material or '')|lower }}" data-prod-id="{{ r.id }}">
+    <tr class="mat-{{ (r.material or '')|lower }}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
       <td>
         {% if not semana_cerrada %}
         <button type="button" class="btn btn-danger" style="padding:0.2rem 0.5rem;font-size:0.75rem;"
@@ -211,8 +212,8 @@
         {% endif %}
       </td>
       {% endfor %}
-      <td>{{ r.total_gramos or '' }}</td>
-      <td>{% if r.efectivo %}${{ '%.2f'|format(r.efectivo|float) }}{% endif %}</td>
+      <td class="cell-total">{{ r.total_gramos or '' }}</td>
+      <td class="cell-efectivo">{% if r.efectivo %}${{ '%.2f'|format(r.efectivo|float) }}{% endif %}</td>
       <td>
         <input type="checkbox" {% if r.firmado %}checked{% endif %}
                {% if semana_cerrada %}disabled{% endif %}
@@ -261,7 +262,7 @@ async function addLinea(e) {
   const semanaId = {{ semana_id or 'null' }};
   const res = await fetch('/api/produccion/' + semanaId, { method: 'POST', body });
   const data = await res.json();
-  if (res.ok && data.ok) { showToast('Día guardado'); setTimeout(() => location.reload(), 400); }
+  if (res.ok && data.ok) { if (window.FajosLive) FajosLive.showToast('Día guardado'); setTimeout(() => location.reload(), 500); }
   else alert(data.user_message || data.message || 'Error al guardar');
   return false;
 }
@@ -269,7 +270,7 @@ async function delLinea(id) {
   if (!confirm('¿Eliminar esta línea?')) return;
   const res = await fetch('/api/produccion/linea/' + id, { method: 'DELETE' });
   const data = await res.json();
-  if (res.ok && data.ok) { showToast('Día guardado'); setTimeout(() => location.reload(), 400); }
+  if (res.ok && data.ok) { if (window.FajosLive) FajosLive.showToast('Día guardado'); setTimeout(() => location.reload(), 500); }
   else alert(data.user_message || data.message || 'Error');
 }
 </script>
@@ -324,8 +325,16 @@ async function saveGramCell(inp) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  if (window.FajosLive) {
+    FajosLive.bindGramInputs({
+      tableSel: '.table-wrap table',
+      kpiSel: '#kpi-live',
+      onSave: async (inp) => { await saveGramCell(inp); },
+    });
+  }
   document.querySelectorAll('input.cell-gm').forEach(inp => {
-    inp.addEventListener('change', () => saveGramCell(inp));
+    // change already handled by bindGramInputs onSave; keep Enter
+
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
     });
