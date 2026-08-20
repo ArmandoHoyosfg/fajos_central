@@ -113,6 +113,8 @@ async def page_produccion(
             semana_cerrada=bool(
                 next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")
             ) if semana_id else False,
+            col_hoy=__import__("app.core.dias", fromlist=["col_hoy"]).col_hoy(),
+            day_cols=["gm_sab","gm_dom","gm_lun","gm_mar","gm_mie","gm_jue","gm_vie"],
         ),
     )
 

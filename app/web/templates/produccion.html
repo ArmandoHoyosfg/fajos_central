@@ -357,3 +357,21 @@ const _origSubmitUnDia = window.submitUnDia;
 </script>
 
 {% endblock %}
+
+<script>
+(function(){
+  const map = {0:'gm_lun',1:'gm_mar',2:'gm_mie',3:'gm_jue',4:'gm_vie',5:'gm_sab',6:'gm_dom'};
+  // better: server col_hoy
+  const hoy = "{{ col_hoy|default('gm_lun') }}";
+  document.querySelectorAll('input.cell-gm').forEach(inp => {
+    const d = inp.dataset.dia;
+    if (d && d !== hoy) {
+      inp.readOnly = true;
+      inp.title = 'Doble clic para confirmar edición de día que no es hoy';
+      inp.addEventListener('dblclick', () => {
+        if (confirm('¿Editar día que no es hoy?')) { inp.readOnly = false; inp.focus(); }
+      });
+    }
+  });
+})();
+</script>

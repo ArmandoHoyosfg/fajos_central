@@ -10,6 +10,7 @@ from decimal import Decimal
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QInputDialog,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -344,6 +345,7 @@ class ProductionWidget(QWidget):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.itemChanged.connect(self._on_cell_changed)
+        self.table.cellDoubleClicked.connect(self._on_day_double_click)
         self.table.setMinimumHeight(280)
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # Highlight today column header
@@ -907,11 +909,15 @@ class ProductionWidget(QWidget):
                     item = QTableWidgetItem(display)
                     if j == 0 or j in self._day_cols or key in ("ubic", "tarifa_gr", "total_gramos", "efectivo"):
                         item.setTextAlignment(Qt.AlignCenter)
-                    # editable only day columns
+                    # Solo HOY editable directo; otros días: doble clic + confirmación
                     if j in self._day_cols:
-                        item.setFlags(item.flags() | Qt.ItemIsEditable)
-                        if self._day_cols[j] == today_key:
+                        if self._day_cols[j] == today_key and not getattr(self, "_semana_cerrada", False):
+                            item.setFlags(item.flags() | Qt.ItemIsEditable)
                             item.setForeground(QBrush(QColor("#c9a227")))
+                            item.setToolTip("Hoy — editable")
+                        else:
+                            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                            item.setToolTip("Doble clic para editar (requiere confirmación)")
                     else:
                         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                     if bg and j > 0:
@@ -921,10 +927,99 @@ class ProductionWidget(QWidget):
                     if j == 0:
                         item.setData(Qt.UserRole, r.get("id"))
                     self.table.setItem(i, j, item)
+            self._lock_non_today_cells()
         finally:
             self._updating_cell = False
 
+
+
+    def _lock_non_today_cells(self) -> None:
+        """Solo el día de hoy es editable directo; el resto exige doble clic + confirmación."""
+        hoy = self._col_hoy_key()
+        for row in range(self.table.rowCount()):
+            for col, col_name in self._day_cols.items():
+                item = self.table.item(row, col)
+                if not item:
+                    continue
+                if col_name == hoy and not getattr(self, "_semana_cerrada", False):
+                    item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    item.setToolTip("Hoy — editable")
+                else:
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    item.setToolTip("Doble clic para editar (requiere confirmación)")
+
+    def _col_hoy_key(self) -> str:
+        return DAY_BY_WEEKDAY.get(date.today().weekday(), "gm_lun")
+
+    def _on_day_double_click(self, row: int, col: int) -> None:
+        """Días distintos de hoy: bloqueados; se editan solo con confirmación."""
+        if col not in self._day_cols:
+            return
+        col_name = self._day_cols[col]
+        if col_name == self._col_hoy_key():
+            return  # hoy se edita normal
+        if getattr(self, "_semana_cerrada", False):
+            QMessageBox.information(self, "Cerrada", "La semana está cerrada.")
+            return
+        id_item = self.table.item(row, 0)
+        if not id_item:
+            return
+        try:
+            prod_id = int(id_item.text())
+        except ValueError:
+            return
+        labels = {
+            "gm_sab": "Sábado", "gm_dom": "Domingo", "gm_lun": "Lunes",
+            "gm_mar": "Martes", "gm_mie": "Miércoles", "gm_jue": "Jueves", "gm_vie": "Viernes",
+        }
+        lab = labels.get(col_name, col_name)
+        old_val = 0.0
+        for r in self._all_rows:
+            if r.get("id") == prod_id:
+                try:
+                    old_val = float(r.get(col_name) or 0)
+                except (TypeError, ValueError):
+                    old_val = 0.0
+                break
+        msg = (
+            f"El {lab} no es el día de hoy.\n"
+            f"Valor actual: {old_val:g} g\n\n"
+            "¿Confirmas editar este día?"
+        )
+        if QMessageBox.question(
+            self, "Editar día bloqueado", msg,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        val, ok = QInputDialog.getDouble(
+            self, f"Gramos — {lab}", f"Gramos para {lab}:",
+            old_val if old_val else 0.0, 0.0, 9999.0, 2,
+        )
+        if not ok:
+            return
+        gramos = None if val == 0 else val
+        try:
+            self.prod_repo.actualizar_gramos_dia(prod_id, col_name, gramos)
+            for r in self._all_rows:
+                if r.get("id") == prod_id:
+                    r[col_name] = gramos
+                    days = list(self._day_cols.values())
+                    tg = sum(float(r.get(d) or 0) for d in days)
+                    r["total_gramos"] = tg
+                    try:
+                        r["efectivo"] = round(tg * float(r.get("tarifa_gr") or 0), 2)
+                    except (TypeError, ValueError):
+                        pass
+                    break
+            self._recalc_totales_ui()
+            self.refresh_table()
+            self.data_changed.emit()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
     def _on_cell_changed(self, item: QTableWidgetItem):
+        # Guard: solo hoy vía edición directa
+
         if self._updating_cell:
             return
         col = item.column()

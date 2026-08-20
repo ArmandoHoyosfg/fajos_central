@@ -64,6 +64,7 @@
           {{ r[d] or '' }}
         {% else %}
           <input class="cell-gm" type="number" step="0.01" min="0"
+                 {% if d != col_hoy %}readonly title="Doble clic / confirmar para editar día que no es hoy"{% endif %}
                  data-trabajo="{{ r.trabajo_id }}"
                  data-prod="{{ r.produccion_id or '' }}"
                  data-tid="{{ r.trabajador_id }}"
@@ -111,7 +112,18 @@ function isPast(col) {
   return DAY_ORDER.indexOf(col) < DAY_ORDER.indexOf(COL_HOY);
 }
 
+function unlockIfNeeded(inp) {
+  if (!inp.readOnly) return true;
+  const col = inp.dataset.dia;
+  const old = parseFloat(inp.dataset.old || '0') || 0;
+  if (!confirm('Este día no es hoy (valor: ' + old + ' g).\n¿Confirmas editarlo?')) return false;
+  inp.readOnly = false;
+  inp.focus();
+  return false; // no guardar aún
+}
 async function saveCell(inp) {
+  if (inp.readOnly) return;
+
   const col = inp.dataset.dia;
   const old = parseFloat(inp.dataset.old || '0') || 0;
   const val = inp.value === '' ? 0 : parseFloat(inp.value);
@@ -164,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   document.querySelectorAll('input.cell-gm').forEach(inp => {
-    // bindGramInputs handles change
+    inp.addEventListener('dblclick', () => unlockIfNeeded(inp));
   });
   const flt = document.getElementById('flt-sin-hoy');
   if (flt) flt.addEventListener('change', () => {

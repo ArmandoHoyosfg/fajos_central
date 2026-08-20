@@ -7,6 +7,7 @@ from datetime import date
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QInputDialog,
     QAbstractItemView,
     QCheckBox,
     QComboBox,
@@ -129,6 +130,7 @@ class TrabajosWidget(QWidget):
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed
         )
         self.table.itemChanged.connect(self._on_cell)
+        self.table.cellDoubleClicked.connect(self._on_day_dbl)
         self.table.setMinimumHeight(320)
         lay.addWidget(self.table)
 
@@ -245,7 +247,12 @@ class TrabajosWidget(QWidget):
                     display = ""
                 item = QTableWidgetItem(display)
                 item.setTextAlignment(Qt.AlignCenter)
-                item.setFlags(item.flags() | Qt.ItemIsEditable)
+                if col == _col_hoy() and not getattr(self, "_semana_cerrada", False):
+                    item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    item.setToolTip("Hoy — editable")
+                else:
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    item.setToolTip("Doble clic + confirmación para editar")
                 item.setData(Qt.UserRole, {
                     "trabajo_id": r.get("trabajo_id"),
                     "produccion_id": r.get("produccion_id"),
@@ -322,7 +329,43 @@ class TrabajosWidget(QWidget):
         })
         return int(new_id)
 
+
+    def _on_day_dbl(self, row: int, col: int):
+        if col < 6 or col > 12:
+            return
+        col_name = ORDERED[col - 6]
+        if col_name == _col_hoy():
+            return
+        item = self.table.item(row, col)
+        if not item:
+            return
+        meta = item.data(Qt.UserRole)
+        if not isinstance(meta, dict):
+            return
+        lab = DAY_LABELS.get(col_name, col_name)
+        old = float(meta.get("old") or 0)
+        if QMessageBox.question(
+            self, "Editar día bloqueado",
+            f"El {lab} no es hoy (actual: {old:g} g).\n¿Confirmas editar?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        val, ok = QInputDialog.getDouble(
+            self, f"Gramos — {lab}", f"Gramos:", old if old else 0.0, 0.0, 9999.0, 2,
+        )
+        if not ok:
+            return
+        gramos = None if val == 0 else val
+        try:
+            pid = self._ensure_prod_line(meta)
+            self.prod_repo.actualizar_gramos_dia(pid, col_name, gramos)
+            self.data_changed.emit()
+            self._load_rows()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
     def _on_cell(self, item: QTableWidgetItem):
+
         if self._updating:
             return
         meta = item.data(Qt.UserRole)
@@ -330,6 +373,9 @@ class TrabajosWidget(QWidget):
             return
         col = meta.get("col")
         if not col:
+            return
+        if col != _col_hoy():
+            self._load_rows()
             return
         text = item.text().strip()
         try:

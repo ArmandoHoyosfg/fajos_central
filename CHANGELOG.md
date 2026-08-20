@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.1.2] — 2026-08-20
+
+### Corregido / endurecido
+- ImportError `etiqueta_semana` (calendar_util con fallback local)
+- Días distintos de hoy **bloqueados**; edición solo con doble clic + confirmación
+- Misma regla en Producción, Trabajos (desktop) y web
+
 ## [3.1.1] — 2026-08-20
 
 ### UI en vivo

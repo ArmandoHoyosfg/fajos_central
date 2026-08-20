@@ -78,3 +78,16 @@ def sugerir_codigo_semana(ref: date | None = None) -> tuple[str, date, date]:
     sab = ref - timedelta(days=days_since_sat)
     vie = sab + timedelta(days=6)
     return f"{sab.day:02d}-{vie.day:02d}", sab, vie
+
+
+def etiqueta_semana(s: dict, ref: date | None = None) -> str:
+    """Texto para combo: código, fechas y marca si es la semana actual."""
+    ref = ref or today()
+    codigo = s.get("codigo") or "?"
+    fi = parse_db_date(s.get("fecha_inicio"))
+    ff = parse_db_date(s.get("fecha_fin"))
+    rango = ""
+    if fi and ff:
+        rango = f"  ({fi.isoformat()} → {ff.isoformat()})"
+    marca = "  ★ ACTUAL" if semana_contiene(ref, fi, ff) else ""
+    return f"{codigo}{rango}{marca}"
