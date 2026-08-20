@@ -39,7 +39,11 @@ async def page_dashboard(
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"kpis": data["kpis"], "semanas": data["ultimas_semanas"]},
+        {
+            "kpis": data["kpis"],
+            "semanas": data["ultimas_semanas"],
+            "db_ok": data.get("db_ok", True),
+        },
     )
 
 
@@ -49,11 +53,32 @@ async def page_trabajadores(
     q: str | None = None,
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
+    from app.services.dashboard_service import check_db
     rows = repo.listar(solo_activos=False, busqueda=q)
     return templates.TemplateResponse(
         request,
         "trabajadores.html",
-        {"trabajadores": rows, "q": q or ""},
+        {"trabajadores": rows, "q": q or "", "db_ok": check_db()},
+    )
+
+
+
+@router.get("/buscar", response_class=HTMLResponse)
+async def page_buscar(
+    request: Request,
+    q: str | None = None,
+    svc: DashboardService = Depends(get_dashboard_service),
+):
+    data = svc.buscar(q or "")
+    return templates.TemplateResponse(
+        request,
+        "buscar.html",
+        {
+            "q": q or "",
+            "trabajadores": data["trabajadores"],
+            "semanas": data["semanas"],
+            "db_ok": data.get("db_ok", True),
+        },
     )
 
 
@@ -65,6 +90,7 @@ async def page_produccion(
     prod_repo: ProduccionRepo = Depends(get_produccion_repo),
     trab_repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
+    from app.services.dashboard_service import check_db
     semanas = sem_repo.listar()
     if semana_id is None and semanas:
         semana_id = semanas[0]["id"]
@@ -80,6 +106,7 @@ async def page_produccion(
             "lineas": lineas,
             "totales": totales,
             "trabajadores": trabajadores,
+            "db_ok": check_db(),
         },
     )
 
@@ -88,7 +115,15 @@ async def page_produccion(
 
 @router.get("/api/health")
 async def health():
-    return {"status": "ok", "app": "fajos_central", "version": "2.0.0"}
+    from app import __version__
+    from app.services.dashboard_service import check_db
+    db_ok = check_db()
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "app": "fajos_central",
+        "version": __version__,
+        "database": "ok" if db_ok else "error",
+    }
 
 
 @router.get("/api/dashboard")
@@ -205,17 +240,32 @@ async def api_del_produccion(prod_id: int, repo: ProduccionRepo = Depends(get_pr
 async def api_export(
     semana_id: int,
     fmt: str = Query("xlsx", pattern="^(xlsx|csv|pdf|json)$"),
+    formal: int = Query(0, description="1 = ordenar como nómina formal (ubic, nombre)"),
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
     prod_repo: ProduccionRepo = Depends(get_produccion_repo),
     export_svc: ExportService = Depends(get_export_service),
 ):
     semana = sem_repo.obtener(semana_id)
     lineas = prod_repo.listar_por_semana(semana_id)
+    if formal:
+        def _key(row: dict):
+            try:
+                u = int(row.get("ubic") or 0)
+            except (TypeError, ValueError):
+                u = 0
+            return (u, str(row.get("nombre") or "").upper(), str(row.get("folio") or "").upper())
+        lineas = sorted(lineas, key=_key)
+        # solo líneas con datos útiles
+        lineas = [
+            r for r in lineas
+            if r.get("folio") or r.get("modelo") or float(r.get("total_gramos") or 0) > 0
+        ]
+    stem = f"nomina_formal_{semana['codigo']}" if formal else f"nomina_{semana['codigo']}"
     content, media_type, filename = export_svc.export_produccion(
         lineas,
         fmt=fmt,  # type: ignore
         codigo_semana=semana["codigo"],
-        filename_stem=f"nomina_{semana['codigo']}",
+        filename_stem=stem,
     )
     return Response(
         content=content,

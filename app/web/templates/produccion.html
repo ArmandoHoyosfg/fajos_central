@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Producción — Fajos Piteados Central{% endblock %}
 {% block content %}
-<h1>Producción semanal (Plata)</h1>
+<div class="page-head">
+  <div>
+    <h1>Producción semanal (Plata)</h1>
+    <p class="muted">Captura de gramos · exportar nómina formal ordenada</p>
+  </div>
+</div>
 
 <div class="toolbar">
   <form class="inline" method="get" action="/produccion">
@@ -21,7 +26,7 @@
     Gramos: {{ totales.total_gramos or 0 }} |
     Efectivo: ${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}
   </span>
-  <a class="btn" href="/api/export/produccion/{{ semana_id }}?fmt=xlsx">Excel</a>
+  <a class="btn" href="/api/export/produccion/{{ semana_id }}?fmt=xlsx&formal=1">Formal Excel</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=json">JSON</a>

@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.4.0] — 2026-08-20
+
+### Añadido
+- UI unificada (web + estilo launcher): Lucide icons, logo, badges
+- Dashboard con estado BD, KPIs y atajos
+- Página /buscar (trabajadores + semanas/nóminas)
+- Export formal ordenado (`?formal=1`) por ubic y nombre
+- Health API con estado de MariaDB
+
 ## [2.3.3] — 2026-08-20
 
 ### Corregido

@@ -6,19 +6,36 @@
   <title>{% block title %}Fajos Piteados Central{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="icon" href="/static/logo.png" type="image/png">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/">
-      <img src="/static/logo.png" alt="Logo Fajos Piteados Central">
+      <img src="/static/logo.png" alt="Logo">
       <span>Fajos Piteados Central</span>
     </a>
     <nav class="nav">
-      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
-      <a href="/trabajadores" class="{% if '/trabajadores' in request.url.path %}active{% endif %}">Trabajadores</a>
-      <a href="/produccion" class="{% if '/produccion' in request.url.path %}active{% endif %}">Producción</a>
-      <a href="/docs" target="_blank" rel="noopener">API</a>
+      <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
+        <i data-lucide="layout-dashboard"></i> Dashboard
+      </a>
+      <a href="/buscar" class="{% if request.url.path.startswith('/buscar') %}active{% endif %}">
+        <i data-lucide="search"></i> Buscar
+      </a>
+      <a href="/trabajadores" class="{% if '/trabajadores' in request.url.path %}active{% endif %}">
+        <i data-lucide="users"></i> Trabajadores
+      </a>
+      <a href="/produccion" class="{% if '/produccion' in request.url.path %}active{% endif %}">
+        <i data-lucide="hammer"></i> Producción
+      </a>
+      <a href="/docs" target="_blank" rel="noopener">
+        <i data-lucide="book-open"></i> API
+      </a>
+      {% if db_ok is defined %}
+      <span class="status-chip {% if db_ok %}ok{% else %}err{% endif %}" title="MariaDB">
+        <span class="dot"></span> BD
+      </span>
+      {% endif %}
     </nav>
   </header>
   <main class="container">
@@ -26,7 +43,13 @@
   </main>
   <footer class="site-footer">
     Fajos Piteados Central · Nóminas · Red local
-    {% if request.url.scheme == 'https' %}· <span title="Conexión cifrada">HTTPS</span>{% endif %}
+    {% if request.url.scheme == 'https' %} · HTTPS{% endif %}
   </footer>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.lucide) lucide.createIcons();
+    });
+  </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>
