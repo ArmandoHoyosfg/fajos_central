@@ -50,15 +50,15 @@ QTabBar::tab:selected {
 }
 QTabBar::tab:hover { background: #45475a; }
 QPushButton {
-    background-color: #89b4fa;
+    background-color: #c9a227;
     color: #1e1e2e;
+    font-weight: 600;
     border: none;
     border-radius: 6px;
     padding: 7px 16px;
-    font-weight: 600;
 }
-QPushButton:hover { background-color: #b4befe; }
-QPushButton:pressed { background-color: #74c7ec; }
+QPushButton:hover { background-color: #a68520; color: #1e1e2e; }
+QPushButton:pressed { background-color: #8a7018; color: #1e1e2e; }
 QPushButton:disabled { background-color: #45475a; color: #6c7086; }
 QPushButton[cssClass="danger"] {
     background-color: #f38ba8;
@@ -73,10 +73,10 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit, QTextEdit {
     border: 1px solid #45475a;
     border-radius: 5px;
     padding: 5px 8px;
-    selection-background-color: #89b4fa;
+    selection-background-color: #c9a227;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
-    border: 1px solid #89b4fa;
+    border: 1px solid #c9a227;
 }
 QTableWidget, QTableView {
     background-color: #1e1e2e;
@@ -110,12 +110,12 @@ QGroupBox::title {
     subcontrol-origin: margin;
     left: 12px;
     padding: 0 6px;
-    color: #89b4fa;
+    color: #c9a227;
 }
 QLabel[cssClass="title"] {
     font-size: 18px;
     font-weight: bold;
-    color: #89b4fa;
+    color: #c9a227;
 }
 QLabel[cssClass="subtitle"] {
     color: #a6adc8;

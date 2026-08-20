@@ -4,13 +4,19 @@ Configuración app de escritorio — usa config.ini de la raíz del proyecto.
 from __future__ import annotations
 
 import configparser
-import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 RESOURCES_DIR = BASE_DIR / "resources"
 CONFIG_INI = PROJECT_ROOT / "config.ini"
+
+
+def _read_project_version() -> str:
+    vf = PROJECT_ROOT / "VERSION"
+    if vf.exists():
+        return vf.read_text(encoding="utf-8").strip() or "2.4.0"
+    return "2.4.0"
 
 
 def _load_db_config() -> dict:
@@ -43,8 +49,8 @@ def _load_db_config() -> dict:
 
 DB_CONFIG = _load_db_config()
 
-APP_NAME = "Fajos Central — Nóminas"
-APP_VERSION = "1.0.0"
+APP_NAME = "Fajos Piteados Central"
+APP_VERSION = _read_project_version()
 APP_ORG = "Taller de Fajos Central"
 WINDOW_MIN_WIDTH = 1100
 WINDOW_MIN_HEIGHT = 700

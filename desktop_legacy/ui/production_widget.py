@@ -130,7 +130,7 @@ class ProductionWidget(QWidget):
         btn_del = QPushButton("Eliminar línea")
         btn_del.setProperty("cssClass", "danger")
         btn_del.clicked.connect(self._on_delete)
-        btn_export_formal = QPushButton("Exportar Nómina Formal (Excel)")
+        btn_export_formal = QPushButton("Exportar Formal (orden Ubic→Nombre)")
         btn_export_formal.clicked.connect(self._on_export_formal)
         btn_export_captura = QPushButton("Exportar hoja de captura")
         btn_export_captura.clicked.connect(self._on_export_captura)

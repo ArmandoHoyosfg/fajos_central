@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Punto de entrada — Fajos Central Nóminas
+Punto de entrada — Fajos Piteados Central
 """
 import sys
 

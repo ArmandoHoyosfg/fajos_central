@@ -43,6 +43,17 @@ class WorkersWidget(QWidget):
         title = QLabel("Catálogo de Trabajadores")
         title.setProperty("cssClass", "title")
         layout.addWidget(title)
+        sub = QLabel("Mismo nombre + distinta ubic = personas diferentes")
+        sub.setProperty("cssClass", "subtitle")
+        layout.addWidget(sub)
+
+        search_row = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Filtrar por nombre o ubic…")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self.apply_filter)
+        search_row.addWidget(self.search)
+        layout.addLayout(search_row)
 
         # Formulario alta rápida
         form_box = QWidget()
@@ -100,10 +111,22 @@ class WorkersWidget(QWidget):
 
     def refresh(self):
         try:
-            rows = self.repo.listar(solo_activos=False)
+            self._all_rows = self.repo.listar(solo_activos=False)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudieron cargar trabajadores:\n{e}")
             return
+        self.apply_filter(self.search.text() if hasattr(self, "search") else "")
+
+    def apply_filter(self, text: str = ""):
+        text = (text or "").strip().lower()
+        rows = getattr(self, "_all_rows", []) or []
+        if text:
+            filtered = []
+            for r in rows:
+                blob = f"{r.get('nombre_mostrar','')} {r.get('nombre_completo','')} {r.get('ubic','')} {r.get('tipo','')}".lower()
+                if text in blob:
+                    filtered.append(r)
+            rows = filtered
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):
             vals = [
