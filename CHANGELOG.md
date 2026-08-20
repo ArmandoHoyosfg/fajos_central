@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.7.1] — 2026-08-20
+
+### Export formal enriquecido
+- Encabezado tipo hoja Nomina-Formal (taller, semana, periodo, mes, año)
+- Fecha/hora de emisión en hoja y pie de página
+- Resumen por material + Vo.Bo. supervisor y fecha de pago
+- Mismo formato en desktop y export web xlsx
+
 ## [2.7.0] — 2026-08-20
 
 ### Web ↔ Desktop parity

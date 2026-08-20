@@ -112,37 +112,158 @@ class ExportService:
         raise ValidationAppError(f"Formato no implementado: {fmt}")
 
     def _to_xlsx(self, lineas: list[dict], codigo_semana: str) -> bytes:
+        from datetime import date, datetime
+        from collections import defaultdict
+
+        hoy = date.today()
+        generado = datetime.now().strftime("%d/%m/%Y %H:%M")
+        meses = {
+            1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+            5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+            9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
+        }
+
         wb = Workbook()
         ws = wb.active
         ws.title = "Nomina-Formal"
-        ws["A1"] = "Taller de Fajos Central — Nómina Formal"
-        ws["A1"].font = Font(name="Calibri", bold=True, size=13, color="1F4E79")
-        ws["A2"] = f"Semana: {codigo_semana}"
+
+        ws.merge_cells("A1:P1")
+        ws["A1"] = "TALLER DE FAJOS CENTRAL"
+        ws["A1"].font = Font(name="Calibri", bold=True, size=16, color="1F4E79")
+
+        ws.merge_cells("A2:P2")
+        ws["A2"] = "NÓMINA FORMAL SEMANAL — PRODUCCIÓN PLATA (PLT)"
+        ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="2E75B6")
+
+        ws["A3"] = "Semana"
+        ws["B3"] = codigo_semana or "—"
+        ws["C3"] = "Mes"
+        ws["D3"] = meses.get(hoy.month, "")
+        ws["E3"] = "Año"
+        ws["F3"] = hoy.year
+        ws["G3"] = "Emitido"
+        ws["H3"] = generado
+        for col in range(1, 9):
+            ws.cell(row=3, column=col).font = Font(name="Calibri", size=9, bold=(col % 2 == 1))
+
+        ws["A4"] = "Material:"
+        ws["A4"].font = Font(name="Calibri", size=8, italic=True, color="666666")
+        for col, (code, fill) in enumerate(self.MAT_FILLS.items(), start=2):
+            cell = ws.cell(row=4, column=col, value=code)
+            cell.fill = fill
+            cell.font = Font(name="Calibri", bold=True, size=8)
+            cell.border = self.THIN
 
         headers = [h for _, h in self.COLUMNS] + ["Firma"]
         for col, h in enumerate(headers, 1):
-            cell = ws.cell(row=4, column=col, value=h)
+            cell = ws.cell(row=5, column=col, value=h)
             cell.font = self.HEADER_FONT
             cell.fill = self.HEADER_FILL
             cell.border = self.THIN
-            cell.alignment = Alignment(horizontal="center")
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
-        for i, row in enumerate(lineas):
-            r = 5 + i
+        data_rows = [
+            r for r in lineas
+            if r.get("folio") or r.get("modelo") or float(r.get("total_gramos") or 0) > 0
+        ]
+        data_rows.sort(
+            key=lambda r: (
+                str(r.get("material") or "").upper(),
+                int(r.get("ubic") or 0) if str(r.get("ubic") or "").replace(".", "").isdigit() else 0,
+                str(r.get("nombre") or "").upper(),
+            )
+        )
+
+        for i, row in enumerate(data_rows):
+            r = 6 + i
+            mat = str(row.get("material") or "").upper()
+            fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else None)
             for col, (key, _) in enumerate(self.COLUMNS, 1):
                 val = row.get(key)
-                cell = ws.cell(row=r, column=col, value=float(val) if isinstance(val, Decimal) else val)
+                if isinstance(val, Decimal):
+                    val = float(val)
+                if val is not None and key in (
+                    "tarifa_gr", "gm_sab", "gm_dom", "gm_lun", "gm_mar",
+                    "gm_mie", "gm_jue", "gm_vie", "total_gramos", "efectivo",
+                ):
+                    try:
+                        if float(val) == 0:
+                            val = None
+                    except (TypeError, ValueError):
+                        pass
+                cell = ws.cell(row=r, column=col, value=val)
                 cell.border = self.THIN
-                cell.alignment = Alignment(horizontal="center")
-                mat = str(row.get("material") or "").upper()
-                fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else (self.ALT_FILL if i % 2 == 0 else None))
+                cell.alignment = Alignment(horizontal="center" if col > 1 else "left")
                 if fill is not None:
                     cell.fill = fill
                 if key == "efectivo" and val is not None:
-                    cell.number_format = '$#,##0.00'
-            # Firma vacía
-            cell = ws.cell(row=r, column=len(self.COLUMNS) + 1, value="")
-            cell.border = self.THIN
+                    cell.number_format = '"$"#,##0.00'
+            firm = ws.cell(row=r, column=len(self.COLUMNS) + 1, value="")
+            firm.border = self.THIN
+            if fill is not None:
+                firm.fill = fill
+
+        last = 5 + len(data_rows)
+        if data_rows:
+            tot = last + 1
+            ws.cell(row=tot, column=13, value="TOTALES").font = Font(bold=True)
+            ws.cell(row=tot, column=14, value=f"=SUM(N6:N{last})")
+            ws.cell(row=tot, column=15, value=f"=SUM(O6:O{last})")
+            ws.cell(row=tot, column=14).fill = self.GREEN_FILL
+            ws.cell(row=tot, column=15).fill = self.GREEN_FILL
+            ws.cell(row=tot, column=15).number_format = '"$"#,##0.00'
+            ws.cell(row=tot, column=14).font = Font(bold=True)
+            ws.cell(row=tot, column=15).font = Font(bold=True)
+
+            sub = tot + 2
+            ws.cell(row=sub, column=1, value="Resumen por material").font = Font(bold=True, color="1F4E79")
+            buckets: dict = defaultdict(lambda: [0, 0.0, 0.0])
+            for row in data_rows:
+                mat = str(row.get("material") or "—").upper()
+                buckets[mat][0] += 1
+                buckets[mat][1] += float(row.get("total_gramos") or 0)
+                buckets[mat][2] += float(row.get("efectivo") or 0)
+            ws.cell(row=sub + 1, column=1, value="Material")
+            ws.cell(row=sub + 1, column=2, value="Líneas")
+            ws.cell(row=sub + 1, column=3, value="Gramos")
+            ws.cell(row=sub + 1, column=4, value="Efectivo")
+            for c in range(1, 5):
+                cell = ws.cell(row=sub + 1, column=c)
+                cell.fill = self.HEADER_FILL
+                cell.font = self.HEADER_FONT
+                cell.border = self.THIN
+            rr = sub + 2
+            for mat, (n, gr, ef) in sorted(buckets.items()):
+                ws.cell(row=rr, column=1, value=mat).fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT)
+                ws.cell(row=rr, column=2, value=n)
+                ws.cell(row=rr, column=3, value=round(gr, 2))
+                ws.cell(row=rr, column=4, value=round(ef, 2)).number_format = '"$"#,##0.00'
+                for c in range(1, 5):
+                    ws.cell(row=rr, column=c).border = self.THIN
+                rr += 1
+            pie = rr + 1
+            ws.cell(row=pie, column=1, value="Vo.Bo. supervisor: ________________")
+            ws.cell(row=pie, column=6, value="Fecha de pago: ____ / ____ / ______")
+            ws.cell(row=pie + 1, column=1, value=(
+                f"Generado por Fajos Piteados Central el {generado}. Firma en cada fila al pagar."
+            )).font = Font(size=8, italic=True, color="666666")
+
+        widths = {
+            "A": 22, "B": 7, "C": 11, "D": 14, "E": 9, "F": 7,
+            "G": 6, "H": 6, "I": 6, "J": 6, "K": 6, "L": 6, "M": 6,
+            "N": 10, "O": 11, "P": 12,
+        }
+        for col, w in widths.items():
+            ws.column_dimensions[col].width = w
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.print_title_rows = "1:5"
+        try:
+            ws.oddFooter.center.text = f"Nómina formal {codigo_semana} · {generado}"
+        except Exception:
+            pass
 
         buf = BytesIO()
         wb.save(buf)

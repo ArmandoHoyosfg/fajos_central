@@ -833,10 +833,21 @@ class ProductionWidget(QWidget):
             return
         try:
             rows = list(self._all_rows)
-            rows.sort(key=lambda r: (int(r.get("ubic") or 0), str(r.get("nombre") or "").upper()))
             codigo = self.cmb_semana.currentText().split()[0] if self.cmb_semana.currentText() else ""
-            self.excel.exportar_nomina_formal(path, rows, codigo_semana=codigo)
-            QMessageBox.information(self, "Exportado", path)
+            fi = ff = None
+            try:
+                sem = self.sem_repo.obtener(self._semana_id) if self._semana_id else None
+                if sem:
+                    codigo = sem.get("codigo") or codigo
+                    fi = str(sem.get("fecha_inicio") or "")[:10] or None
+                    ff = str(sem.get("fecha_fin") or "")[:10] or None
+            except Exception:
+                pass
+            self.excel.exportar_nomina_formal(
+                path, rows, codigo_semana=codigo,
+                fecha_inicio=fi, fecha_fin=ff,
+            )
+            self._show_toast(f"Formal exportado: {path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 

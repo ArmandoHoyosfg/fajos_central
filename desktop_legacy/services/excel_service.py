@@ -44,11 +44,16 @@ class ExcelService:
         mes: str = "",
         anio: int = 2026,
         agrupar_material: bool = True,
+        fecha_inicio: str | None = None,
+        fecha_fin: str | None = None,
+        titulo_extra: str = "",
     ) -> Path:
         """
         Exporta la nómina formal lista para imprimir y firmar.
-        Colores por material, orden Ubic→Nombre (o material→ubic→nombre).
+        Formato enriquecido tipo hoja Nomina-Formal del Excel del taller.
         """
+        from datetime import date, datetime
+
         ruta = Path(ruta)
         lineas = list(lineas)
 
@@ -64,25 +69,76 @@ class ExcelService:
                 return (mat, u, nombre, folio)
             return (u, nombre, folio)
 
+        # Solo líneas con contenido útil (como formal de pago)
+        def _util(r: dict) -> bool:
+            if r.get("folio") or r.get("modelo"):
+                return True
+            try:
+                return float(r.get("total_gramos") or 0) > 0
+            except (TypeError, ValueError):
+                return False
+
+        lineas = [r for r in lineas if _util(r)]
         lineas.sort(key=_sort_key)
+
+        hoy = date.today()
+        generado = datetime.now().strftime("%d/%m/%Y %H:%M")
+        if not mes:
+            meses = {
+                1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+                5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+                9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
+            }
+            mes = meses.get(hoy.month, "")
+        if not anio:
+            anio = hoy.year
 
         wb = Workbook()
         ws = wb.active
         ws.title = "Nomina-Formal"
 
-        # Encabezado
-        ws["A1"] = "Taller de Fajos Central"
-        ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+        # --- Encabezado enriquecido ---
         ws.merge_cells("A1:P1")
+        c = ws["A1"]
+        c.value = "TALLER DE FAJOS CENTRAL"
+        c.font = Font(name="Calibri", bold=True, size=16, color="1F4E79")
+        c.alignment = Alignment(horizontal="left", vertical="center")
 
-        ws["A2"] = "NÓMINA FORMAL SEMANAL — PLATA"
-        ws["A2"].font = Font(name="Calibri", bold=True, size=11, color="2E75B6")
         ws.merge_cells("A2:P2")
+        c = ws["A2"]
+        c.value = "NÓMINA FORMAL SEMANAL — PRODUCCIÓN PLATA (PLT)"
+        c.font = Font(name="Calibri", bold=True, size=12, color="2E75B6")
 
-        ws["A3"] = f"Semana: {codigo_semana}"
-        ws["C3"] = f"Mes: {mes}"
-        ws["E3"] = f"Año: {anio}"
-        ws["A4"] = "Color por material:"
+        # Fila meta: semana, periodo, mes, año, fecha de emisión
+        periodo = ""
+        if fecha_inicio and fecha_fin:
+            periodo = f"{fecha_inicio} → {fecha_fin}"
+        elif fecha_inicio:
+            periodo = str(fecha_inicio)
+
+        ws["A3"] = "Semana"
+        ws["B3"] = codigo_semana or "—"
+        ws["C3"] = "Periodo"
+        ws["D3"] = periodo or "—"
+        ws.merge_cells("D3:F3")
+        ws["G3"] = "Mes"
+        ws["H3"] = mes
+        ws["I3"] = "Año"
+        ws["J3"] = anio
+        ws["K3"] = "Emitido"
+        ws["L3"] = generado
+        ws.merge_cells("L3:N3")
+        for col in range(1, 15):
+            cell = ws.cell(row=3, column=col)
+            cell.font = Font(name="Calibri", size=9, bold=(col % 2 == 1))
+            cell.alignment = Alignment(horizontal="left" if col % 2 == 1 else "center")
+
+        if titulo_extra:
+            ws["A3"].value = str(ws["A3"].value)  # keep
+            ws["O3"] = titulo_extra
+
+        # Leyenda materiales
+        ws["A4"] = "Material / color:"
         ws["A4"].font = Font(name="Calibri", size=8, italic=True, color="666666")
         for col, (code, fill) in enumerate(self.MAT_FILLS.items(), start=2):
             cell = ws.cell(row=4, column=col, value=code)
@@ -90,6 +146,9 @@ class ExcelService:
             cell.font = Font(name="Calibri", bold=True, size=8)
             cell.border = self.THIN
             cell.alignment = Alignment(horizontal="center")
+        ws["F4"] = "Orden: material → ubic → nombre  ·  Ceros ocultos  ·  Columna Firma para pago"
+        ws["F4"].font = Font(name="Calibri", size=8, italic=True, color="666666")
+        ws.merge_cells("F4:P4")
 
         headers = [
             "Nombre", "Ubic", "Folio", "Modelo", "Material", "$/Gr",
@@ -100,9 +159,11 @@ class ExcelService:
             cell = ws.cell(row=5, column=col, value=h)
             cell.font = self.HEADER_FONT
             cell.fill = self.HEADER_FILL
-            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            cell.alignment = Alignment(horizontal="center", wrap_text=True, vertical="center")
             cell.border = self.THIN
+        ws.row_dimensions[5].height = 22
 
+        # Datos
         for i, row in enumerate(lineas):
             r = 6 + i
             values = [
@@ -121,13 +182,12 @@ class ExcelService:
                 row.get("gm_vie"),
                 row.get("total_gramos"),
                 row.get("efectivo"),
-                "",  # firma
+                "",
             ]
             mat = str(row.get("material") or "").strip().upper()
             fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else None)
             for col, val in enumerate(values, 1):
-                # ocultar ceros en gramos / tarifa
-                if col >= 6 and col <= 14 and val is not None:
+                if col >= 6 and col <= 15 and val is not None:
                     try:
                         if float(val) == 0:
                             val = None
@@ -135,46 +195,107 @@ class ExcelService:
                         pass
                 cell = ws.cell(row=r, column=col, value=val)
                 cell.border = self.THIN
-                cell.alignment = Alignment(horizontal="center" if col > 1 else "left")
+                cell.alignment = Alignment(
+                    horizontal="left" if col == 1 else "center",
+                    vertical="center",
+                )
                 if fill is not None:
                     cell.fill = fill
-                if col in (6, 7, 8, 9, 10, 11, 12, 13, 14) and val is not None:
+                if col == 6 and val is not None:
+                    cell.number_format = "0.00"
+                if 7 <= col <= 14 and val is not None:
                     cell.number_format = "0.##"
                 if col == 15 and val is not None:
-                    cell.number_format = '$#,##0.00'
+                    cell.number_format = '"$"#,##0.00'
 
-        # Totales
-        last = 5 + len(lineas)
+        last = 5 + max(len(lineas), 1)
         tot_row = last + 1
-        ws.cell(row=tot_row, column=13, value="TOTALES →").font = Font(bold=True)
         if lineas:
+            last = 5 + len(lineas)
+            tot_row = last + 1
+            ws.cell(row=tot_row, column=12, value="TOTALES").font = Font(name="Calibri", bold=True, size=10)
             ws.cell(row=tot_row, column=14, value=f"=SUM(N6:N{last})")
             ws.cell(row=tot_row, column=15, value=f"=SUM(O6:O{last})")
-            ws.cell(row=tot_row, column=14).fill = self.GREEN_FILL
-            ws.cell(row=tot_row, column=15).fill = self.GREEN_FILL
-            ws.cell(row=tot_row, column=15).number_format = '$#,##0.00'
-            ws.cell(row=tot_row, column=14).font = Font(bold=True)
-            ws.cell(row=tot_row, column=15).font = Font(bold=True)
+            for col in (14, 15):
+                cell = ws.cell(row=tot_row, column=col)
+                cell.fill = self.GREEN_FILL
+                cell.font = Font(name="Calibri", bold=True, size=10)
+                cell.border = self.THIN
+            ws.cell(row=tot_row, column=15).number_format = '"$"#,##0.00'
+            ws.cell(row=tot_row, column=14).number_format = "0.##"
 
-        # Anchos y página
+            # Subtotales por material (bloque a la derecha del total)
+            sub_row = tot_row + 2
+            ws.cell(row=sub_row, column=1, value="Resumen por material").font = Font(
+                name="Calibri", bold=True, size=9, color="1F4E79"
+            )
+            ws.cell(row=sub_row + 1, column=1, value="Material")
+            ws.cell(row=sub_row + 1, column=2, value="Líneas")
+            ws.cell(row=sub_row + 1, column=3, value="Gramos")
+            ws.cell(row=sub_row + 1, column=4, value="Efectivo")
+            for col in range(1, 5):
+                ws.cell(row=sub_row + 1, column=col).font = Font(bold=True, size=8)
+                ws.cell(row=sub_row + 1, column=col).fill = self.HEADER_FILL
+                ws.cell(row=sub_row + 1, column=col).font = self.HEADER_FONT
+                ws.cell(row=sub_row + 1, column=col).border = self.THIN
+
+            from collections import defaultdict
+            buckets: dict[str, list] = defaultdict(lambda: [0, 0.0, 0.0])
+            for row in lineas:
+                mat = str(row.get("material") or "—").upper()
+                buckets[mat][0] += 1
+                try:
+                    buckets[mat][1] += float(row.get("total_gramos") or 0)
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    buckets[mat][2] += float(row.get("efectivo") or 0)
+                except (TypeError, ValueError):
+                    pass
+            rr = sub_row + 2
+            for mat, (n, gr, ef) in sorted(buckets.items()):
+                ws.cell(row=rr, column=1, value=mat).fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT)
+                ws.cell(row=rr, column=2, value=n)
+                ws.cell(row=rr, column=3, value=round(gr, 2))
+                ws.cell(row=rr, column=4, value=round(ef, 2))
+                ws.cell(row=rr, column=4).number_format = '"$"#,##0.00'
+                for col in range(1, 5):
+                    ws.cell(row=rr, column=col).border = self.THIN
+                rr += 1
+
+            # Pie de página / firmas
+            pie = rr + 2
+            ws.cell(row=pie, column=1, value="Vo.Bo. supervisor: ________________").font = Font(size=9)
+            ws.cell(row=pie, column=6, value="Fecha de pago: ____ / ____ / ______").font = Font(size=9)
+            ws.cell(row=pie + 1, column=1, value=(
+                f"Documento generado por Fajos Piteados Central el {generado}. "
+                "Cada trabajador firma en su fila al recibir el pago."
+            )).font = Font(size=8, italic=True, color="666666")
+            ws.merge_cells(start_row=pie + 1, start_column=1, end_row=pie + 1, end_column=12)
+
         widths = {
-            "A": 22, "B": 7, "C": 11, "D": 13, "E": 9, "F": 7,
+            "A": 22, "B": 7, "C": 11, "D": 14, "E": 9, "F": 7,
             "G": 6, "H": 6, "I": 6, "J": 6, "K": 6, "L": 6, "M": 6,
-            "N": 10, "O": 11, "P": 10,
+            "N": 10, "O": 11, "P": 12,
         }
         for col, w in widths.items():
             ws.column_dimensions[col].width = w
 
+        ws.row_dimensions[1].height = 22
+        ws.row_dimensions[2].height = 18
         ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
-        ws.page_margins = PageMargins(left=0.3, right=0.3, top=0.4, bottom=0.4)
-        ws.print_title_rows = "1:5"  # encabezado + leyenda + columnas
+        ws.page_margins = PageMargins(left=0.35, right=0.35, top=0.4, bottom=0.5)
+        ws.print_title_rows = "1:5"
+        ws.oddFooter.center.text = f"Nómina formal {codigo_semana} · Emitido {generado}"
+        ws.oddFooter.center.font = "Calibri"
+        ws.oddFooter.center.size = 8
 
         wb.save(ruta)
         return ruta
-
 
     def exportar_pdf_formal(
         self,
@@ -225,7 +346,11 @@ class ExcelService:
         )
         story = [
             Paragraph("Taller de Fajos Central — NÓMINA FORMAL", title_style),
-            Paragraph(f"Semana: {codigo_semana}", styles["Normal"]),
+            Paragraph(
+                f"Semana: {codigo_semana}  ·  Emitido: "
+                + __import__("datetime").datetime.now().strftime("%d/%m/%Y %H:%M"),
+                styles["Normal"],
+            ),
             Spacer(1, 6),
         ]
         keys = [
