@@ -1,34 +1,24 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-  Fajos Central — atajo para Windows / PowerShell 7
-.DESCRIPTION
-  Activa el venv si existe y abre el launcher GUI.
-  Uso:  pwsh -File .\start.ps1
+  Arranca el launcher usando el Python del .venv (no el de PATH/Inkscape).
 #>
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-$venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
-$py = $null
-
-if (Test-Path $venvPython) {
-    $py = $venvPython
-    Write-Host "Usando entorno virtual: .venv" -ForegroundColor Cyan
-} else {
-    $py = (Get-Command python -ErrorAction SilentlyContinue)?.Source
-    if (-not $py) {
-        $py = (Get-Command py -ErrorAction SilentlyContinue)?.Source
-    }
-}
-
-if (-not $py) {
-    Write-Host "No se encontró Python. Instálalo o crea el venv:" -ForegroundColor Red
-    Write-Host "  py -3 -m venv .venv"
-    Write-Host "  .\ .venv\Scripts\Activate.ps1"
-    Write-Host "  pip install -r requirements.txt"
+$venvPy = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path $venvPy)) {
+    Write-Host "No hay .venv válido. Ejecuta primero:" -ForegroundColor Red
+    Write-Host "  pwsh -File .\setup_windows.ps1"
     exit 1
 }
 
-Write-Host "Iniciando launcher..." -ForegroundColor Green
-& $py (Join-Path $PSScriptRoot "launcher.py")
+& $venvPy -c "import sys; print(sys.version)" 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "El .venv está roto (Python base movido/borrado). Repara con:" -ForegroundColor Red
+    Write-Host "  pwsh -File .\setup_windows.ps1"
+    exit 1
+}
+
+Write-Host "Iniciando launcher con: $venvPy" -ForegroundColor Cyan
+& $venvPy (Join-Path $PSScriptRoot "launcher.py")
