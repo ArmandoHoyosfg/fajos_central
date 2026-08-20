@@ -37,3 +37,21 @@ def get_dashboard_service() -> DashboardService:
 
 def get_export_service() -> ExportService:
     return ExportService()
+
+
+def common_template_context(extra: dict | None = None) -> dict:
+    """Contexto compartido web/desktop parity: fecha, versión, semana actual flags."""
+    from app import __version__
+    from app.core.calendar_util import format_fecha_corta, format_fecha_larga, today
+    from app.services.dashboard_service import check_db
+
+    ctx = {
+        "fecha_hoy": today(),
+        "fecha_hoy_larga": format_fecha_larga(),
+        "fecha_hoy_corta": format_fecha_corta(),
+        "app_version": __version__,
+        "db_ok": check_db(),
+    }
+    if extra:
+        ctx.update(extra)
+    return ctx

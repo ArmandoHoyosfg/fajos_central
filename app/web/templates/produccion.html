@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Producción — Fajos Piteados Central{% endblock %}
 {% block content %}
+<div class="semana-ctx">
+  <img src="/static/icons/calendar.svg" width="18" height="18" class="icon-inline" alt="">
+  <strong>Hoy:</strong> {{ fecha_hoy_larga }}
+  {% if semanas %}
+    {% set actual = semanas | selectattr('es_actual') | list %}
+    {% if actual %}
+      · Semana actual del calendario: <span class="badge-actual">{{ actual[0].codigo }}</span>
+    {% else %}
+      · <span class="muted">Ninguna semana en BD cubre la fecha de hoy</span>
+    {% endif %}
+  {% endif %}
+</div>
+
 <div class="page-head">
   <div>
     <h1>Producción semanal (Plata)</h1>
@@ -157,7 +170,7 @@
   </thead>
   <tbody>
     {% for r in lineas %}
-    <tr>
+    <tr class="mat-{{ (r.material or '')|lower }}">
       <td>
         <button type="button" class="btn btn-danger" style="padding:0.2rem 0.5rem;font-size:0.75rem;"
                 onclick="delLinea({{ r.id }})">✕</button>

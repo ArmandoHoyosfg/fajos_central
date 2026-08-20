@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
 from app.api.deps import (
+    common_template_context,
     get_dashboard_service,
     get_export_service,
     get_produccion_repo,
@@ -27,6 +28,13 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 router = APIRouter()
 
+def _ctx(request: Request, **kwargs):
+    """Contexto de plantilla unificado (fecha, versión, db_ok + kwargs)."""
+    data = common_template_context(kwargs)
+    data["request"] = request
+    return data
+
+
 
 # ---------- Web pages ----------
 
@@ -35,15 +43,13 @@ async def page_dashboard(
     request: Request,
     svc: DashboardService = Depends(get_dashboard_service),
 ):
+    from app.core.calendar_util import marcar_semanas
     data = svc.get_dashboard()
+    semanas = marcar_semanas(data["ultimas_semanas"])
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {
-            "kpis": data["kpis"],
-            "semanas": data["ultimas_semanas"],
-            "db_ok": data.get("db_ok", True),
-        },
+        _ctx(request, kpis=data["kpis"], semanas=semanas),
     )
 
 
@@ -53,12 +59,11 @@ async def page_trabajadores(
     q: str | None = None,
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
-    from app.services.dashboard_service import check_db
-    rows = repo.listar(solo_activos=False, busqueda=q)
+    trabajadores = repo.listar(solo_activos=False, busqueda=q)
     return templates.TemplateResponse(
         request,
         "trabajadores.html",
-        {"trabajadores": rows, "q": q or "", "db_ok": check_db()},
+        _ctx(request, trabajadores=trabajadores, q=q),
     )
 
 
@@ -73,12 +78,7 @@ async def page_buscar(
     return templates.TemplateResponse(
         request,
         "buscar.html",
-        {
-            "q": q or "",
-            "trabajadores": data["trabajadores"],
-            "semanas": data["semanas"],
-            "db_ok": data.get("db_ok", True),
-        },
+        _ctx(request, q=q, trabajadores=data["trabajadores"], semanas=data["semanas"]),
     )
 
 
@@ -91,23 +91,26 @@ async def page_produccion(
     trab_repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
     from app.services.dashboard_service import check_db
-    semanas = sem_repo.listar()
+    from app.core.calendar_util import encontrar_semana_actual, marcar_semanas, today
+    semanas_raw = sem_repo.listar()
+    semanas = marcar_semanas(semanas_raw)
     if semana_id is None and semanas:
-        semana_id = semanas[0]["id"]
+        actual = encontrar_semana_actual(semanas_raw, today())
+        semana_id = actual["id"] if actual else semanas[0]["id"]
     lineas = prod_repo.listar_por_semana(semana_id) if semana_id else []
     totales = prod_repo.totales_semana(semana_id) if semana_id else {}
     trabajadores = trab_repo.listar(solo_plt=True, solo_activos=True)
     return templates.TemplateResponse(
         request,
         "produccion.html",
-        {
-            "semanas": semanas,
-            "semana_id": semana_id,
-            "lineas": lineas,
-            "totales": totales,
-            "trabajadores": trabajadores,
-            "db_ok": check_db(),
-        },
+        _ctx(
+            request,
+            semanas=semanas,
+            semana_id=semana_id,
+            lineas=lineas,
+            totales=totales,
+            trabajadores=trabajadores,
+        ),
     )
 
 

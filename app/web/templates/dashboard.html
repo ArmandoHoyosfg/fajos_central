@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>Dashboard</h1>
-    <p class="muted">Resumen del taller · captura, nóminas y acceso rápido</p>
+    <p class="muted">Resumen del taller · misma información que la app de escritorio</p>
   </div>
   <form class="search-box" action="/buscar" method="get">
     <input type="search" name="q" placeholder="Buscar trabajador o semana..." aria-label="Buscar">
@@ -65,7 +65,7 @@
   <tbody>
     {% for s in semanas %}
     <tr>
-      <td><strong>{{ s.codigo }}</strong></td>
+      <td><strong>{% if s.es_actual %}<span class="badge-actual"><img src="/static/icons/star.svg" width="12" height="12" alt=""> ACTUAL</span> {% endif %}{{ s.codigo }}</strong></td>
       <td>{{ s.fecha_inicio }}</td>
       <td>{{ s.fecha_fin }}</td>
       <td>${{ '%.2f'|format( (s.nomina_plt or 0)|float ) }}</td>

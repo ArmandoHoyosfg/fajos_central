@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.7.0] — 2026-08-20
+
+### Web ↔ Desktop parity
+- Fecha actual en topbar web (misma lógica de calendario)
+- Semana ★ ACTUAL auto-seleccionada en Producción web
+- Iconos SVG propios (favicon, calendario, materiales, estrella)
+- Colores de fila por material en producción web
+- Contexto de plantilla unificado (`common_template_context`)
+
 ## [2.6.1] — 2026-08-20
 
 ### Añadido
