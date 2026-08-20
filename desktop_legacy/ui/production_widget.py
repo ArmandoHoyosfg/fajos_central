@@ -8,8 +8,9 @@ from datetime import date
 from decimal import Decimal
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtGui import QColor, QBrush, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFormLayout,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QToolButton,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -59,6 +61,8 @@ MAT_COLORS = {
     "DOL": QColor("#3d3420"),
     "DLO": QColor("#3d2e1a"),
 }
+TARIFA_DEFAULT = {"AG3": 12.0, "AG4": 13.0, "DOL": 13.0, "DLO": 13.0}
+
 MAT_FG = {
     "AG3": QColor("#89b4fa"),
     "AG4": QColor("#a6e3a1"),
@@ -89,6 +93,9 @@ class ProductionWidget(QWidget):
         self._semana_id: int | None = None
         self._all_rows: list[dict] = []
         self._updating_cell = False
+        self._last_material = "AG3"
+        self._last_tarifa = 12.0
+        self._toast_timer = None
         self._build_ui()
         self._load_semanas()
 
@@ -120,9 +127,13 @@ class ProductionWidget(QWidget):
         title = QLabel("Producción semanal — Plata")
         title.setProperty("cssClass", "title")
         layout.addWidget(title)
-        sub = QLabel("Captura por día, edición en tabla y export formal")
+        sub = QLabel("Captura por día · Enter guarda · Doble clic edita gramos")
         sub.setProperty("cssClass", "subtitle")
         layout.addWidget(sub)
+        self.lbl_toast = QLabel("")
+        self.lbl_toast.setProperty("cssClass", "toast")
+        self.lbl_toast.setVisible(False)
+        layout.addWidget(self.lbl_toast)
 
         # Semana + totales
         top = QHBoxLayout()
@@ -200,8 +211,31 @@ class ProductionWidget(QWidget):
         day_outer.addLayout(row2)
         layout.addWidget(box_day)
 
-        # --- Línea completa ---
-        box = QGroupBox("➕  Agregar línea completa (varios días / folio)")
+        # --- Línea completa (colapsada por defecto) ---
+        self.btn_toggle_full = QToolButton()
+        self.btn_toggle_full.setText("➕  Línea completa (varios días / folio)  — clic para expandir")
+        self.btn_toggle_full.setCheckable(True)
+        self.btn_toggle_full.setChecked(False)
+        self.btn_toggle_full.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.btn_toggle_full.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.btn_toggle_full.setStyleSheet(
+            "QToolButton { text-align: left; padding: 8px 12px; background: #313244; "
+            "border: 1px solid #45475a; border-radius: 8px; color: #cdd6f4; font-weight: 600; }"
+            "QToolButton:checked { background: #45475a; }"
+        )
+        layout.addWidget(self.btn_toggle_full)
+
+        box = QGroupBox()
+        box.setTitle("")
+        box.setVisible(False)
+        self.box_full = box
+        self.btn_toggle_full.toggled.connect(lambda on: (
+            box.setVisible(on),
+            self.btn_toggle_full.setText(
+                "➖  Ocultar línea completa" if on
+                else "➕  Línea completa (varios días / folio)  — clic para expandir"
+            ),
+        ))
         form = QFormLayout(box)
         self.cmb_trabajador = QComboBox()
         self.cmb_trabajador.setEditable(True)
@@ -239,7 +273,7 @@ class ProductionWidget(QWidget):
         form.addRow(btn_add)
         layout.addWidget(box)
 
-        # Filtro
+        # Filtro + herramientas
         filt = QHBoxLayout()
         filt.addWidget(QLabel("Filtrar:"))
         self.inp_filter = QLineEdit()
@@ -247,9 +281,14 @@ class ProductionWidget(QWidget):
         self.inp_filter.setClearButtonEnabled(True)
         self.inp_filter.textChanged.connect(self._apply_filter)
         filt.addWidget(self.inp_filter)
-        hint = QLabel("Doble clic en gramos para editar un día")
-        hint.setProperty("cssClass", "subtitle")
-        filt.addWidget(hint)
+        self.chk_solo_hoy = QCheckBox("Solo sin gramos hoy")
+        self.chk_solo_hoy.setToolTip("Muestra líneas que aún no tienen gramos en el día de hoy")
+        self.chk_solo_hoy.toggled.connect(lambda: self._apply_filter(self.inp_filter.text()))
+        filt.addWidget(self.chk_solo_hoy)
+        btn_copy = QPushButton("Copiar día → hoy")
+        btn_copy.setToolTip("Copia gramos del día anterior al día de hoy en la línea seleccionada")
+        btn_copy.clicked.connect(self._on_copy_prev_day)
+        filt.addWidget(btn_copy)
         layout.addLayout(filt)
 
         # Tabla
@@ -293,6 +332,8 @@ class ProductionWidget(QWidget):
         btn_del.clicked.connect(self._on_delete)
         btn_export_formal = QPushButton("📄 Formal Excel")
         btn_export_formal.clicked.connect(self._on_export_formal)
+        btn_export_pdf = QPushButton("📕 Formal PDF")
+        btn_export_pdf.clicked.connect(self._on_export_pdf)
         btn_export_captura = QPushButton("📋 Captura")
         btn_export_captura.clicked.connect(self._on_export_captura)
         btn_import = QPushButton("Importar Excel/CSV")
@@ -302,6 +343,7 @@ class ProductionWidget(QWidget):
         bottom.addWidget(btn_import)
         bottom.addWidget(btn_export_captura)
         bottom.addWidget(btn_export_formal)
+        bottom.addWidget(btn_export_pdf)
         layout.addLayout(bottom)
         layout.addStretch(1)
 
@@ -309,6 +351,9 @@ class ProductionWidget(QWidget):
         outer.addWidget(scroll)
 
         self._load_trabajadores()
+        self._setup_shortcuts()
+        self.cmb_dia_mat.currentTextChanged.connect(self._on_mat_changed_day)
+        self.cmb_material.currentTextChanged.connect(self._on_mat_changed_full)
 
     def _load_semanas(self):
         self.cmb_semana.blockSignals(True)
@@ -388,49 +433,162 @@ class ProductionWidget(QWidget):
         text = cmb.currentText().strip()
         return (None, text, 0)
 
+
+    def _show_toast(self, msg: str, error: bool = False) -> None:
+        """Confirmación discreta (sin modal)."""
+        from PySide6.QtCore import QTimer
+        self.lbl_toast.setText(("⚠ " if error else "✓ ") + msg)
+        self.lbl_toast.setStyleSheet(
+            "color: #f38ba8; background: #313244; padding: 6px 12px; border-radius: 6px;"
+            if error else
+            "color: #a6e3a1; background: #313244; padding: 6px 12px; border-radius: 6px;"
+        )
+        self.lbl_toast.setVisible(True)
+        if self._toast_timer:
+            self._toast_timer.stop()
+        self._toast_timer = QTimer(self)
+        self._toast_timer.setSingleShot(True)
+        self._toast_timer.timeout.connect(lambda: self.lbl_toast.setVisible(False))
+        self._toast_timer.start(3200)
+
+    def _setup_shortcuts(self) -> None:
+        sc_save = QShortcut(QKeySequence(Qt.Key_Return), self)
+        sc_save.activated.connect(self._on_guardar_dia)
+        sc_save2 = QShortcut(QKeySequence(Qt.Key_Enter), self)
+        sc_save2.activated.connect(self._on_guardar_dia)
+        sc_left = QShortcut(QKeySequence(Qt.Key_Left), self)
+        sc_left.activated.connect(lambda: self._nudge_day(-1))
+        sc_right = QShortcut(QKeySequence(Qt.Key_Right), self)
+        sc_right.activated.connect(lambda: self._nudge_day(1))
+
+    def _nudge_day(self, delta: int) -> None:
+        if not self.spin_dia_gr.hasFocus() and not self.cmb_dia.hasFocus():
+            # only when day panel is the natural focus context
+            if self.cmb_dia_trab.hasFocus() or self.spin_dia_gr.hasFocus() or self.cmb_dia.hasFocus():
+                pass
+        i = self.cmb_dia.currentIndex()
+        n = self.cmb_dia.count()
+        self.cmb_dia.setCurrentIndex((i + delta) % n)
+
+    def _on_mat_changed_day(self, mat: str) -> None:
+        tar = TARIFA_DEFAULT.get(mat, 12.0)
+        self.spin_dia_tarifa.setValue(tar)
+        self._last_material = mat
+        self._last_tarifa = tar
+
+    def _on_mat_changed_full(self, mat: str) -> None:
+        tar = TARIFA_DEFAULT.get(mat, 12.0)
+        self.inp_tarifa.setValue(tar)
+        self._last_material = mat
+        self._last_tarifa = tar
+
+    def _warn_folio_dup(self, folio: str | None, exclude_id: int | None = None) -> None:
+        if not folio or not self._semana_id:
+            return
+        for r in self._all_rows:
+            if exclude_id and r.get("id") == exclude_id:
+                continue
+            if str(r.get("folio") or "").strip().upper() == folio.strip().upper():
+                self._show_toast(
+                    f"El folio «{folio}» ya existe en esta semana (id={r.get('id')}).",
+                    error=True,
+                )
+                return
+
+    def _on_copy_prev_day(self) -> None:
+        """Copia gramos del día anterior al día de hoy en la fila seleccionada."""
+        row = self.table.currentRow()
+        if row < 0:
+            self._show_toast("Selecciona una línea en la tabla.", error=True)
+            return
+        id_item = self.table.item(row, 0)
+        if not id_item:
+            return
+        prod_id = id_item.data(Qt.UserRole) or int(id_item.text())
+        today_key = DAY_BY_WEEKDAY.get(date.today().weekday(), "gm_lun")
+        order = [k for k, _ in DAY_KEYS]
+        try:
+            ti = order.index(today_key)
+        except ValueError:
+            ti = 0
+        if ti == 0:
+            self._show_toast("No hay día anterior a copiar (hoy es el primero).", error=True)
+            return
+        prev_key = order[ti - 1]
+        # read current values from _all_rows
+        rec = next((r for r in self._all_rows if r.get("id") == prod_id), None)
+        if not rec:
+            self._show_toast("Línea no encontrada.", error=True)
+            return
+        prev_val = rec.get(prev_key)
+        if prev_val is None or float(prev_val or 0) == 0:
+            self._show_toast("El día anterior no tiene gramos.", error=True)
+            return
+        try:
+            self.prod_repo.actualizar_gramos_dia(int(prod_id), today_key, float(prev_val))
+            self.refresh_table()
+            self.data_changed.emit()
+            self._show_toast(f"Copiado {prev_val} g del día anterior → hoy.")
+        except Exception as e:
+            self._show_toast(str(e), error=True)
+
+
     def _on_guardar_dia(self):
         if not self._semana_id:
-            QMessageBox.warning(self, "Semana", "Selecciona o crea una semana.")
+            self._show_toast("Selecciona o crea una semana.", error=True)
             return
         tid, nombre, ubic = self._trabajador_data(self.cmb_dia_trab)
         if not nombre:
-            QMessageBox.warning(self, "Datos", "Elige un trabajador.")
+            self._show_toast("Elige un trabajador.", error=True)
             return
         gr = self.spin_dia_gr.value()
         if gr <= 0:
-            QMessageBox.warning(self, "Datos", "Indica los gramos del día (> 0).")
+            self._show_toast("Indica los gramos del día (> 0).", error=True)
             return
         col = self.cmb_dia.currentData()
         folio = self.inp_dia_folio.text().strip() or None
+        material = self.cmb_dia_mat.currentText()
+        tarifa = self.spin_dia_tarifa.value()
+        expected = TARIFA_DEFAULT.get(material)
+        if expected is not None and abs(tarifa - expected) > 0.001:
+            # aviso suave; no bloquea
+            self._show_toast(
+                f"Tarifa {tarifa} distinta a la habitual de {material} ({expected}). Se guarda igual."
+            )
         try:
-            existing = self.prod_repo.buscar_linea(self._semana_id, nombre, ubic, folio)
+            existing = self.prod_repo.buscar_linea(self._semana_id, nombre, int(ubic) if ubic else 0, folio)
             if existing:
+                self._warn_folio_dup(folio, exclude_id=existing.get("id"))
                 self.prod_repo.actualizar_gramos_dia(existing["id"], col, gr)
-                msg = f"Actualizado {self.cmb_dia.currentText()} de {nombre}."
+                msg = f"{nombre}: {self.cmb_dia.currentText()} = {gr:g} g"
             else:
+                if not ubic:
+                    self._show_toast("Selecciona un trabajador de la lista (con ubic).", error=True)
+                    return
+                self._warn_folio_dup(folio)
                 payload = {
                     "trabajador_id": tid,
                     "nombre": nombre,
-                    "ubic": int(ubic) if ubic else 0,
+                    "ubic": int(ubic),
                     "folio": folio,
                     "modelo": self.inp_dia_modelo.text().strip() or None,
-                    "material": self.cmb_dia_mat.currentText(),
-                    "tarifa_gr": self.spin_dia_tarifa.value(),
+                    "material": material,
+                    "tarifa_gr": tarifa,
                     "gm_sab": None, "gm_dom": None, "gm_lun": None,
                     "gm_mar": None, "gm_mie": None, "gm_jue": None, "gm_vie": None,
                 }
                 payload[col] = gr
-                if not payload["ubic"]:
-                    QMessageBox.warning(self, "Datos", "Selecciona un trabajador de la lista (con ubic).")
-                    return
                 self.prod_repo.insertar(self._semana_id, payload)
-                msg = f"Nueva línea: {nombre} — {self.cmb_dia.currentText()} {gr} g."
+                msg = f"Nueva línea · {nombre} · {self.cmb_dia.currentText()} {gr:g} g"
+            self._last_material = material
+            self._last_tarifa = tarifa
             self.spin_dia_gr.setValue(0)
+            self.spin_dia_gr.setFocus()
             self.refresh_table()
             self.data_changed.emit()
-            QMessageBox.information(self, "OK", msg)
+            self._show_toast(msg)
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+            self._show_toast(str(e), error=True)
 
     def _on_add(self):
         if not self._semana_id:
@@ -496,6 +654,12 @@ class ProductionWidget(QWidget):
                     or q in str(r.get("material") or "").lower()
                     or q in str(r.get("modelo") or "").lower()
                     or q in str(r.get("ubic") or "")
+                ]
+            if getattr(self, "chk_solo_hoy", None) and self.chk_solo_hoy.isChecked():
+                today_key = DAY_BY_WEEKDAY.get(date.today().weekday(), "gm_lun")
+                rows = [
+                    r for r in rows
+                    if not r.get(today_key) or float(r.get(today_key) or 0) == 0
                 ]
             self.table.setRowCount(len(rows))
             if not rows:
@@ -564,8 +728,9 @@ class ProductionWidget(QWidget):
             self.prod_repo.actualizar_gramos_dia(int(prod_id), col_name, gramos)
             self.refresh_table()
             self.data_changed.emit()
+            self._show_toast(f"Guardado: {gramos if gramos is not None else 'vacío'} g")
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+            self._show_toast(str(e), error=True)
             self.refresh_table()
 
     def _on_delete(self):
@@ -606,7 +771,25 @@ class ProductionWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
+    def _on_export_pdf(self):
+        if not self._semana_id:
+            self._show_toast("Selecciona una semana.", error=True)
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar Formal PDF", "Nomina_Formal.pdf", "PDF (*.pdf)"
+        )
+        if not path:
+            return
+        try:
+            codigo = self.cmb_semana.currentText().split()[0] if self.cmb_semana.currentText() else ""
+            self.excel.exportar_pdf_formal(path, self._all_rows, codigo_semana=codigo)
+            self._show_toast(f"PDF guardado: {path}")
+        except Exception as e:
+            self._show_toast(str(e), error=True)
+            QMessageBox.critical(self, "PDF", str(e))
+
     def _on_export_captura(self):
+
         if not self._semana_id:
             return
         path, _ = QFileDialog.getSaveFileName(

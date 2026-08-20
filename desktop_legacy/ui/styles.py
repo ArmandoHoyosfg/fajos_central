@@ -121,6 +121,10 @@ QLabel[cssClass="subtitle"] {
     color: #a6adc8;
     font-size: 12px;
 }
+QLabel[cssClass="toast"] {
+    font-size: 12px;
+    font-weight: 600;
+}
 QLabel[cssClass="kpi"] {
     color: #c9a227;
     font-size: 13px;

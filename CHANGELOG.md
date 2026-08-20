@@ -5,6 +5,18 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.6.0] — 2026-08-20
+
+### Desktop UX
+- Atajos: Enter guarda el día; flechas cambian día
+- Toast discreto (sin modal) al guardar
+- Línea completa colapsada por defecto
+- Filtro «solo sin gramos hoy» y copiar día anterior → hoy
+- Tarifa sugerida por material + aviso si difiere
+- Aviso de folio duplicado en la semana
+- Export Formal PDF + Excel ordenado por material
+- Encabezado de impresión repetido en cada página
+
 ## [2.5.2] — 2026-08-20
 
 ### Corregido / Mejorado
