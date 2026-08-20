@@ -153,14 +153,50 @@ class MainWindow(QMainWindow):
             "color: #c9a227; font-weight: 700; padding: 0 8px;"
         )
         self.lbl_version.setToolTip(f"{APP_NAME} versión {APP_VERSION}")
+        self.lbl_lan = QLabel("  Red: —  ")
+        self.lbl_lan.setStyleSheet("color: #89b4fa; font-weight: 600; padding: 0 8px;")
         self.lbl_db = QLabel("BD: —")
         self.status.addPermanentWidget(self.lbl_fecha_status)
         self.status.addPermanentWidget(self.lbl_version)
+        self.status.addPermanentWidget(self.lbl_lan)
         self.status.addPermanentWidget(self.lbl_db)
+        self._update_lan_label()
         self.status.showMessage("Listo")
         self._update_fecha_label()
 
+    def _update_lan_label(self) -> None:
+        try:
+            import sys
+            from pathlib import Path as _P
+            root = _P(__file__).resolve().parents[2]
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from app.core.network import lan_urls
+            # puerto desde config.ini
+            port = 8000
+            try:
+                from config import PROJECT_ROOT
+                import configparser
+                cp = configparser.ConfigParser()
+                ini = PROJECT_ROOT / "config.ini"
+                if ini.exists():
+                    cp.read(ini, encoding="utf-8")
+                    if cp.has_section("server"):
+                        port = int(cp.get("server", "port", fallback="8000"))
+            except Exception:
+                pass
+            urls = lan_urls(port=port)
+            if hasattr(self, "lbl_lan"):
+                self.lbl_lan.setText(f"  Red: {urls['ip']}:{port}  ")
+                self.lbl_lan.setToolTip(
+                    f"Desde otros equipos de la misma red abre:\n{urls['lan']}"
+                )
+        except Exception:
+            if hasattr(self, "lbl_lan"):
+                self.lbl_lan.setText("  Red: —  ")
+
     def _update_fecha_label(self) -> None:
+
         d = today()
         larga = format_fecha_larga(d)
         corta = format_fecha_corta(d)

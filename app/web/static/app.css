@@ -323,3 +323,19 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
+
+.lan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: #1e3a5f;
+  border: 1px solid #89b4fa55;
+  color: #89b4fa;
+  font-weight: 600;
+  font-size: 0.8rem;
+  font-family: ui-monospace, Consolas, monospace;
+  cursor: default;
+  user-select: all;
+}

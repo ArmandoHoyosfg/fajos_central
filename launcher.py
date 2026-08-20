@@ -25,6 +25,22 @@ def _app_version() -> str:
 
 APP_VERSION = _app_version()
 
+
+def _local_ip() -> str:
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+    return "127.0.0.1"
+
+
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -253,6 +269,14 @@ class LauncherApp(tk.Tk):
         titles.pack(side=tk.LEFT, fill=tk.X)
         ttk.Label(titles, text="Fajos Piteados Central", style="Title.TLabel").pack(anchor=tk.W)
         ttk.Label(titles, text=f"Centro de control  ·  v{APP_VERSION}", foreground="#a6adc8").pack(anchor=tk.W)
+        self.lbl_lan = ttk.Label(titles, text="", foreground="#89b4fa")
+        self.lbl_lan.pack(anchor=tk.W, pady=(4, 0))
+        self._refresh_lan_label()
+            if getattr(self, '_lan_url', None):
+                try:
+                    self.lbl_url.configure(text=self._lan_url)
+                except Exception:
+                    pass
 
         st = ttk.Frame(main)
         st.pack(fill=tk.X, pady=(0, 2))
@@ -286,8 +310,10 @@ class LauncherApp(tk.Tk):
         g.pack(fill=tk.X)
         self.btn_start = ttk.Button(g, text="▶  Iniciar", command=self._start_server)
         self.btn_stop = ttk.Button(g, text="■  Detener", command=self._stop_server, state=tk.DISABLED)
+        self.btn_copy_url = ttk.Button(g, text="📋 Copiar URL red", command=self._copy_lan_url)
         self.btn_start.grid(row=0, column=0, sticky="ew", padx=(0, 3), pady=2)
-        self.btn_stop.grid(row=0, column=1, sticky="ew", padx=(3, 0), pady=2)
+        self.btn_stop.grid(row=0, column=1, sticky="ew", padx=(3, 3), pady=2)
+        self.btn_copy_url.grid(row=0, column=2, sticky="ew", padx=(0, 0), pady=2)
         ttk.Button(g, text="🌐  Navegador", command=self._open_browser).grid(
             row=1, column=0, sticky="ew", padx=(0, 3), pady=2
         )
@@ -296,6 +322,7 @@ class LauncherApp(tk.Tk):
         )
         g.columnconfigure(0, weight=1)
         g.columnconfigure(1, weight=1)
+        g.columnconfigure(2, weight=1)
 
         # --- Escritorio + Datos: 2 columnas ---
         mid = ttk.Frame(main)
@@ -435,7 +462,36 @@ class LauncherApp(tk.Tk):
     def _is_running(self) -> bool:
         return self._server_proc is not None and self._server_proc.poll() is None
 
-    def _start_server(self) -> None:
+    def _refresh_lan_label(self) -> None:
+        try:
+            cfg = _read_db_ini()
+            port = int(cfg.get("app_port") or 8000)
+            https = bool(cfg.get("force_https"))
+            scheme = "https" if https else "http"
+            ip = _local_ip()
+            url = f"{scheme}://{ip}:{port}"
+            self.lbl_lan.configure(
+                text=f"Red local (otros equipos):  {url}"
+            )
+            self._lan_url = url
+        except Exception:
+            self.lbl_lan.configure(text="Red local: —")
+            self._lan_url = ""
+
+    def _copy_lan_url(self) -> None:
+        url = getattr(self, "_lan_url", "") or ""
+        if not url:
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(url)
+            self.update()
+            self._log(f"URL copiada: {url}")
+        except Exception as e:
+            self._log(f"No se pudo copiar: {e}")
+
+    def _start_server(self)
+ -> None:
         if self._is_running():
             messagebox.showinfo("Servidor", "Ya está en ejecución.")
             return
@@ -733,6 +789,7 @@ class LauncherApp(tk.Tk):
         if self._is_running():
             self.lbl_status.configure(text="● En ejecución", foreground="#a6e3a1")
             self.btn_start.configure(state=tk.DISABLED)
+            self._refresh_lan_label()
             self.btn_stop.configure(state=tk.NORMAL)
         else:
             self.lbl_status.configure(text="● Detenido", foreground="#f38ba8")

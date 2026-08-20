@@ -45,12 +45,25 @@ def common_template_context(extra: dict | None = None) -> dict:
     from app.core.calendar_util import format_fecha_corta, format_fecha_larga, today
     from app.services.dashboard_service import check_db
 
+    from app.core.network import lan_urls, local_ip
+    from app.core.config import get_settings
+    try:
+        settings = get_settings()
+        port = int(getattr(settings, "app_port", 8000) or 8000)
+        https = bool(getattr(settings, "force_https", False))
+    except Exception:
+        port, https = 8000, False
+    urls = lan_urls(port=port, https=https)
     ctx = {
         "fecha_hoy": today(),
         "fecha_hoy_larga": format_fecha_larga(),
         "fecha_hoy_corta": format_fecha_corta(),
         "app_version": __version__,
         "db_ok": check_db(),
+        "lan_ip": urls["ip"],
+        "lan_url": urls["lan"],
+        "local_url": urls["local"],
+        "app_port": port,
     }
     if extra:
         ctx.update(extra)

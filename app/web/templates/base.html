@@ -23,6 +23,11 @@
       <span class="fecha-corta muted">{{ fecha_hoy_corta|default('') }}</span>
     </div>
     <span class="version-badge" title="Versión de la aplicación">v{{ app_version|default('?') }}</span>
+    {% if lan_ip %}
+    <span class="lan-badge" title="Abre esta URL en otros equipos de la misma red">
+      🌐 {{ lan_ip }}{% if app_port %}:{{ app_port }}{% endif %}
+    </span>
+    {% endif %}
     <nav class="nav">
       <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
         <i data-lucide="layout-dashboard"></i> Dashboard
