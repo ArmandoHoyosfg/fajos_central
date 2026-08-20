@@ -13,6 +13,6 @@ host = 0.0.0.0
 port = 8000
 debug = true
 ; HTTPS local (tras: python scripts\generate_ssl_certs.py)
-force_https = false
+force_https = true
 ssl_certfile = certs/cert.pem
 ssl_keyfile = certs/key.pem

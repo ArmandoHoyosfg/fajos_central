@@ -110,11 +110,88 @@ async def page_produccion(
             lineas=lineas,
             totales=totales,
             trabajadores=trabajadores,
+            semana_cerrada=bool(
+                next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")
+            ) if semana_id else False,
         ),
     )
 
 
 # ---------- API JSON ----------
+
+
+@router.get("/api/tarifas")
+async def api_tarifas():
+    from app.services.tarifas_service import TarifasService
+    return TarifasService().mapa()
+
+
+@router.post("/api/semanas/{semana_id}/cerrar")
+async def api_cerrar_semana(
+    semana_id: int,
+    usuario: str | None = Form(None),
+    repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    repo.cerrar(semana_id, usuario=usuario or "web")
+    return {"ok": True, "semana_id": semana_id, "cerrada": True}
+
+
+@router.post("/api/semanas/{semana_id}/reabrir")
+async def api_reabrir_semana(
+    semana_id: int,
+    repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    repo.reabrir(semana_id)
+    return {"ok": True, "semana_id": semana_id, "cerrada": False}
+
+
+@router.get("/api/semanas/{semana_id}/historial")
+async def api_historial(semana_id: int, limit: int = Query(50, ge=1, le=500)):
+    from app.services.audit_service import AuditService
+    return AuditService().listar_por_semana(semana_id, limit=limit)
+
+
+@router.get("/api/suministro")
+async def api_suministro(fecha: str | None = None):
+    """Avance del día (suministro) + líneas de la semana actual si aplica."""
+    from datetime import date as _date
+    from app.core.calendar_util import encontrar_semana_actual, today
+    from app.db.connection import get_db
+    from app.db.repository import ProduccionRepo, SemanasRepo
+
+    d = _date.fromisoformat(fecha) if fecha else today()
+    day_map = {5: "gm_sab", 6: "gm_dom", 0: "gm_lun", 1: "gm_mar", 2: "gm_mie", 3: "gm_jue", 4: "gm_vie"}
+    col = day_map.get(d.weekday(), "gm_lun")
+    sem_repo = SemanasRepo()
+    semanas = sem_repo.listar()
+    actual = encontrar_semana_actual(semanas, d)
+    lineas = []
+    if actual:
+        prod = ProduccionRepo().listar_por_semana(actual["id"])
+        for r in prod:
+            gr = r.get(col)
+            try:
+                grf = float(gr) if gr is not None else 0
+            except (TypeError, ValueError):
+                grf = 0
+            lineas.append({
+                "produccion_id": r.get("id"),
+                "nombre": r.get("nombre"),
+                "ubic": r.get("ubic"),
+                "folio": r.get("folio"),
+                "modelo": r.get("modelo"),
+                "material": r.get("material"),
+                "gramos_hoy": grf if grf else None,
+                "campo_dia": col,
+            })
+    return {
+        "fecha": d.isoformat(),
+        "campo_dia": col,
+        "semana": actual,
+        "lineas": lineas,
+    }
+
+
 
 @router.get("/api/health")
 async def health():
@@ -328,6 +405,17 @@ async def api_export(
         codigo_semana=semana["codigo"],
         filename_stem=stem,
     )
+    if formal and fmt in ("xlsx", "pdf"):
+        try:
+            from app.services.backup_service import BackupService
+            BackupService().guardar_export(
+                content,
+                codigo_semana=str(semana.get("codigo") or ""),
+                extension=f".{fmt}",
+                prefijo="formal",
+            )
+        except Exception:
+            pass
     return Response(
         content=content,
         media_type=media_type,

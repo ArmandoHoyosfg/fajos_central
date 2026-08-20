@@ -5,6 +5,16 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.8.0] — 2026-08-20
+
+### Alta prioridad
+- Historial de cambios de producción (`historial_produccion`)
+- Cierre / reapertura de semana (bloquea edición)
+- Tarifas desde tabla `tarifas_material` (API + desktop)
+- Backup automático en `exports/` al generar formal
+- API suministro del día (`/api/suministro`)
+- Script SQL `004_cierre_historial_tarifas.sql`
+
 ## [2.7.2] — 2026-08-20
 
 ### Corregido

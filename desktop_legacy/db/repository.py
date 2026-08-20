@@ -125,7 +125,32 @@ class SemanasRepo(BaseRepo):
         return new_id
 
 
+    def cerrar(self, semana_id: int, usuario: str | None = None) -> None:
+        cur = self.db.cursor()
+        cur.execute(
+            "UPDATE semanas SET cerrada=1, cerrada_en=CURRENT_TIMESTAMP, cerrada_por=%s WHERE id=%s",
+            (usuario, semana_id),
+        )
+        cur.close()
+
+    def reabrir(self, semana_id: int) -> None:
+        cur = self.db.cursor()
+        cur.execute(
+            "UPDATE semanas SET cerrada=0, cerrada_en=NULL, cerrada_por=NULL WHERE id=%s",
+            (semana_id,),
+        )
+        cur.close()
+
+    def esta_cerrada(self, semana_id: int) -> bool:
+        cur = self.db.cursor()
+        cur.execute("SELECT cerrada FROM semanas WHERE id=%s", (semana_id,))
+        row = cur.fetchone()
+        cur.close()
+        return bool(row and row.get("cerrada"))
+
+
 class ProduccionRepo(BaseRepo):
+
     def listar_por_semana(self, semana_id: int) -> list[dict]:
         sql = """
             SELECT id, semana_id, trabajador_id, nombre, ubic, folio, modelo,
@@ -143,6 +168,13 @@ class ProduccionRepo(BaseRepo):
         return rows
 
     def insertar(self, semana_id: int, data: dict) -> int:
+        cur = self.db.cursor()
+        cur.execute("SELECT cerrada FROM semanas WHERE id=%s", (semana_id,))
+        sem = cur.fetchone()
+        if sem and sem.get("cerrada"):
+            cur.close()
+            raise ValueError("La semana está cerrada; no se puede agregar producción.")
+        cur.close()
         sql = """
             INSERT INTO produccion_plata (
                 semana_id, trabajador_id, nombre, ubic, folio, modelo, material, tarifa_gr,
@@ -210,7 +242,31 @@ class ProduccionRepo(BaseRepo):
             except (TypeError, ValueError):
                 val = None
         cur = self.db.cursor()
-        cur.execute(f"UPDATE produccion_plata SET {col} = %s WHERE id = %s", (val, prod_id))
+        cur.execute(
+            f"SELECT semana_id, {col} AS old_v FROM produccion_plata WHERE id=%s",
+            (prod_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            raise ValueError(f"Línea id={prod_id} no existe")
+        semana_id = row["semana_id"]
+        old_v = row.get("old_v")
+        cur.execute("SELECT cerrada FROM semanas WHERE id=%s", (semana_id,))
+        sem = cur.fetchone()
+        if sem and sem.get("cerrada"):
+            cur.close()
+            raise ValueError("La semana está cerrada; no se puede editar.")
+        cur.execute(f"UPDATE produccion_plata SET {col}=%s WHERE id=%s", (val, prod_id))
+        try:
+            cur.execute(
+                "INSERT INTO historial_produccion "
+                "(produccion_id, semana_id, campo, valor_anterior, valor_nuevo, origen) "
+                "VALUES (%s,%s,%s,%s,%s,'desktop')",
+                (prod_id, semana_id, col, None if old_v is None else str(old_v), None if val is None else str(val)),
+            )
+        except Exception:
+            pass
         cur.close()
 
     def buscar_linea(
@@ -286,3 +342,20 @@ class ResumenRepo(BaseRepo):
         cur = self.db.cursor()
         cur.execute(sql, (semana_id, nomina_plt, nomina_pit, nomina_tll, notas))
         cur.close()
+
+
+class TarifasRepo(BaseRepo):
+    def mapa(self) -> dict[str, float]:
+        try:
+            cur = self.db.cursor()
+            cur.execute(
+                "SELECT material, tarifa_por_gramo FROM tarifas_material WHERE activo=1"
+            )
+            rows = cur.fetchall() or []
+            cur.close()
+            return {
+                str(r["material"]).upper(): float(r["tarifa_por_gramo"])
+                for r in rows if r.get("material") is not None
+            }
+        except Exception:
+            return {"AG3": 12.0, "AG4": 13.0, "DOL": 13.0, "DLO": 13.0}

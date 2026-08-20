@@ -143,6 +143,40 @@ class SemanasRepo(BaseRepo):
             return cur.lastrowid
 
 
+
+    def cerrar(self, semana_id: int, usuario: str | None = None) -> None:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE semanas
+                SET cerrada = 1, cerrada_en = CURRENT_TIMESTAMP, cerrada_por = %s
+                WHERE id = %s
+                """,
+                (usuario, semana_id),
+            )
+            if cur.rowcount == 0:
+                raise NotFoundError(f"Semana id={semana_id} no existe.", details={"semana_id": semana_id})
+
+    def reabrir(self, semana_id: int) -> None:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE semanas
+                SET cerrada = 0, cerrada_en = NULL, cerrada_por = NULL
+                WHERE id = %s
+                """,
+                (semana_id,),
+            )
+            if cur.rowcount == 0:
+                raise NotFoundError(f"Semana id={semana_id} no existe.", details={"semana_id": semana_id})
+
+    def esta_cerrada(self, semana_id: int) -> bool:
+        with self.db.cursor() as cur:
+            cur.execute("SELECT cerrada FROM semanas WHERE id = %s", (semana_id,))
+            row = cur.fetchone()
+        return bool(row and row.get("cerrada"))
+
+
 class ProduccionRepo(BaseRepo):
     def listar_por_semana(self, semana_id: int) -> list[dict]:
         sql = """
@@ -159,6 +193,8 @@ class ProduccionRepo(BaseRepo):
             return list(cur.fetchall())
 
     def insertar(self, semana_id: int, data: dict) -> int:
+        from app.services.audit_service import AuditService
+        AuditService(self.db).assert_semana_abierta(semana_id)
         if not data.get("nombre"):
             raise ValidationAppError("El nombre es obligatorio.", details={"field": "nombre"})
         if data.get("ubic") is None:
@@ -215,6 +251,8 @@ class ProduccionRepo(BaseRepo):
 
     def actualizar_gramos_dia(self, prod_id: int, dia: str, gramos: float | None) -> None:
         """Actualiza un solo día de una línea existente (None o 0 = vacío)."""
+        from app.services.audit_service import AuditService
+        audit = AuditService(self.db)
         col = self.DAY_COLS.get((dia or "").strip().lower())
         if not col:
             raise ValidationAppError(
@@ -230,14 +268,30 @@ class ProduccionRepo(BaseRepo):
                 raise ValidationAppError("Gramos inválidos.", details={"gramos": gramos})
         with self.db.cursor() as cur:
             cur.execute(
-                f"UPDATE produccion_plata SET {col} = %s WHERE id = %s",
-                (val, prod_id),
+                f"SELECT semana_id, {col} AS old_v FROM produccion_plata WHERE id = %s",
+                (prod_id,),
             )
-            if cur.rowcount == 0:
+            row = cur.fetchone()
+            if not row:
                 raise NotFoundError(
                     f"Línea de producción id={prod_id} no existe.",
                     details={"produccion_id": prod_id},
                 )
+            semana_id = int(row["semana_id"])
+            old_v = row.get("old_v")
+            audit.assert_semana_abierta(semana_id)
+            cur.execute(
+                f"UPDATE produccion_plata SET {col} = %s WHERE id = %s",
+                (val, prod_id),
+            )
+        audit.registrar(
+            produccion_id=prod_id,
+            semana_id=semana_id,
+            campo=col,
+            valor_anterior=old_v,
+            valor_nuevo=val,
+            origen="app",
+        )
         logger.info("Producción id=%s día %s = %s", prod_id, col, val)
 
     def totales_semana(self, semana_id: int) -> dict:

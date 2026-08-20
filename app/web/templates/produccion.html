@@ -14,6 +14,16 @@
   {% endif %}
 </div>
 
+<div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center;">
+  {% if semana_id %}
+  <button type="button" class="btn btn-secondary" onclick="cerrarSemana()" {% if semana_cerrada %}disabled{% endif %}>🔒 Cerrar semana</button>
+  <button type="button" class="btn btn-secondary" onclick="reabrirSemana()" {% if not semana_cerrada %}disabled{% endif %}>🔓 Reabrir</button>
+  <a class="btn btn-secondary" href="/api/semanas/{{ semana_id }}/historial" target="_blank">Historial</a>
+  {% endif %}
+  {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;border-color:#f38ba855;">SEMANA CERRADA</span>{% endif %}
+</div>
+
+
 <div class="page-head">
   <div>
     <h1>Producción semanal (Plata)</h1>

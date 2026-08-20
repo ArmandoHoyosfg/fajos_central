@@ -1,5 +1,11 @@
 from .connection import Database
-from .repository import TrabajadoresRepo, SemanasRepo, ProduccionRepo, ResumenRepo
+from .repository import (
+    TrabajadoresRepo,
+    SemanasRepo,
+    ProduccionRepo,
+    ResumenRepo,
+    TarifasRepo,
+)
 
 __all__ = [
     "Database",
@@ -7,4 +13,5 @@ __all__ = [
     "SemanasRepo",
     "ProduccionRepo",
     "ResumenRepo",
+    "TarifasRepo",
 ]

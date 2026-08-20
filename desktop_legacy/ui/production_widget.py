@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QFrame,
 )
 
-from db import ProduccionRepo, SemanasRepo, TrabajadoresRepo
+from db import ProduccionRepo, SemanasRepo, TrabajadoresRepo, TarifasRepo
 from services.excel_service import ExcelService
 from ui.calendar_util import (
     encontrar_semana_actual,
@@ -97,6 +97,9 @@ class ProductionWidget(QWidget):
         self.sem_repo = SemanasRepo()
         self.trab_repo = TrabajadoresRepo()
         self.excel = ExcelService()
+        self.tarifas_repo = TarifasRepo()
+        self._tarifas = {}
+        self._semana_cerrada = False
         self._semana_id: int | None = None
         self._all_rows: list[dict] = []
         self._updating_cell = False
@@ -152,6 +155,13 @@ class ProductionWidget(QWidget):
         self.btn_nueva_sem = QPushButton("+ Nueva semana")
         self.btn_nueva_sem.clicked.connect(self._on_nueva_semana)
         top.addWidget(self.btn_nueva_sem)
+        self.btn_cerrar_sem = QPushButton("🔒 Cerrar semana")
+        self.btn_cerrar_sem.setToolTip("Bloquea edición de producción (formal definitivo)")
+        self.btn_cerrar_sem.clicked.connect(self._on_cerrar_semana)
+        top.addWidget(self.btn_cerrar_sem)
+        self.btn_reabrir_sem = QPushButton("🔓 Reabrir")
+        self.btn_reabrir_sem.clicked.connect(self._on_reabrir_semana)
+        top.addWidget(self.btn_reabrir_sem)
         top.addStretch()
         self.lbl_totales = QLabel("Totales: —")
         self.lbl_totales.setProperty("cssClass", "kpi")
@@ -365,6 +375,7 @@ class ProductionWidget(QWidget):
         self._setup_shortcuts()
         self.cmb_dia_mat.currentTextChanged.connect(self._on_mat_changed_day)
         self.cmb_material.currentTextChanged.connect(self._on_mat_changed_full)
+        self._load_tarifas()
 
     def _load_semanas(self):
         self.cmb_semana.blockSignals(True)
@@ -432,6 +443,8 @@ class ProductionWidget(QWidget):
                 "La semana seleccionada <b>no incluye hoy</b>. "
                 "Cambia a la marcada ★ ACTUAL o crea la semana correspondiente."
             )
+        if self._semana_cerrada:
+            estado += " · <b style='color:#f38ba8'>SEMANA CERRADA</b> (solo lectura)"
         self.lbl_semana_ctx.setText(f"📅 Hoy: {texto_hoy}.  {estado}")
 
     def on_fecha_sistema_changed(self, d=None) -> None:
@@ -455,6 +468,13 @@ class ProductionWidget(QWidget):
 
     def _on_semana_changed(self):
         self._semana_id = self.cmb_semana.currentData()
+        cerrada = False
+        if self._semana_id:
+            try:
+                cerrada = bool(self.sem_repo.esta_cerrada(self._semana_id))
+            except Exception:
+                cerrada = False
+        self._set_edit_enabled(not cerrada)
         self._update_semana_context_label()
         self.refresh_table()
 
@@ -539,14 +559,87 @@ class ProductionWidget(QWidget):
         n = self.cmb_dia.count()
         self.cmb_dia.setCurrentIndex((i + delta) % n)
 
+
+    def _load_tarifas(self) -> None:
+        try:
+            self._tarifas = self.tarifas_repo.mapa() or {}
+        except Exception:
+            self._tarifas = {"AG3": 12.0, "AG4": 13.0, "DOL": 13.0, "DLO": 13.0}
+
+    def _tarifa_material(self, mat: str) -> float:
+        if not self._tarifas:
+            self._load_tarifas()
+        return float(self._tarifas.get((mat or "AG3").upper(), 12.0))
+
+    def _set_edit_enabled(self, enabled: bool) -> None:
+        self._semana_cerrada = not enabled
+        for w in (
+            getattr(self, "cmb_dia_trab", None),
+            getattr(self, "spin_dia_gr", None),
+            getattr(self, "cmb_dia", None),
+        ):
+            if w is not None:
+                w.setEnabled(enabled)
+        if hasattr(self, "btn_toggle_full"):
+            self.btn_toggle_full.setEnabled(enabled)
+        if hasattr(self, "box_full"):
+            self.box_full.setEnabled(enabled)
+        if enabled:
+            self.table.setEditTriggers(
+                QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed
+            )
+        else:
+            self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        if hasattr(self, "btn_cerrar_sem"):
+            self.btn_cerrar_sem.setEnabled(enabled and self._semana_id is not None)
+        if hasattr(self, "btn_reabrir_sem"):
+            self.btn_reabrir_sem.setEnabled((not enabled) and self._semana_id is not None)
+
+    def _on_cerrar_semana(self) -> None:
+        if not self._semana_id:
+            return
+        if not QMessageBox.question(
+            self,
+            "Cerrar semana",
+            "¿Cerrar esta semana?\nNo se podrá editar producción hasta reabrirla.\n"
+            "Úsalo cuando el formal ya esté listo para pago.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        ) == QMessageBox.Yes:
+            return
+        try:
+            self.sem_repo.cerrar(self._semana_id, usuario="desktop")
+            self._set_edit_enabled(False)
+            self._update_semana_context_label()
+            self._show_toast("Semana cerrada.")
+        except Exception as e:
+            self._show_toast(str(e), error=True)
+
+    def _on_reabrir_semana(self) -> None:
+        if not self._semana_id:
+            return
+        if not QMessageBox.question(
+            self, "Reabrir", "¿Reabrir la semana para permitir ediciones?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) == QMessageBox.Yes:
+            return
+        try:
+            self.sem_repo.reabrir(self._semana_id)
+            self._set_edit_enabled(True)
+            self._update_semana_context_label()
+            self._show_toast("Semana reabierta.")
+        except Exception as e:
+            self._show_toast(str(e), error=True)
+
+
     def _on_mat_changed_day(self, mat: str) -> None:
-        tar = TARIFA_DEFAULT.get(mat, 12.0)
+        tar = self._tarifa_material(mat)
         self.spin_dia_tarifa.setValue(tar)
         self._last_material = mat
         self._last_tarifa = tar
 
     def _on_mat_changed_full(self, mat: str) -> None:
-        tar = TARIFA_DEFAULT.get(mat, 12.0)
+        tar = self._tarifa_material(mat)
         self.inp_tarifa.setValue(tar)
         self._last_material = mat
         self._last_tarifa = tar
@@ -605,6 +698,9 @@ class ProductionWidget(QWidget):
     def _on_guardar_dia(self):
         if not self._semana_id:
             self._show_toast("Selecciona o crea una semana.", error=True)
+            return
+        if self._semana_cerrada:
+            self._show_toast("Semana cerrada: no se puede editar.", error=True)
             return
         tid, nombre, ubic = self._trabajador_data(self.cmb_dia_trab)
         if not nombre:
@@ -847,7 +943,20 @@ class ProductionWidget(QWidget):
                 path, rows, codigo_semana=codigo,
                 fecha_inicio=fi, fecha_fin=ff,
             )
-            self._show_toast(f"Formal exportado: {path}")
+            # Copia automática en exports/
+            try:
+                from pathlib import Path as _P
+                import shutil
+                root = _P(__file__).resolve().parents[2]
+                exp_dir = root / "exports"
+                exp_dir.mkdir(parents=True, exist_ok=True)
+                from datetime import datetime as _dt
+                stamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+                backup = exp_dir / f"formal_{codigo}_{stamp}.xlsx"
+                shutil.copy2(path, backup)
+                self._show_toast(f"Formal exportado + backup: {backup.name}")
+            except Exception:
+                self._show_toast(f"Formal exportado: {path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
@@ -863,7 +972,18 @@ class ProductionWidget(QWidget):
         try:
             codigo = self.cmb_semana.currentText().split()[0] if self.cmb_semana.currentText() else ""
             self.excel.exportar_pdf_formal(path, self._all_rows, codigo_semana=codigo)
-            self._show_toast(f"PDF guardado: {path}")
+            try:
+                from pathlib import Path as _P
+                import shutil
+                from datetime import datetime as _dt
+                root = _P(__file__).resolve().parents[2]
+                exp_dir = root / "exports"
+                exp_dir.mkdir(parents=True, exist_ok=True)
+                backup = exp_dir / f"formal_{codigo}_{_dt.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                shutil.copy2(path, backup)
+                self._show_toast(f"PDF + backup: {backup.name}")
+            except Exception:
+                self._show_toast(f"PDF guardado: {path}")
         except Exception as e:
             self._show_toast(str(e), error=True)
             QMessageBox.critical(self, "PDF", str(e))
