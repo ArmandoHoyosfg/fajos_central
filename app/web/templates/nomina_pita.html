@@ -57,7 +57,7 @@
   <thead>
     <tr>
       <th></th>
-      <th>Nombre</th><th>Ubic</th><th>Modelo</th><th>Folio</th>
+      <th class="col-nombre">Nombre</th><th>Ubic</th><th>Modelo</th><th>Folio</th>
       <th>Material</th><th>Producto</th><th>Pitas</th><th>Efectivo</th><th>Firma</th>
     </tr>
   </thead>
@@ -67,7 +67,7 @@
       <td>
         <button type="button" class="btn-icon-del" onclick="delPit({{ r.id }})" title="Eliminar">×</button>
       </td>
-      <td title="{{ r.nombre }}">{{ r.nombre }}</td>
+      <td class="col-nombre" title="{{ r.nombre }}">{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="modelo" value="{{ r.modelo or '' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint"><input class="cell-edit" data-field="folio" value="{{ r.folio or '' }}" readonly title="Doble clic para editar"></td>
