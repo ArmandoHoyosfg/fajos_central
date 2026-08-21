@@ -272,11 +272,6 @@ class LauncherApp(tk.Tk):
         self.lbl_lan = ttk.Label(titles, text="", foreground="#89b4fa")
         self.lbl_lan.pack(anchor=tk.W, pady=(4, 0))
         self._refresh_lan_label()
-            if getattr(self, '_lan_url', None):
-                try:
-                    self.lbl_url.configure(text=self._lan_url)
-                except Exception:
-                    pass
 
         st = ttk.Frame(main)
         st.pack(fill=tk.X, pady=(0, 2))
@@ -474,6 +469,11 @@ class LauncherApp(tk.Tk):
                 text=f"Red local (otros equipos):  {url}"
             )
             self._lan_url = url
+            if hasattr(self, 'lbl_url'):
+                try:
+                    self.lbl_url.configure(text=f'URL: {url}')
+                except Exception:
+                    pass
         except Exception:
             self.lbl_lan.configure(text="Red local: —")
             self._lan_url = ""
@@ -490,8 +490,7 @@ class LauncherApp(tk.Tk):
         except Exception as e:
             self._log(f"No se pudo copiar: {e}")
 
-    def _start_server(self)
- -> None:
+    def _start_server(self) -> None:
         if self._is_running():
             messagebox.showinfo("Servidor", "Ya está en ejecución.")
             return

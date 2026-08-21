@@ -40,6 +40,7 @@
 </div>
 
 <div class="table-wrap">
+<div class="filter-row"><input type="search" id="flt-trab" placeholder="Filtrar trabajadores…" style="min-width:220px;" oninput="filterTrab()"></div>
 <table>
   <thead>
     <tr>
@@ -85,3 +86,12 @@ async function submitTrabajador(e) {
 }
 </script>
 {% endblock %}
+
+<script>
+function filterTrab() {
+  const q = (document.getElementById('flt-trab').value || '').toLowerCase();
+  document.querySelectorAll('table tbody tr').forEach(tr => {
+    tr.style.display = !q || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>

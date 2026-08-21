@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.2.1] — 2026-08-21
+
+### Corregido
+- IndentationError en launcher (bloque LAN)
+- `cierre_dia`: crear tabla automáticamente / no romper avisos
+- Captura un solo día: actualiza línea existente + selector de trabajos
+- `submitUnDia` restaurado en web + filtros de tabla
+
 ## [3.2.0] — 2026-08-20
 
 ### Operación diaria

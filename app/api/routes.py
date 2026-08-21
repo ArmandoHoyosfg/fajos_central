@@ -540,35 +540,54 @@ async def api_add_un_dia(
     material: str | None = Form("AG3"),
     tarifa_gr: float | None = Form(12.0),
     trabajador_id: int | None = Form(None),
+    trabajo_id: int | None = Form(None),
     repo: ProduccionRepo = Depends(get_produccion_repo),
 ):
     """
-    Alta rápida: una línea con un solo día lleno (resto vacío).
-    Ideal para capturar el avance del día sin rellenar la semana completa.
+    Alta rápida de un día. Si ya existe línea (mismo trabajador+folio+material)
+    actualiza ese día; si no, crea línea ligada a trabajo.
     """
     from app.core.normalize import canonical_name
     day_map = {
         "sab": "gm_sab", "dom": "gm_dom", "lun": "gm_lun", "mar": "gm_mar",
         "mie": "gm_mie", "jue": "gm_jue", "vie": "gm_vie",
+        "gm_sab": "gm_sab", "gm_dom": "gm_dom", "gm_lun": "gm_lun", "gm_mar": "gm_mar",
+        "gm_mie": "gm_mie", "gm_jue": "gm_jue", "gm_vie": "gm_vie",
     }
-    col = day_map.get(dia.strip().lower())
+    col = day_map.get((dia or "").strip().lower())
     if not col:
         from app.core.exceptions import ValidationAppError
         raise ValidationAppError(f"Día inválido: {dia}")
+    nombre_c = canonical_name(nombre)
+    # buscar línea existente
+    existing = None
+    try:
+        existing = repo.buscar_linea(semana_id, nombre_c, int(ubic), folio)
+    except Exception:
+        existing = None
+    if existing is None and trabajo_id:
+        for row in repo.listar_por_semana(semana_id):
+            if row.get("trabajo_id") == trabajo_id:
+                existing = row
+                break
+    if existing:
+        repo.actualizar_gramos_dia(int(existing["id"]), col, gramos)
+        return {"id": existing["id"], "ok": True, "dia": dia, "gramos": gramos, "updated": True}
     payload = {
-        "nombre": canonical_name(nombre),
+        "nombre": nombre_c,
         "ubic": ubic,
         "folio": folio,
         "modelo": modelo,
         "material": material,
         "tarifa_gr": tarifa_gr,
         "trabajador_id": trabajador_id,
+        "trabajo_id": trabajo_id,
         "gm_sab": None, "gm_dom": None, "gm_lun": None,
         "gm_mar": None, "gm_mie": None, "gm_jue": None, "gm_vie": None,
     }
     payload[col] = gramos
     new_id = repo.insertar(semana_id, payload)
-    return {"id": new_id, "ok": True, "dia": dia, "gramos": gramos}
+    return {"id": new_id, "ok": True, "dia": dia, "gramos": gramos, "updated": False}
 
 
 @router.delete("/api/produccion/linea/{prod_id}")

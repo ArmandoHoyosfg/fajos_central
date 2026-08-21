@@ -345,7 +345,29 @@ class ProduccionRepo(BaseRepo):
         return {"created": created, "skipped": skipped, "total_candidates": len(to_insert)}
 
 
+    def buscar_linea(
+        self,
+        semana_id: int,
+        nombre: str,
+        ubic: int,
+        folio: str | None = None,
+    ) -> dict | None:
+        with self.db.cursor() as cur:
+            if folio:
+                cur.execute(
+                    "SELECT * FROM produccion_plata WHERE semana_id=%s AND nombre=%s AND ubic=%s AND folio=%s LIMIT 1",
+                    (semana_id, nombre, ubic, folio),
+                )
+            else:
+                cur.execute(
+                    "SELECT * FROM produccion_plata WHERE semana_id=%s AND nombre=%s AND ubic=%s "
+                    "AND (folio IS NULL OR folio='') LIMIT 1",
+                    (semana_id, nombre, ubic),
+                )
+            return cur.fetchone()
+
     def set_firmado(self, prod_id: int, firmado: bool) -> None:
+
         with self.db.cursor() as cur:
             cur.execute(
                 "UPDATE produccion_plata SET firmado = %s WHERE id = %s",

@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QFrame,
 )
 
-from db import ProduccionRepo, SemanasRepo, TrabajadoresRepo, TarifasRepo
+from db import ProduccionRepo, SemanasRepo, TrabajadoresRepo, TarifasRepo, TrabajosRepo
 from services.excel_service import ExcelService
 from ui.calendar_util import (
     encontrar_semana_actual,
@@ -99,6 +99,7 @@ class ProductionWidget(QWidget):
         self.trab_repo = TrabajadoresRepo()
         self.excel = ExcelService()
         self.tarifas_repo = TarifasRepo()
+        self.trabajos_repo = TrabajosRepo()
         self._tarifas = {}
         self._semana_cerrada = False
         self._semana_id: int | None = None
@@ -384,6 +385,8 @@ class ProductionWidget(QWidget):
         self._load_trabajadores()
         self._setup_shortcuts()
         self.cmb_dia_mat.currentTextChanged.connect(self._on_mat_changed_day)
+        if hasattr(self, 'cmb_dia_trab'):
+            self.cmb_dia_trab.currentIndexChanged.connect(self._filtrar_trabajos_dia)
         self.cmb_material.currentTextChanged.connect(self._on_mat_changed_full)
         self._load_tarifas()
 
@@ -728,6 +731,41 @@ class ProductionWidget(QWidget):
         except Exception as e:
             self._show_toast(str(e), error=True)
 
+
+
+    def _filtrar_trabajos_dia(self) -> None:
+        """Rellena folio/modelo/material desde trabajos activos del trabajador elegido."""
+        if not hasattr(self, "trabajos_repo") or not self._semana_id:
+            return
+        tid, nombre, ubic = self._trabajador_data(self.cmb_dia_trab)
+        if not tid:
+            return
+        try:
+            rows = self.trabajos_repo.listar(solo_activos=True, trabajador_id=int(tid))
+        except Exception:
+            return
+        if not rows:
+            return
+        # si hay un solo trabajo, autocompletar
+        if len(rows) == 1:
+            r = rows[0]
+            if hasattr(self, "inp_dia_folio"):
+                self.inp_dia_folio.setText(str(r.get("folio") or ""))
+            if hasattr(self, "inp_dia_modelo"):
+                self.inp_dia_modelo.setText(str(r.get("modelo") or ""))
+            mat = str(r.get("material") or "AG3")
+            if hasattr(self, "cmb_dia_mat"):
+                idx = self.cmb_dia_mat.findText(mat)
+                if idx >= 0:
+                    self.cmb_dia_mat.setCurrentIndex(idx)
+            if r.get("tarifa_gr") is not None and hasattr(self, "spin_dia_tarifa"):
+                try:
+                    self.spin_dia_tarifa.setValue(float(r["tarifa_gr"]))
+                except (TypeError, ValueError):
+                    pass
+            self._show_toast(f"Trabajo: {r.get('folio') or 's/folio'} · {r.get('modelo') or ''}")
+        elif len(rows) > 1:
+            self._show_toast(f"{len(rows)} trabajos activos — elige folio o deja vacío para nuevo")
 
     def _on_guardar_dia(self):
         if not self._semana_id:

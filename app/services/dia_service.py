@@ -45,6 +45,10 @@ class DiaService:
 
     def estado_hoy(self, ref: date | None = None) -> dict[str, Any]:
         ref = ref or today()
+        try:
+            self.ensure_cierre_table()
+        except Exception:
+            pass
         col = col_hoy(ref)
         sem_repo = SemanasRepo(self.db)
         semanas = sem_repo.listar()
@@ -88,10 +92,12 @@ class DiaService:
     def esta_cerrado(self, ref: date | None = None) -> bool:
         ref = ref or today()
         try:
+            self.ensure_cierre_table()
             with self.db.cursor() as cur:
                 cur.execute("SELECT id FROM cierre_dia WHERE fecha = %s", (ref.isoformat(),))
                 return cur.fetchone() is not None
-        except Exception:
+        except Exception as e:
+            logger.debug("esta_cerrado: %s", e)
             return False
 
     def cerrar_hoy(self, ref: date | None = None, usuario: str | None = "app") -> dict:
