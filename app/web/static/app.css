@@ -823,3 +823,77 @@ td.editable-hint:hover input.cell-edit[readonly] {
   border-color: var(--border);
   background: var(--surface);
 }
+
+
+/* Tabla compacta: sin scroll horizontal en Pita/Taller */
+.table-wrap.table-compact {
+  overflow-x: hidden;
+}
+.table-wrap.table-compact table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.table-wrap.table-compact th,
+.table-wrap.table-compact td {
+  padding: 0.28rem 0.3rem;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* No sticky en tablas cortas (rompe el layout con pocas columnas) */
+.table-wrap.table-compact th:first-child,
+.table-wrap.table-compact td:first-child {
+  position: static;
+  left: auto;
+  z-index: auto;
+}
+.table-wrap.table-compact input.cell-edit {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.15rem 0.25rem;
+  font-size: 0.82rem;
+  border-radius: 6px;
+}
+.table-wrap.table-compact input.cell-edit.money {
+  max-width: none;
+  text-align: right;
+}
+.table-wrap.table-compact .col-nombre { width: 14%; }
+.table-wrap.table-compact .col-ubic { width: 6%; text-align: center; }
+.table-wrap.table-compact .col-modelo { width: 11%; }
+.table-wrap.table-compact .col-folio { width: 9%; }
+.table-wrap.table-compact .col-mat { width: 11%; }
+.table-wrap.table-compact .col-prod { width: 11%; }
+.table-wrap.table-compact .col-pitas { width: 8%; }
+.table-wrap.table-compact .col-efec { width: 10%; }
+.table-wrap.table-compact .col-firma { width: 6%; text-align: center; }
+.table-wrap.table-compact .col-puesto { width: 14%; }
+.table-wrap.table-compact .col-sueldo { width: 12%; }
+.table-wrap.table-compact .col-extras { width: 12%; }
+.table-wrap.table-compact .col-total { width: 12%; text-align: right; }
+
+/* Formulario alta: que se ajuste */
+.form-alta-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+.form-alta-compact input,
+.form-alta-compact select {
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 9rem;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.45rem;
+}
+.form-alta-compact select[name="trab"] {
+  max-width: 14rem;
+  flex: 1 1 12rem;
+}
