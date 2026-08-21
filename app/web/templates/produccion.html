@@ -478,7 +478,7 @@ async function saveGramCell(inp) {
   fd.append('gramos', inp.value === '' ? '0' : inp.value);
   const res = await fetch('/api/produccion/linea/' + id + '/dia', { method: 'PATCH', body: fd });
   const data = await res.json().catch(() => ({}));
-  if (res.ok) showToast('Guardado ' + day);
+  if (res.ok) { showToast('Guardado ' + day); if (window.FajosLive) { FajosLive.flashCell(inp); FajosLive.flashRow(inp); FajosLive.pulseKpi('#kpi-live'); } }
   else showToast(data.user_message || data.message || 'Error', true);
 }
 

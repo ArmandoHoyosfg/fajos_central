@@ -17,7 +17,23 @@
   --radius: 12px;
   --shadow: 0 4px 20px rgba(0,0,0,.28);
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* Motion tokens — fluido pero contenido */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 280ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
@@ -408,4 +424,222 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
   gap: 0.5rem;
   justify-content: flex-end;
   margin-top: 1rem;
+}
+
+
+/* ========== Fluidez e interactividad ========== */
+
+.btn, button.btn, a.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: #11111b;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition:
+    transform var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out),
+    opacity var(--dur-1) var(--ease-out);
+  box-shadow: 0 1px 0 #0004;
+}
+.btn:hover, button.btn:hover, a.btn:hover {
+  background: var(--accent-dim);
+  transform: translateY(-1px);
+  text-decoration: none;
+  color: #11111b;
+}
+.btn:active, button.btn:active, a.btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+.btn:disabled, button.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn-secondary, a.btn-secondary, button.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn-secondary:hover, a.btn-secondary:hover {
+  background: #3b3d54;
+  color: var(--text);
+}
+
+/* Inputs con focus vivo */
+input, select, textarea {
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out);
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--blue) !important;
+  box-shadow: 0 0 0 3px #89b4fa33;
+}
+
+/* Nav underline suave */
+.nav a {
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+
+/* Cards y KPI */
+.card, .kpi-bar {
+  transition: box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+}
+.kpi-bar .kpi-item b {
+  transition: color var(--dur-2) var(--ease-spring);
+}
+.kpi-bar.kpi-pulse .kpi-item b {
+  animation: kpiFlash var(--dur-3) var(--ease-out);
+}
+@keyframes kpiFlash {
+  0% { color: var(--green); }
+  100% { color: var(--accent); }
+}
+
+/* Filas de tabla: hover + flash al guardar */
+.table-wrap tbody tr {
+  transition: background var(--dur-1) var(--ease-out);
+}
+.table-wrap tbody tr:hover {
+  filter: brightness(1.08);
+}
+.table-wrap tbody tr.row-saved {
+  animation: rowSaved 0.7s var(--ease-out);
+}
+@keyframes rowSaved {
+  0% { box-shadow: inset 3px 0 0 var(--green); background: #a6e3a122; }
+  100% { box-shadow: none; }
+}
+
+/* Celda editada */
+input.cell-gm {
+  transition:
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+input.cell-gm:focus {
+  background: #1e3a5f !important;
+  border-color: var(--blue) !important;
+}
+input.cell-gm.cell-ok {
+  animation: cellOk 0.55s var(--ease-out);
+}
+@keyframes cellOk {
+  0% { background: #a6e3a144; border-color: var(--green); }
+  100% { background: #11111b; }
+}
+
+/* Sticky primera columna (trabajador) */
+.table-wrap th:first-child,
+.table-wrap td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #1e1e2e;
+}
+.table-wrap thead th:first-child {
+  z-index: 6;
+  background: #1e1e2e;
+}
+.table-wrap tbody tr:hover td:first-child {
+  background: #2a2b3d;
+}
+
+/* Modal fluido */
+.modal-backdrop {
+  animation: fadeIn var(--dur-2) var(--ease-out);
+}
+.modal-backdrop[hidden] {
+  animation: none;
+}
+.modal {
+  animation: modalIn var(--dur-3) var(--ease-spring);
+  transform-origin: center top;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Toast deslizante */
+.toast-web {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 200;
+  padding: 0.7rem 1.1rem;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  animation: toastIn var(--dur-3) var(--ease-spring);
+  max-width: min(360px, 90vw);
+}
+.toast-web.err {
+  border-color: var(--red);
+  color: var(--red);
+}
+.toast-web.ok {
+  border-color: var(--green);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Skeleton sutil (opcional) */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, #3b3d54 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease infinite;
+  border-radius: 6px;
+  color: transparent !important;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Checkbox / filtros más táctiles */
+.filter-row label {
+  cursor: pointer;
+  user-select: none;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.filter-row label:hover {
+  background: var(--surface);
+}
+
+/* Badge version / LAN */
+.version-badge, .lan-badge {
+  transition: transform var(--dur-1) var(--ease-out), border-color var(--dur-1);
+}
+.version-badge:hover, .lan-badge:hover {
+  transform: scale(1.04);
+}
+
+main.page-enter {
+  animation: pageIn var(--dur-3) var(--ease-out);
+}
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }

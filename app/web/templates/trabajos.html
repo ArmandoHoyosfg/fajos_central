@@ -203,6 +203,7 @@ async function saveCell(inp) {
   if (res.ok) {
     inp.dataset.old = val;
     showToast('Guardado ' + (DAY_LABEL[col]||col) + ': ' + (val || 'vacío'));
+    if (window.FajosLive) { FajosLive.flashCell(inp); FajosLive.flashRow(inp); FajosLive.pulseKpi('#kpi-live'); }
   } else {
     const data = await res.json().catch(() => ({}));
     showToast(data.user_message || data.message || 'Error', true);

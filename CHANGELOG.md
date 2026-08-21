@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.2.3] — 2026-08-21
+
+### UI web más fluida
+- Microinteracciones en botones (hover/active)
+- Modal y toast animados
+- Flash en celda/fila al guardar gramos
+- KPI pulse + columna trabajador sticky
+- `prefers-reduced-motion` respetado
+
 ## [3.2.2] — 2026-08-21
 
 - Solo SQL `000_fajos_central_completo.sql` (incluye `cierre_dia`)

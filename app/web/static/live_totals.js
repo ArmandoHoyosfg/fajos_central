@@ -7,6 +7,30 @@
   function $all(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
   window.FajosLive = {
+    flashRow(el) {
+      const tr = el && el.closest ? el.closest("tr") : null;
+      if (!tr) return;
+      tr.classList.remove("row-saved");
+      void tr.offsetWidth;
+      tr.classList.add("row-saved");
+      setTimeout(() => tr.classList.remove("row-saved"), 700);
+    },
+    flashCell(inp) {
+      if (!inp) return;
+      inp.classList.remove("cell-ok");
+      void inp.offsetWidth;
+      inp.classList.add("cell-ok");
+      setTimeout(() => inp.classList.remove("cell-ok"), 550);
+    },
+    pulseKpi(sel) {
+      const el = document.querySelector(sel || "#kpi-live");
+      if (!el) return;
+      el.classList.remove("kpi-pulse");
+      void el.offsetWidth;
+      el.classList.add("kpi-pulse");
+      setTimeout(() => el.classList.remove("kpi-pulse"), 400);
+    },
+
     showToast(msg, err) {
       let el = $("#toast");
       if (!el) {
@@ -17,7 +41,11 @@
       }
       el.hidden = false;
       el.textContent = msg;
-      el.classList.toggle("err", !!err);
+      el.className = "toast-web" + (err ? " err" : " ok");
+      // restart animation
+      el.style.animation = "none";
+      void el.offsetWidth;
+      el.style.animation = "";
       clearTimeout(window._toastT);
       window._toastT = setTimeout(() => { el.hidden = true; }, 2800);
     },
@@ -85,6 +113,9 @@
             await onSave(inp);
           }
           this.recalcFromTable(tableSel, kpiSel);
+          this.flashCell(inp);
+          this.flashRow(inp);
+          this.pulseKpi(kpiSel);
         });
         inp.addEventListener("input", () => {
           // feedback inmediato al teclear
