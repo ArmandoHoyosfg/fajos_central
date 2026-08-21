@@ -691,3 +691,152 @@ class DashboardRepo(BaseRepo):
         with self.db.cursor() as cur:
             cur.execute(sql, (limit,))
             return list(cur.fetchall())
+
+
+
+class NominaTallerRepo(BaseRepo):
+    """Nómina de taller: sueldo + extras por semana."""
+
+    def listar_por_semana(self, semana_id: int) -> list[dict]:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, semana_id, trabajador_id, nombre, ubic, puesto,
+                       sueldo, extras, total, firmado, notas
+                FROM nomina_taller
+                WHERE semana_id = %s
+                ORDER BY ubic, nombre
+                """,
+                (semana_id,),
+            )
+            return list(cur.fetchall() or [])
+
+    def totales(self, semana_id: int) -> dict:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS lineas,
+                       COALESCE(SUM(sueldo),0) AS sum_sueldo,
+                       COALESCE(SUM(extras),0) AS sum_extras,
+                       COALESCE(SUM(total),0) AS total
+                FROM nomina_taller WHERE semana_id = %s
+                """,
+                (semana_id,),
+            )
+            return cur.fetchone() or {}
+
+    def insertar(self, semana_id: int, data: dict) -> int:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO nomina_taller
+                  (semana_id, trabajador_id, nombre, ubic, puesto, sueldo, extras, firmado, notas)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    semana_id,
+                    data.get("trabajador_id"),
+                    data["nombre"],
+                    data["ubic"],
+                    data.get("puesto"),
+                    float(data.get("sueldo") or 0),
+                    float(data.get("extras") or 0),
+                    1 if data.get("firmado") else 0,
+                    data.get("notas"),
+                ),
+            )
+            return cur.lastrowid
+
+    def actualizar(self, row_id: int, data: dict) -> None:
+        fields = []
+        params: list = []
+        for k in ("nombre", "ubic", "puesto", "sueldo", "extras", "firmado", "notas", "trabajador_id"):
+            if k in data:
+                fields.append(f"{k}=%s")
+                params.append(data[k])
+        if not fields:
+            return
+        params.append(row_id)
+        with self.db.cursor() as cur:
+            cur.execute(f"UPDATE nomina_taller SET {', '.join(fields)} WHERE id=%s", params)
+
+    def eliminar(self, row_id: int) -> None:
+        with self.db.cursor() as cur:
+            cur.execute("DELETE FROM nomina_taller WHERE id=%s", (row_id,))
+
+
+class ProduccionPitaRepo(BaseRepo):
+    """Nómina Pita: modelo/folio/material PITA NxN + efectivo."""
+
+    def listar_por_semana(self, semana_id: int) -> list[dict]:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, semana_id, trabajador_id, nombre, ubic, modelo, folio,
+                       material, producto, pitas, efectivo, firmado, notas
+                FROM produccion_pita
+                WHERE semana_id = %s
+                ORDER BY ubic, nombre
+                """,
+                (semana_id,),
+            )
+            return list(cur.fetchall() or [])
+
+    def totales(self, semana_id: int) -> dict:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS lineas,
+                       COALESCE(SUM(pitas),0) AS sum_pitas,
+                       COALESCE(SUM(efectivo),0) AS total
+                FROM produccion_pita WHERE semana_id = %s
+                """,
+                (semana_id,),
+            )
+            return cur.fetchone() or {}
+
+    def insertar(self, semana_id: int, data: dict) -> int:
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO produccion_pita
+                  (semana_id, trabajador_id, nombre, ubic, modelo, folio, material,
+                   producto, pitas, efectivo, firmado, notas)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    semana_id,
+                    data.get("trabajador_id"),
+                    data["nombre"],
+                    data["ubic"],
+                    data.get("modelo"),
+                    data.get("folio"),
+                    data.get("material"),
+                    data.get("producto") or "Cinturón",
+                    data.get("pitas"),
+                    float(data.get("efectivo") or 0),
+                    1 if data.get("firmado") else 0,
+                    data.get("notas"),
+                ),
+            )
+            return cur.lastrowid
+
+    def actualizar(self, row_id: int, data: dict) -> None:
+        fields = []
+        params: list = []
+        for k in (
+            "nombre", "ubic", "modelo", "folio", "material", "producto",
+            "pitas", "efectivo", "firmado", "notas", "trabajador_id",
+        ):
+            if k in data:
+                fields.append(f"{k}=%s")
+                params.append(data[k])
+        if not fields:
+            return
+        params.append(row_id)
+        with self.db.cursor() as cur:
+            cur.execute(f"UPDATE produccion_pita SET {', '.join(fields)} WHERE id=%s", params)
+
+    def eliminar(self, row_id: int) -> None:
+        with self.db.cursor() as cur:
+            cur.execute("DELETE FROM produccion_pita WHERE id=%s", (row_id,))

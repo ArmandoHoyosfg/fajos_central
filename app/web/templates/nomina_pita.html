@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Nómina Pita — Fajos Central{% endblock %}
+{% block content %}
+<div class="help-panel">
+  <strong>Pita (PIT):</strong> Modelo distinto al de plata. Material tipo <em>PITA 6X6</em>, producto casi siempre <em>Cinturón</em>.
+  El campo Pitas suele ir vacío; el pago va en <strong>Efectivo</strong>.
+</div>
+<div class="page-head">
+  <div>
+    <h1>Nómina Pita</h1>
+    <p class="muted">Nombre · Ubic · Modelo · Folio · Material · Producto · Pitas · Efectivo · Firma</p>
+  </div>
+</div>
+<div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+  <form class="inline" method="get" action="/nomina-pita">
+    <label>Semana</label>
+    <select name="semana_id" onchange="this.form.submit()">
+      {% for s in semanas %}
+      <option value="{{ s.id }}" {% if s.id==semana_id %}selected{% endif %}>{{ s.codigo }}{% if s.es_actual %} ★{% endif %}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% if semana_id %}
+  <div class="kpi-bar">
+    <span class="kpi-item"><b>{{ totales.lineas or 0 }}</b> líneas</span>
+    <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total or 0)|float) }}</b> total pita</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if semana_id %}
+<div class="card" style="margin:1rem 0;">
+  <strong>Agregar línea</strong>
+  <form class="inline" style="flex-wrap:wrap;margin-top:0.5rem;" onsubmit="return addPit(event)">
+    <select name="trab" required>
+      <option value="">— trabajador —</option>
+      {% for t in trabajadores %}
+      <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}">{{ t.nombre_mostrar }} ({{ t.ubic }})</option>
+      {% endfor %}
+    </select>
+    <input name="modelo" placeholder="Modelo" style="width:100px;">
+    <input name="folio" placeholder="Folio" style="width:90px;">
+    <input name="material" placeholder="PITA 6X6" value="PITA 6X6" style="width:100px;">
+    <input name="producto" placeholder="Cinturón" value="Cinturón" style="width:100px;">
+    <input name="pitas" type="number" step="0.01" placeholder="Pitas" style="width:80px;">
+    <input name="efectivo" type="number" step="0.01" placeholder="Efectivo $" required style="width:100px;">
+    <button class="btn" type="submit">Agregar</button>
+  </form>
+</div>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Nombre</th><th>Ubic</th><th>Modelo</th><th>Folio</th>
+      <th>Material</th><th>Producto</th><th>Pitas</th><th>Efectivo</th><th>Firma</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in lineas %}
+    <tr>
+      <td>{{ r.nombre }}</td>
+      <td>{{ r.ubic }}</td>
+      <td>{{ r.modelo or '—' }}</td>
+      <td>{{ r.folio or '—' }}</td>
+      <td>{{ r.material or '—' }}</td>
+      <td>{{ r.producto or '—' }}</td>
+      <td>{{ r.pitas if r.pitas is not none else '' }}</td>
+      <td><strong>${{ '%.2f'|format((r.efectivo or 0)|float) }}</strong></td>
+      <td>{% if r.firmado %}✓{% else %}—{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">Sin líneas de pita esta semana.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Selecciona o crea una semana.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+async function addPit(e) {
+  e.preventDefault();
+  const sid = {{ semana_id or 'null' }};
+  if (!sid) return false;
+  const form = e.target;
+  const parts = (form.trab.value||'').split('|');
+  const body = new FormData();
+  body.set('nombre', parts[0]);
+  body.set('ubic', parts[1]);
+  if (parts[2]) body.set('trabajador_id', parts[2]);
+  body.set('modelo', form.modelo.value || '');
+  body.set('folio', form.folio.value || '');
+  body.set('material', form.material.value || 'PITA 6X6');
+  body.set('producto', form.producto.value || 'Cinturón');
+  if (form.pitas.value) body.set('pitas', form.pitas.value);
+  body.set('efectivo', form.efectivo.value);
+  const res = await fetch('/api/nomina-pita/' + sid, { method: 'POST', body });
+  if (res.ok) location.reload();
+  else alert('Error al guardar');
+  return false;
+}
+</script>
+{% endblock %}

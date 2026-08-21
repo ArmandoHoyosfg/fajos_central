@@ -15,11 +15,13 @@ from app.api.deps import (
     get_dashboard_service,
     get_export_service,
     get_produccion_repo,
+    get_produccion_pita_repo,
+    get_nomina_taller_repo,
     get_semanas_repo,
     get_trabajadores_repo,
 )
 from app.core.exceptions import AppError
-from app.db.repository import ProduccionRepo, SemanasRepo, TrabajadoresRepo
+from app.db.repository import ProduccionRepo, ProduccionPitaRepo, NominaTallerRepo, SemanasRepo, TrabajadoresRepo
 from app.services.dashboard_service import DashboardService
 from app.services.export_service import ExportService
 
@@ -719,3 +721,114 @@ async def api_export(
 
 def error_response(exc: AppError) -> JSONResponse:
     return JSONResponse(status_code=exc.http_status, content=exc.to_dict())
+
+
+# ---------- Taller (TLL) y Pita (PIT) ----------
+
+@router.get("/nomina-taller", response_class=HTMLResponse)
+async def page_nomina_taller(
+    request: Request,
+    semana_id: int | None = None,
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+    repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
+    trab_repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    from app.core.calendar_util import marcar_semanas
+    semanas = marcar_semanas(sem_repo.listar())
+    if semana_id is None and semanas:
+        actual = next((s for s in semanas if s.get("es_actual")), None)
+        semana_id = (actual or semanas[0]).get("id")
+    lineas = repo.listar_por_semana(semana_id) if semana_id else []
+    totales = repo.totales(semana_id) if semana_id else {}
+    trabajadores = [t for t in trab_repo.listar(solo_activos=True) if "TLL" in str(t.get("tipo") or "").upper() or "Mixto" in str(t.get("tipo") or "")]
+    return templates.TemplateResponse(
+        request,
+        "nomina_taller.html",
+        _ctx(request, semanas=semanas, semana_id=semana_id, lineas=lineas, totales=totales, trabajadores=trabajadores),
+    )
+
+
+@router.get("/nomina-pita", response_class=HTMLResponse)
+async def page_nomina_pita(
+    request: Request,
+    semana_id: int | None = None,
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+    repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+    trab_repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    from app.core.calendar_util import marcar_semanas
+    semanas = marcar_semanas(sem_repo.listar())
+    if semana_id is None and semanas:
+        actual = next((s for s in semanas if s.get("es_actual")), None)
+        semana_id = (actual or semanas[0]).get("id")
+    lineas = repo.listar_por_semana(semana_id) if semana_id else []
+    totales = repo.totales(semana_id) if semana_id else {}
+    trabajadores = [t for t in trab_repo.listar(solo_activos=True) if "PIT" in str(t.get("tipo") or "").upper() or "Mixto" in str(t.get("tipo") or "")]
+    return templates.TemplateResponse(
+        request,
+        "nomina_pita.html",
+        _ctx(request, semanas=semanas, semana_id=semana_id, lineas=lineas, totales=totales, trabajadores=trabajadores),
+    )
+
+
+@router.post("/api/nomina-taller/{semana_id}")
+async def api_add_taller(
+    semana_id: int,
+    nombre: str = Form(...),
+    ubic: int = Form(...),
+    puesto: str | None = Form(None),
+    sueldo: float = Form(0),
+    extras: float = Form(0),
+    trabajador_id: int | None = Form(None),
+    repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
+):
+    new_id = repo.insertar(semana_id, {
+        "nombre": nombre, "ubic": ubic, "puesto": puesto,
+        "sueldo": sueldo, "extras": extras, "trabajador_id": trabajador_id,
+    })
+    return {"ok": True, "id": new_id}
+
+
+@router.post("/api/nomina-pita/{semana_id}")
+async def api_add_pita(
+    semana_id: int,
+    nombre: str = Form(...),
+    ubic: int = Form(...),
+    modelo: str | None = Form(None),
+    folio: str | None = Form(None),
+    material: str | None = Form("PITA 6X6"),
+    producto: str | None = Form("Cinturón"),
+    pitas: float | None = Form(None),
+    efectivo: float = Form(0),
+    trabajador_id: int | None = Form(None),
+    repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+):
+    new_id = repo.insertar(semana_id, {
+        "nombre": nombre, "ubic": ubic, "modelo": modelo, "folio": folio,
+        "material": material, "producto": producto, "pitas": pitas,
+        "efectivo": efectivo, "trabajador_id": trabajador_id,
+    })
+    return {"ok": True, "id": new_id}
+
+
+@router.get("/api/resumen/{semana_id}")
+async def api_resumen_semana(
+    semana_id: int,
+    plt: ProduccionRepo = Depends(get_produccion_repo),
+    pit: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+    tll: NominaTallerRepo = Depends(get_nomina_taller_repo),
+):
+    """Totales tipo captura: Taller + Plata + Pita + gran total."""
+    t_plt = plt.totales_semana(semana_id) if hasattr(plt, "totales_semana") else {}
+    t_pit = pit.totales(semana_id)
+    t_tll = tll.totales(semana_id)
+    plata = float(t_plt.get("total_efectivo") or 0)
+    pita = float(t_pit.get("total") or 0)
+    taller = float(t_tll.get("total") or 0)
+    return {
+        "semana_id": semana_id,
+        "nomina_taller": taller,
+        "nomina_plata": plata,
+        "nomina_pita": pita,
+        "total_nomina": taller + plata + pita,
+    }

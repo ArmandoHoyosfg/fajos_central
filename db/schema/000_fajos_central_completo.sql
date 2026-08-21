@@ -12,12 +12,19 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP VIEW IF EXISTS v_trabajadores_plt_activos;
+DROP VIEW IF EXISTS v_trabajadores_plt;
+DROP VIEW IF EXISTS v_trabajadores_pit;
+DROP VIEW IF EXISTS v_trabajadores_tll;
+DROP VIEW IF EXISTS v_trabajadores_por_area;
+DROP VIEW IF EXISTS v_totales_semana;
 DROP VIEW IF EXISTS v_produccion_semana;
 DROP VIEW IF EXISTS v_trabajos_activos;
 DROP TABLE IF EXISTS historial_produccion;
 DROP TABLE IF EXISTS import_log;
 DROP TABLE IF EXISTS cierre_dia;
 DROP TABLE IF EXISTS suministro_diario;
+DROP TABLE IF EXISTS produccion_pita;
+DROP TABLE IF EXISTS nomina_taller;
 DROP TABLE IF EXISTS produccion_plata;
 DROP TABLE IF EXISTS trabajos;
 DROP TABLE IF EXISTS resumen_nominas;
@@ -141,6 +148,51 @@ CREATE TABLE produccion_plata (
   CONSTRAINT fk_prod_semana FOREIGN KEY (semana_id) REFERENCES semanas(id) ON DELETE CASCADE,
   CONSTRAINT fk_prod_trab FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id) ON DELETE RESTRICT,
   CONSTRAINT fk_prod_trabajo FOREIGN KEY (trabajo_id) REFERENCES trabajos(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE nomina_taller (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  semana_id INT UNSIGNED NOT NULL,
+  trabajador_id INT UNSIGNED DEFAULT NULL,
+  nombre VARCHAR(80) NOT NULL,
+  ubic INT UNSIGNED NOT NULL,
+  puesto VARCHAR(60) DEFAULT NULL,
+  sueldo DECIMAL(12,2) NOT NULL DEFAULT 0,
+  extras DECIMAL(12,2) NOT NULL DEFAULT 0,
+  total DECIMAL(12,2) GENERATED ALWAYS AS (COALESCE(sueldo,0)+COALESCE(extras,0)) STORED,
+  firmado TINYINT(1) NOT NULL DEFAULT 0,
+  notas VARCHAR(255) DEFAULT NULL,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_semana (semana_id),
+  KEY idx_trab (trabajador_id),
+  CONSTRAINT fk_tll_semana FOREIGN KEY (semana_id) REFERENCES semanas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_tll_trab FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE produccion_pita (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  semana_id INT UNSIGNED NOT NULL,
+  trabajador_id INT UNSIGNED DEFAULT NULL,
+  nombre VARCHAR(80) NOT NULL,
+  ubic INT UNSIGNED NOT NULL,
+  modelo VARCHAR(80) DEFAULT NULL,
+  folio VARCHAR(40) DEFAULT NULL,
+  material VARCHAR(40) DEFAULT NULL,
+  producto VARCHAR(60) DEFAULT 'Cinturón',
+  pitas DECIMAL(12,2) DEFAULT NULL,
+  efectivo DECIMAL(12,2) NOT NULL DEFAULT 0,
+  firmado TINYINT(1) NOT NULL DEFAULT 0,
+  notas VARCHAR(255) DEFAULT NULL,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_semana (semana_id),
+  KEY idx_trab (trabajador_id),
+  CONSTRAINT fk_pit_semana FOREIGN KEY (semana_id) REFERENCES semanas(id) ON DELETE CASCADE,
+  CONSTRAINT fk_pit_trab FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE resumen_nominas (

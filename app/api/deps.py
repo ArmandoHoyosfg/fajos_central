@@ -3,6 +3,8 @@ from app.db.connection import Database, get_db
 from app.db.repository import (
     DashboardRepo,
     ProduccionRepo,
+    ProduccionPitaRepo,
+    NominaTallerRepo,
     ResumenRepo,
     SemanasRepo,
     TrabajadoresRepo,
@@ -68,3 +70,11 @@ def common_template_context(extra: dict | None = None) -> dict:
     if extra:
         ctx.update(extra)
     return ctx
+
+
+def get_nomina_taller_repo() -> NominaTallerRepo:
+    return NominaTallerRepo()
+
+
+def get_produccion_pita_repo() -> ProduccionPitaRepo:
+    return ProduccionPitaRepo()

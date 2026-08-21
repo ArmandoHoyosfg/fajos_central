@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.4.0] — 2026-08-21
+
+### Nóminas Taller (TLL) y Pita (PIT)
+- Tablas `nomina_taller` y `produccion_pita` + migración `001_nomina_taller_pita.sql`
+- Vistas por área: `v_trabajadores_plt/pit/tll`, `v_totales_semana`
+- Web: `/nomina-taller`, `/nomina-pita`, API resumen tres nóminas
+- Excel: hojas Nomina-TLL y Nomina-PIT + instrucciones
+- Trabajadores unificados; tipo define el área
+
 ## [3.3.1] — 2026-08-21
 
 ### UX para usuarios poco experimentados
