@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.4.1] — 2026-08-21
+
+### Export Excel formal por área
+- Taller / Pita / Resumen 3 nóminas imprimibles
+- Endpoints export nomina-taller, nomina-pita, resumen
+
 ## [3.4.0] — 2026-08-21
 
 ### Nóminas Taller (TLL) y Pita (PIT)

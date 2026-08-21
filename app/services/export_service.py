@@ -406,3 +406,337 @@ class ExportService:
         ))
         doc.build(story)
         return buf.getvalue()
+
+
+    # ---- Taller / Pita / Resumen completo ----
+
+    TLL_COLUMNS = [
+        ("nombre", "Nombre"),
+        ("ubic", "Ubic"),
+        ("puesto", "Puesto"),
+        ("sueldo", "Sueldo"),
+        ("extras", "Extras"),
+        ("total", "Total"),
+        ("firma", "Firma"),
+    ]
+    PIT_COLUMNS = [
+        ("nombre", "Nombre"),
+        ("ubic", "Ubic"),
+        ("modelo", "Modelo"),
+        ("folio", "Folio"),
+        ("material", "Material"),
+        ("producto", "Producto"),
+        ("pitas", "Pitas"),
+        ("efectivo", "Efectivo"),
+        ("firma", "Firma"),
+    ]
+
+    def export_nomina_taller(
+        self,
+        lineas: list[dict],
+        *,
+        codigo_semana: str = "",
+        filename_stem: str = "nomina_taller",
+        resumen: dict | None = None,
+    ) -> tuple[bytes, str, str]:
+        """Excel formal Taller: Nombre, Ubic, Puesto, Sueldo, Extras, Total, Firma."""
+        try:
+            data = self._xlsx_taller(lineas, codigo_semana, resumen)
+            return (
+                data,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                f"{filename_stem}.xlsx",
+            )
+        except Exception as e:
+            logger.exception("Error exportando taller")
+            raise ExportError("Fallo al exportar nómina taller.", cause=e) from e
+
+    def export_nomina_pita(
+        self,
+        lineas: list[dict],
+        *,
+        codigo_semana: str = "",
+        filename_stem: str = "nomina_pita",
+        resumen: dict | None = None,
+    ) -> tuple[bytes, str, str]:
+        """Excel formal Pita: Nombre, Ubic, Modelo, Folio, Material, Producto, Pitas, Efectivo, Firma."""
+        try:
+            data = self._xlsx_pita(lineas, codigo_semana, resumen)
+            return (
+                data,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                f"{filename_stem}.xlsx",
+            )
+        except Exception as e:
+            logger.exception("Error exportando pita")
+            raise ExportError("Fallo al exportar nómina pita.", cause=e) from e
+
+    def export_resumen_tres_nominas(
+        self,
+        *,
+        codigo_semana: str,
+        nomina_taller: float,
+        nomina_plata: float,
+        nomina_pita: float,
+        filename_stem: str = "resumen_nominas",
+    ) -> tuple[bytes, str, str]:
+        """Hoja de totales tipo captura: Taller | Plata | Pita | Total."""
+        try:
+            data = self._xlsx_resumen_totales(
+                codigo_semana, nomina_taller, nomina_plata, nomina_pita
+            )
+            return (
+                data,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                f"{filename_stem}.xlsx",
+            )
+        except Exception as e:
+            logger.exception("Error exportando resumen")
+            raise ExportError("Fallo al exportar resumen.", cause=e) from e
+
+    def _xlsx_taller(
+        self, lineas: list[dict], codigo_semana: str, resumen: dict | None
+    ) -> bytes:
+        from datetime import datetime
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Nomina-Taller"
+        ws["A1"] = "Taller de Fajos Central — NÓMINA TALLER (TLL)"
+        ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+        ws.merge_cells("A1:G1")
+        ws["A2"] = (
+            f"Semana: {codigo_semana}    |    Solo sueldo + extras (sin material)    |    "
+            f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        ws["A2"].font = Font(name="Calibri", size=10, color="666666")
+        ws.merge_cells("A2:G2")
+
+        headers = [c[1] for c in self.TLL_COLUMNS]
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(4, col, h)
+            cell.fill = self.HEADER_FILL
+            cell.font = self.HEADER_FONT
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = self.THIN
+
+        money = '"$"#,##0.00'
+        row_i = 5
+        total_sueldo = total_extras = total_all = 0.0
+        for r in sorted(lineas, key=lambda x: (int(x.get("ubic") or 0), str(x.get("nombre") or ""))):
+            sueldo = float(r.get("sueldo") or 0)
+            extras = float(r.get("extras") or 0)
+            tot = float(r.get("total") or (sueldo + extras))
+            total_sueldo += sueldo
+            total_extras += extras
+            total_all += tot
+            vals = [
+                r.get("nombre") or "",
+                r.get("ubic"),
+                r.get("puesto") or "",
+                sueldo if sueldo else None,
+                extras if extras else None,
+                tot if tot else None,
+                "______" if not r.get("firmado") else "✓",
+            ]
+            for col, v in enumerate(vals, 1):
+                cell = ws.cell(row_i, col, v if v is not None else "")
+                cell.border = self.THIN
+                if col in (4, 5, 6) and isinstance(v, (int, float)):
+                    cell.number_format = money
+                if row_i % 2 == 0:
+                    cell.fill = self.ALT_FILL
+            row_i += 1
+
+        # Total taller
+        row_i += 1
+        ws.cell(row_i, 3, "TOTAL TALLER").font = Font(bold=True, size=11)
+        for col, v in [(4, total_sueldo), (5, total_extras), (6, total_all)]:
+            cell = ws.cell(row_i, col, v)
+            cell.font = Font(bold=True)
+            cell.fill = self.GREEN_FILL
+            cell.number_format = money
+            cell.border = self.THIN
+
+        # Bloque resumen tres nóminas (si se pasó)
+        if resumen:
+            row_i += 2
+            ws.cell(row_i, 1, "RESUMEN DE NÓMINAS DE LA SEMANA").font = Font(bold=True, size=12, color="1F4E79")
+            row_i += 1
+            labels = [
+                ("Nómina Taller", float(resumen.get("nomina_taller") or total_all)),
+                ("Nómina Plata", float(resumen.get("nomina_plata") or 0)),
+                ("Nómina Pita", float(resumen.get("nomina_pita") or 0)),
+            ]
+            for label, amount in labels:
+                ws.cell(row_i, 1, label)
+                cell = ws.cell(row_i, 2, amount)
+                cell.number_format = money
+                row_i += 1
+            gran = sum(a for _, a in labels)
+            ws.cell(row_i, 1, "Total Nómina").font = Font(bold=True, size=12)
+            cell = ws.cell(row_i, 2, gran)
+            cell.font = Font(bold=True, size=12)
+            cell.fill = self.GREEN_FILL
+            cell.number_format = money
+
+        from openpyxl.utils import get_column_letter
+        widths = [20, 8, 14, 12, 12, 12, 10]
+        for i, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+        ws.print_title_rows = "4:4"
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.oddFooter.center.text = f"Nómina Taller {codigo_semana}"
+
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    def _xlsx_pita(
+        self, lineas: list[dict], codigo_semana: str, resumen: dict | None
+    ) -> bytes:
+        from datetime import datetime
+        from openpyxl.utils import get_column_letter
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Nomina-Pita"
+        ws["A1"] = "Taller de Fajos Central — NÓMINA PITA (PIT)"
+        ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+        ws.merge_cells("A1:I1")
+        ws["A2"] = (
+            f"Semana: {codigo_semana}    |    Material tipo PITA NxN · Producto (Cinturón) · Pitas suele vacío    |    "
+            f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        ws["A2"].font = Font(name="Calibri", size=10, color="666666")
+        ws.merge_cells("A2:I2")
+
+        headers = [c[1] for c in self.PIT_COLUMNS]
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(4, col, h)
+            cell.fill = self.HEADER_FILL
+            cell.font = self.HEADER_FONT
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = self.THIN
+
+        money = '"$"#,##0.00'
+        pita_fill = PatternFill("solid", fgColor="FCE4D6")
+        row_i = 5
+        total_ef = 0.0
+        for r in sorted(lineas, key=lambda x: (int(x.get("ubic") or 0), str(x.get("nombre") or ""))):
+            ef = float(r.get("efectivo") or 0)
+            total_ef += ef
+            pitas_v = r.get("pitas")
+            vals = [
+                r.get("nombre") or "",
+                r.get("ubic"),
+                r.get("modelo") or "",
+                r.get("folio") or "",
+                r.get("material") or "",
+                r.get("producto") or "Cinturón",
+                pitas_v if pitas_v is not None else "",
+                ef if ef else None,
+                "______" if not r.get("firmado") else "✓",
+            ]
+            for col, v in enumerate(vals, 1):
+                cell = ws.cell(row_i, col, v if v is not None else "")
+                cell.border = self.THIN
+                if col == 8 and isinstance(v, (int, float)):
+                    cell.number_format = money
+                mat = str(r.get("material") or "").upper()
+                if "PITA" in mat:
+                    cell.fill = pita_fill
+                elif row_i % 2 == 0:
+                    cell.fill = self.ALT_FILL
+            row_i += 1
+
+        row_i += 1
+        ws.cell(row_i, 7, "TOTAL PITA").font = Font(bold=True, size=11)
+        cell = ws.cell(row_i, 8, total_ef)
+        cell.font = Font(bold=True)
+        cell.fill = self.GREEN_FILL
+        cell.number_format = money
+        cell.border = self.THIN
+
+        if resumen:
+            row_i += 2
+            ws.cell(row_i, 1, "RESUMEN DE NÓMINAS DE LA SEMANA").font = Font(
+                bold=True, size=12, color="1F4E79"
+            )
+            row_i += 1
+            labels = [
+                ("Nómina Taller", float(resumen.get("nomina_taller") or 0)),
+                ("Nómina Plata", float(resumen.get("nomina_plata") or 0)),
+                ("Nómina Pita", float(resumen.get("nomina_pita") or total_ef)),
+            ]
+            for label, amount in labels:
+                ws.cell(row_i, 1, label)
+                cell = ws.cell(row_i, 2, amount)
+                cell.number_format = money
+                row_i += 1
+            gran = sum(a for _, a in labels)
+            ws.cell(row_i, 1, "Total Nómina").font = Font(bold=True, size=12)
+            cell = ws.cell(row_i, 2, gran)
+            cell.font = Font(bold=True, size=12)
+            cell.fill = self.GREEN_FILL
+            cell.number_format = money
+
+        widths = [18, 8, 14, 12, 14, 12, 10, 12, 10]
+        for i, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+        ws.print_title_rows = "4:4"
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.oddFooter.center.text = f"Nómina Pita {codigo_semana}"
+
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    def _xlsx_resumen_totales(
+        self,
+        codigo_semana: str,
+        nomina_taller: float,
+        nomina_plata: float,
+        nomina_pita: float,
+    ) -> bytes:
+        from datetime import datetime
+        from openpyxl.utils import get_column_letter
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Resumen"
+        ws["A1"] = "Taller de Fajos Central — RESUMEN DE NÓMINAS"
+        ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+        ws["A2"] = f"Semana: {codigo_semana}    |    {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        money = '"$"#,##0.00'
+        rows = [
+            ("Nómina Taller", float(nomina_taller or 0)),
+            ("Nómina Plata", float(nomina_plata or 0)),
+            ("Nómina Pita", float(nomina_pita or 0)),
+        ]
+        r = 4
+        for label, amount in rows:
+            ws.cell(r, 1, label).font = Font(size=12)
+            cell = ws.cell(r, 2, amount)
+            cell.number_format = money
+            cell.font = Font(size=12)
+            r += 1
+        gran = sum(a for _, a in rows)
+        ws.cell(r, 1, "Total Nómina").font = Font(bold=True, size=13)
+        cell = ws.cell(r, 2, gran)
+        cell.font = Font(bold=True, size=13)
+        cell.fill = self.GREEN_FILL
+        cell.number_format = money
+        ws.column_dimensions["A"].width = 18
+        ws.column_dimensions["B"].width = 14
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()

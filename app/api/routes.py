@@ -832,3 +832,109 @@ async def api_resumen_semana(
         "nomina_pita": pita,
         "total_nomina": taller + plata + pita,
     }
+
+
+@router.get("/api/export/nomina-taller/{semana_id}")
+async def api_export_taller(
+    semana_id: int,
+    include_resumen: int = Query(1),
+    repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
+    pit: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+    plt: ProduccionRepo = Depends(get_produccion_repo),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+    export_svc: ExportService = Depends(get_export_service),
+):
+    """Excel formal de nómina Taller (imprimible)."""
+    sem = sem_repo.obtener(semana_id)
+    if not sem:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Semana no encontrada")
+    lineas = repo.listar_por_semana(semana_id)
+    resumen = None
+    if include_resumen:
+        t_plt = plt.totales_semana(semana_id)
+        t_pit = pit.totales(semana_id)
+        t_tll = repo.totales(semana_id)
+        resumen = {
+            "nomina_taller": float(t_tll.get("total") or 0),
+            "nomina_plata": float(t_plt.get("total_efectivo") or 0),
+            "nomina_pita": float(t_pit.get("total") or 0),
+        }
+    codigo = sem.get("codigo") or str(semana_id)
+    data, media, fname = export_svc.export_nomina_taller(
+        lineas, codigo_semana=codigo, filename_stem=f"nomina_taller_{codigo}", resumen=resumen
+    )
+    return Response(
+        content=data,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.get("/api/export/nomina-pita/{semana_id}")
+async def api_export_pita(
+    semana_id: int,
+    include_resumen: int = Query(1),
+    repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+    tll: NominaTallerRepo = Depends(get_nomina_taller_repo),
+    plt: ProduccionRepo = Depends(get_produccion_repo),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+    export_svc: ExportService = Depends(get_export_service),
+):
+    """Excel formal de nómina Pita (imprimible)."""
+    sem = sem_repo.obtener(semana_id)
+    if not sem:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Semana no encontrada")
+    lineas = repo.listar_por_semana(semana_id)
+    resumen = None
+    if include_resumen:
+        t_plt = plt.totales_semana(semana_id)
+        t_pit = repo.totales(semana_id)
+        t_tll = tll.totales(semana_id)
+        resumen = {
+            "nomina_taller": float(t_tll.get("total") or 0),
+            "nomina_plata": float(t_plt.get("total_efectivo") or 0),
+            "nomina_pita": float(t_pit.get("total") or 0),
+        }
+    codigo = sem.get("codigo") or str(semana_id)
+    data, media, fname = export_svc.export_nomina_pita(
+        lineas, codigo_semana=codigo, filename_stem=f"nomina_pita_{codigo}", resumen=resumen
+    )
+    return Response(
+        content=data,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.get("/api/export/resumen/{semana_id}")
+async def api_export_resumen(
+    semana_id: int,
+    repo_tll: NominaTallerRepo = Depends(get_nomina_taller_repo),
+    repo_pit: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+    plt: ProduccionRepo = Depends(get_produccion_repo),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+    export_svc: ExportService = Depends(get_export_service),
+):
+    """Excel solo con el bloque de totales (Taller + Plata + Pita + Total)."""
+    sem = sem_repo.obtener(semana_id)
+    if not sem:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Semana no encontrada")
+    t_plt = plt.totales_semana(semana_id)
+    t_pit = repo_pit.totales(semana_id)
+    t_tll = repo_tll.totales(semana_id)
+    codigo = sem.get("codigo") or str(semana_id)
+    data, media, fname = export_svc.export_resumen_tres_nominas(
+        codigo_semana=codigo,
+        nomina_taller=float(t_tll.get("total") or 0),
+        nomina_plata=float(t_plt.get("total_efectivo") or 0),
+        nomina_pita=float(t_pit.get("total") or 0),
+        filename_stem=f"resumen_nominas_{codigo}",
+    )
+    return Response(
+        content=data,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )

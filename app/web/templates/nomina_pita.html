@@ -21,6 +21,8 @@
     </select>
   </form>
   {% if semana_id %}
+  <a class="btn" href="/api/export/nomina-pita/{{ semana_id }}">Excel formal Pita</a>
+  <a class="btn btn-secondary" href="/api/export/resumen/{{ semana_id }}">Resumen 3 nóminas</a>
   <div class="kpi-bar">
     <span class="kpi-item"><b>{{ totales.lineas or 0 }}</b> líneas</span>
     <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total or 0)|float) }}</b> total pita</span>

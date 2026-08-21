@@ -56,7 +56,8 @@
     <span class="kpi-item"><b>{{ totales.total_gramos or 0 }}</b> g</span>
     <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}</b></span>
   </div>
-  <a class="btn" href="/api/export/produccion/{{ semana_id }}?fmt=xlsx&formal=1">Formal Excel</a>
+  <a class="btn" href="/api/export/produccion/{{ semana_id }}?fmt=xlsx&formal=1">Formal Excel Plata</a>
+  <a class="btn btn-secondary" href="/api/export/resumen/{{ semana_id }}">Resumen 3 nóminas</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
   {% endif %}
