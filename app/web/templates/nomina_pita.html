@@ -91,6 +91,7 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/cell_edit.js"></script>
 <script>
 const SID = {{ semana_id or 'null' }};
 function toast(msg, err) {
@@ -143,28 +144,25 @@ async function delPit(id) {
 }
 document.addEventListener('DOMContentLoaded', () => {
 
-  document.querySelectorAll('input.cell-edit').forEach(inp => {
-    inp.addEventListener('dblclick', () => {
-      if (!inp.readOnly) return;
-      if (!confirm('¿Editar este campo?')) return;
-      inp.readOnly = false;
-      inp.focus();
-      inp.select();
+  function onSaved(id, field, value, tr) {
+    if (field === 'efectivo') {
+      let sum = 0;
+      document.querySelectorAll('tr[data-id] input[data-field="efectivo"]').forEach(inp => {
+        const v = parseFloat(String(inp.value||'0').replace(',','.'));
+        if (!isNaN(v)) sum += v;
+      });
+      const el = document.getElementById('kpi-total');
+      if (el) el.textContent = '$' + sum.toFixed(2);
+    }
+  }
+
+  if (window.FajosCellEdit) {
+    FajosCellEdit.bindCellEdits({
+      selector: 'input.cell-edit',
+      urlFor: (id) => '/api/nomina-pita/linea/' + id,
+      onSaved: onSaved
     });
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-      if (e.key === 'Escape') { inp.readOnly = true; inp.blur(); }
-    });
-    inp.addEventListener('blur', async () => {
-      if (inp.readOnly) return;
-      const tr = inp.closest('tr');
-      const id = tr && tr.dataset.id;
-      if (!id) return;
-      const ok = await patchPit(id, inp.dataset.field, inp.value);
-      inp.readOnly = true;
-      if (!ok) location.reload();
-    });
-  });
+  }
 });
 </script>
 {% endblock %}

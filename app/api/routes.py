@@ -933,57 +933,75 @@ async def api_export_resumen(
     )
 
 
+def _parse_num(val: str | None, default=None, allow_empty_none: bool = True):
+    """Convierte string de formulario a float de forma segura."""
+    if val is None:
+        return default
+    s = str(val).strip().replace(",", ".")
+    if s == "":
+        return None if allow_empty_none else 0.0
+    try:
+        return float(s)
+    except ValueError as e:
+        from app.core.exceptions import ValidationAppError
+        raise ValidationAppError(f"Valor numérico inválido: {val!r}") from e
+
+
 @router.patch("/api/nomina-pita/linea/{row_id}")
 async def api_patch_pita(
     row_id: int,
-    modelo: str | None = Form(None),
-    folio: str | None = Form(None),
-    material: str | None = Form(None),
-    producto: str | None = Form(None),
-    pitas: str | None = Form(None),
-    efectivo: str | None = Form(None),
-    firmado: int | None = Form(None),
+    request: Request,
     repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
 ):
+    """Actualiza solo los campos enviados en el formulario."""
+    form = await request.form()
     data = {}
-    if modelo is not None:
-        data["modelo"] = modelo or None
-    if folio is not None:
-        data["folio"] = folio or None
-    if material is not None:
-        data["material"] = material or None
-    if producto is not None:
-        data["producto"] = producto or None
-    if pitas is not None:
-        data["pitas"] = float(pitas) if str(pitas).strip() != "" else None
-    if efectivo is not None:
-        data["efectivo"] = float(efectivo) if str(efectivo).strip() != "" else 0
-    if firmado is not None:
-        data["firmado"] = 1 if int(firmado) else 0
+    for key in ("modelo", "folio", "material", "producto", "notas"):
+        if key in form:
+            v = str(form.get(key) or "").strip()
+            data[key] = v or None
+    if "pitas" in form:
+        data["pitas"] = _parse_num(str(form.get("pitas")), allow_empty_none=True)
+    if "efectivo" in form:
+        data["efectivo"] = _parse_num(str(form.get("efectivo")), default=0, allow_empty_none=False) or 0
+    if "firmado" in form:
+        try:
+            data["firmado"] = 1 if int(str(form.get("firmado"))) else 0
+        except ValueError:
+            data["firmado"] = 0
+    if not data:
+        return {"ok": True, "id": row_id, "unchanged": True}
     repo.actualizar(row_id, data)
-    return {"ok": True, "id": row_id}
+    return {"ok": True, "id": row_id, "updated": list(data.keys())}
 
 
 @router.patch("/api/nomina-taller/linea/{row_id}")
 async def api_patch_taller(
     row_id: int,
-    puesto: str | None = Form(None),
-    sueldo: str | None = Form(None),
-    extras: str | None = Form(None),
-    firmado: int | None = Form(None),
+    request: Request,
     repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
 ):
+    """Actualiza solo los campos enviados en el formulario."""
+    form = await request.form()
     data = {}
-    if puesto is not None:
-        data["puesto"] = puesto or None
-    if sueldo is not None:
-        data["sueldo"] = float(sueldo) if str(sueldo).strip() != "" else 0
-    if extras is not None:
-        data["extras"] = float(extras) if str(extras).strip() != "" else 0
-    if firmado is not None:
-        data["firmado"] = 1 if int(firmado) else 0
+    if "puesto" in form:
+        v = str(form.get("puesto") or "").strip()
+        data["puesto"] = v or None
+    if "sueldo" in form:
+        data["sueldo"] = _parse_num(str(form.get("sueldo")), default=0, allow_empty_none=False) or 0
+    if "extras" in form:
+        data["extras"] = _parse_num(str(form.get("extras")), default=0, allow_empty_none=False) or 0
+    if "firmado" in form:
+        try:
+            data["firmado"] = 1 if int(str(form.get("firmado"))) else 0
+        except ValueError:
+            data["firmado"] = 0
+    if "notas" in form:
+        data["notas"] = str(form.get("notas") or "").strip() or None
+    if not data:
+        return {"ok": True, "id": row_id, "unchanged": True}
     repo.actualizar(row_id, data)
-    return {"ok": True, "id": row_id}
+    return {"ok": True, "id": row_id, "updated": list(data.keys())}
 
 
 @router.get("/api/export/master")

@@ -83,6 +83,7 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/cell_edit.js"></script>
 <script>
 const SID = {{ semana_id or 'null' }};
 function toast(msg, err) {
@@ -137,28 +138,30 @@ async function delTll(id) {
 }
 document.addEventListener('DOMContentLoaded', () => {
 
-  document.querySelectorAll('input.cell-edit').forEach(inp => {
-    inp.addEventListener('dblclick', () => {
-      if (!inp.readOnly) return;
-      if (!confirm('¿Editar este campo?')) return;
-      inp.readOnly = false;
-      inp.focus();
-      inp.select();
+  function onSaved(id, field, value, tr) {
+    if (field === 'sueldo' || field === 'extras') {
+      const s = parseFloat(String(tr.querySelector('[data-field="sueldo"]').value||'0').replace(',','.'))||0;
+      const x = parseFloat(String(tr.querySelector('[data-field="extras"]').value||'0').replace(',','.'))||0;
+      const cell = tr.querySelector('.cell-total strong');
+      if (cell) cell.textContent = '$' + (s+x).toFixed(2);
+      let sum = 0;
+      document.querySelectorAll('tr[data-id]').forEach(row => {
+        const a = parseFloat(String(row.querySelector('[data-field="sueldo"]').value||'0').replace(',','.'))||0;
+        const b = parseFloat(String(row.querySelector('[data-field="extras"]').value||'0').replace(',','.'))||0;
+        sum += a+b;
+      });
+      const el = document.getElementById('kpi-total');
+      if (el) el.textContent = '$' + sum.toFixed(2);
+    }
+  }
+
+  if (window.FajosCellEdit) {
+    FajosCellEdit.bindCellEdits({
+      selector: 'input.cell-edit',
+      urlFor: (id) => '/api/nomina-taller/linea/' + id,
+      onSaved: onSaved
     });
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
-      if (e.key === 'Escape') { inp.readOnly = true; inp.blur(); }
-    });
-    inp.addEventListener('blur', async () => {
-      if (inp.readOnly) return;
-      const tr = inp.closest('tr');
-      const id = tr && tr.dataset.id;
-      if (!id) return;
-      const ok = await patchTll(id, inp.dataset.field, inp.value);
-      inp.readOnly = true;
-      if (!ok) location.reload();
-    });
-  });
+  }
 });
 </script>
 {% endblock %}
