@@ -95,6 +95,44 @@ class TrabajadoresRepo(BaseRepo):
         except Exception as e:
             raise DatabaseError("No se pudo agregar el trabajador.", cause=e) from e
 
+
+    def actualizar(self, trabajador_id: int, data: dict) -> dict:
+        self.obtener(trabajador_id)
+        fields = []
+        params: list[Any] = []
+        mapping = {
+            "nombre_mostrar": "nombre_mostrar",
+            "nombre_completo": "nombre_completo",
+            "ubic": "ubic",
+            "tipo": "tipo",
+            "puesto": "puesto",
+            "fecha_incorporacion": "fecha_incorporacion",
+            "notas": "notas",
+            "activo": "activo",
+        }
+        for key, col in mapping.items():
+            if key in data and data[key] is not None:
+                fields.append(f"{col} = %s")
+                params.append(data[key])
+        if not fields:
+            return self.obtener(trabajador_id)
+        # nombre_completo default if only nombre_mostrar
+        if "nombre_mostrar" in data and "nombre_completo" not in data:
+            fields.append("nombre_completo = %s")
+            params.append(data["nombre_mostrar"])
+        params.append(trabajador_id)
+        sql = f"UPDATE trabajadores SET {', '.join(fields)} WHERE id = %s"
+        with self.db.cursor() as cur:
+            cur.execute(sql, params)
+        logger.info("Trabajador actualizado id=%s", trabajador_id)
+        return self.obtener(trabajador_id)
+
+    def activar(self, trabajador_id: int) -> None:
+        self.obtener(trabajador_id)
+        with self.db.cursor() as cur:
+            cur.execute("UPDATE trabajadores SET activo = 1 WHERE id = %s", (trabajador_id,))
+        logger.info("Trabajador reactivado id=%s", trabajador_id)
+
     def desactivar(self, trabajador_id: int) -> None:
         self.obtener(trabajador_id)  # valida existencia
         with self.db.cursor() as cur:

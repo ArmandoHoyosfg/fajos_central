@@ -8,6 +8,10 @@ from datetime import date
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QVBoxLayout as _QVBox,
+
     QComboBox,
     QDateEdit,
     QFormLayout,
@@ -105,10 +109,21 @@ class WorkersWidget(QWidget):
         self.table.verticalHeader().setVisible(False)
         layout.addWidget(self.table)
 
-        btn_deact = QPushButton("Desactivar seleccionado")
+        act_row = QHBoxLayout()
+        btn_edit = QPushButton("Editar seleccionado")
+        btn_edit.clicked.connect(self._on_edit)
+        btn_deact = QPushButton("Dar de baja")
         btn_deact.setProperty("cssClass", "danger")
         btn_deact.clicked.connect(self._on_deactivate)
-        layout.addWidget(btn_deact)
+        btn_act = QPushButton("Reactivar")
+        btn_act.setProperty("cssClass", "success")
+        btn_act.clicked.connect(self._on_reactivate)
+        act_row.addWidget(btn_edit)
+        act_row.addWidget(btn_deact)
+        act_row.addWidget(btn_act)
+        act_row.addStretch()
+        layout.addLayout(act_row)
+        self.table.doubleClicked.connect(lambda: self._on_edit())
 
     def refresh(self):
         try:
@@ -180,6 +195,109 @@ class WorkersWidget(QWidget):
             self.refresh()
             self.data_changed.emit()
             QMessageBox.information(self, "OK", "Trabajador agregado.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+
+    def _selected_id(self):
+        rows = self.table.selectionModel().selectedRows()
+        if not rows:
+            return None
+        item = self.table.item(rows[0].row(), 0)
+        try:
+            return int(item.text())
+        except (TypeError, ValueError, AttributeError):
+            return None
+
+    def _on_edit(self):
+        tid = self._selected_id()
+        if not tid:
+            QMessageBox.information(self, "Editar", "Selecciona un trabajador en la tabla.")
+            return
+        row = next((r for r in self._all_rows if r.get("id") == tid), None)
+        if not row:
+            QMessageBox.warning(self, "Editar", "No se encontró el registro.")
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Editar — {row.get('nombre_mostrar')}")
+        dlg.setMinimumWidth(380)
+        form = QFormLayout(dlg)
+        inp_n = QLineEdit(str(row.get("nombre_mostrar") or ""))
+        inp_c = QLineEdit(str(row.get("nombre_completo") or ""))
+        inp_u = QSpinBox()
+        inp_u.setRange(1, 9999)
+        try:
+            inp_u.setValue(int(row.get("ubic") or 1))
+        except (TypeError, ValueError):
+            inp_u.setValue(1)
+        cmb_t = QComboBox()
+        cmb_t.addItems(["PLT", "PIT", "TLL", "PLT/PIT", "Mixto"])
+        tip = str(row.get("tipo") or "PLT")
+        idx = cmb_t.findText(tip)
+        if idx >= 0:
+            cmb_t.setCurrentIndex(idx)
+        inp_p = QLineEdit(str(row.get("puesto") or ""))
+        date_i = QDateEdit()
+        date_i.setCalendarPopup(True)
+        from datetime import date as _date
+        fi = row.get("fecha_incorporacion")
+        if fi:
+            try:
+                if hasattr(fi, "year"):
+                    date_i.setDate(fi if not hasattr(fi, "date") else fi)
+                else:
+                    y, m, d = str(fi)[:10].split("-")
+                    date_i.setDate(_date(int(y), int(m), int(d)))
+            except Exception:
+                date_i.setDate(_date.today())
+        else:
+            date_i.setDate(_date.today())
+        cmb_a = QComboBox()
+        cmb_a.addItem("Activo", 1)
+        cmb_a.addItem("Baja", 0)
+        cmb_a.setCurrentIndex(0 if row.get("activo") else 1)
+        form.addRow("Nombre:", inp_n)
+        form.addRow("Nombre completo:", inp_c)
+        form.addRow("Ubicación:", inp_u)
+        form.addRow("Tipo:", cmb_t)
+        form.addRow("Puesto:", inp_p)
+        form.addRow("Incorporación:", date_i)
+        form.addRow("Estado:", cmb_a)
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        form.addRow(buttons)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        try:
+            self.repo.actualizar(
+                tid,
+                nombre_mostrar=inp_n.text().strip(),
+                nombre_completo=inp_c.text().strip() or inp_n.text().strip(),
+                ubic=inp_u.value(),
+                tipo=cmb_t.currentText(),
+                puesto=inp_p.text().strip() or None,
+                fecha_incorporacion=date_i.date().toPython().isoformat(),
+                activo=cmb_a.currentData(),
+            )
+            self.data_changed.emit()
+            self.refresh()
+            QMessageBox.information(self, "OK", "Trabajador actualizado.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+    def _on_reactivate(self):
+        tid = self._selected_id()
+        if not tid:
+            QMessageBox.information(self, "Reactivar", "Selecciona un trabajador.")
+            return
+        try:
+            if hasattr(self.repo, "activar"):
+                self.repo.activar(tid)
+            else:
+                self.repo.actualizar(tid, activo=1)
+            self.data_changed.emit()
+            self.refresh()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 

@@ -4,94 +4,217 @@
 <div class="page-head">
   <div>
     <h1>Trabajadores</h1>
-    <p class="muted">Mismo nombre + distinta ubic = personas diferentes</p>
+    <p class="muted">Alta, edición, cambios y bajas. Los inactivos no aparecen en captura nueva.</p>
   </div>
-  <form class="search-box" action="/trabajadores" method="get">
-    <input type="search" name="q" value="{{ q }}" placeholder="Nombre o ubic...">
-    <button type="submit"><i data-lucide="search"></i></button>
-  </form>
+  <button type="button" class="btn" onclick="openEditId(null)">＋ Nuevo</button>
 </div>
 
-<div class="card" style="margin-bottom:1rem;">
-  <strong><i data-lucide="user-plus" style="width:16px;height:16px;vertical-align:middle"></i> Agregar trabajador</strong>
-  <form class="inline" style="margin-top:0.75rem;" method="post" action="/api/trabajadores"
-        onsubmit="return submitTrabajador(event)">
-    <div>
-      <label class="field-label">Nombre</label>
-      <input name="nombre_mostrar" required placeholder="Nombre">
-    </div>
-    <div>
-      <label class="field-label">Ubic</label>
-      <input name="ubic" type="number" required style="width:90px;">
-    </div>
-    <div>
-      <label class="field-label">Tipo</label>
-      <select name="tipo">
-        <option>PLT</option><option>PIT</option><option>TLL</option>
-        <option>PLT/PIT</option><option>Mixto</option>
-      </select>
-    </div>
-    <div>
-      <label class="field-label">Puesto</label>
-      <input name="puesto" placeholder="(TLL)">
-    </div>
-    <button class="btn btn-success" type="submit"><i data-lucide="plus"></i> Agregar</button>
+<div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+  <form class="inline" method="get" action="/trabajadores">
+    <input type="search" name="q" value="{{ q or '' }}" placeholder="Buscar nombre o ubic…" style="min-width:220px;">
+    <button type="submit" class="btn btn-secondary">Buscar</button>
   </form>
+  <label class="muted"><input type="checkbox" id="flt-activos" checked onchange="filterRows()"> Solo activos</label>
+  <input type="search" id="flt-local" placeholder="Filtro rápido…" style="min-width:160px;" oninput="filterRows()">
 </div>
+<div id="toast" class="toast-web" hidden></div>
 
 <div class="table-wrap">
-<div class="filter-row"><input type="search" id="flt-trab" placeholder="Filtrar trabajadores…" style="min-width:220px;" oninput="filterTrab()"></div>
 <table>
   <thead>
     <tr>
-      <th>ID</th><th>Nombre</th><th>Ubic</th><th>Tipo</th>
-      <th>Puesto</th><th>Activo</th><th>Incorporación</th>
+      <th>ID</th>
+      <th>Nombre</th>
+      <th>Nombre completo</th>
+      <th>Ubic</th>
+      <th>Tipo</th>
+      <th>Puesto</th>
+      <th>Estado</th>
+      <th>Incorp.</th>
+      <th>Acciones</th>
     </tr>
   </thead>
   <tbody>
-    {% for t in trabajadores %}
-    <tr>
+  {% for t in trabajadores %}
+    <tr data-activo="{{ 1 if t.activo else 0 }}" data-id="{{ t.id }}">
       <td>{{ t.id }}</td>
       <td>{{ t.nombre_mostrar }}</td>
+      <td>{{ t.nombre_completo or '—' }}</td>
       <td>{{ t.ubic }}</td>
-      <td>
-        {% set tipo = (t.tipo or '')|upper %}
-        {% if 'PLT' in tipo and 'PIT' in tipo %}<span class="badge badge-mix">{{ t.tipo }}</span>
-        {% elif 'PLT' in tipo %}<span class="badge badge-plt">{{ t.tipo }}</span>
-        {% elif 'PIT' in tipo %}<span class="badge badge-pit">{{ t.tipo }}</span>
-        {% elif 'TLL' in tipo %}<span class="badge badge-tll">{{ t.tipo }}</span>
-        {% else %}<span class="badge badge-mix">{{ t.tipo or '—' }}</span>{% endif %}
-      </td>
+      <td>{{ t.tipo or 'PLT' }}</td>
       <td>{{ t.puesto or '—' }}</td>
-      <td>{% if t.activo %}<span class="badge badge-ok">Sí</span>{% else %}<span class="badge badge-off">No</span>{% endif %}</td>
+      <td>
+        {% if t.activo %}
+        <span style="color:#a6e3a1;font-weight:600">Activo</span>
+        {% else %}
+        <span style="color:#f38ba8;font-weight:600">Baja</span>
+        {% endif %}
+      </td>
       <td>{{ t.fecha_incorporacion or '—' }}</td>
+      <td style="white-space:nowrap">
+        <button type="button" class="btn btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.8rem"
+                onclick="openEditId({{ t.id }})">Editar</button>
+        {% if t.activo %}
+        <button type="button" class="btn btn-danger" style="padding:0.2rem 0.5rem;font-size:0.8rem"
+                onclick="baja({{ t.id }}, '{{ t.nombre_mostrar }}')">Baja</button>
+        {% else %}
+        <button type="button" class="btn" style="padding:0.2rem 0.5rem;font-size:0.8rem"
+                onclick="activar({{ t.id }})">Reactivar</button>
+        {% endif %}
+      </td>
     </tr>
-    {% else %}
-    <tr><td colspan="7" class="muted">Sin trabajadores. Agrega uno o importa el Excel.</td></tr>
-    {% endfor %}
+  {% else %}
+    <tr><td colspan="9" class="muted">No hay trabajadores. Agrega el primero.</td></tr>
+  {% endfor %}
   </tbody>
 </table>
 </div>
 
-<script>
-async function submitTrabajador(e) {
-  e.preventDefault();
-  const form = e.target;
-  const fd = new FormData(form);
-  const res = await fetch('/api/trabajadores', { method: 'POST', body: fd });
-  const data = await res.json();
-  if (res.ok && data.ok) location.reload();
-  else alert(data.user_message || data.message || 'Error al agregar');
-  return false;
-}
-</script>
+<div class="modal-backdrop" id="modal-trab" hidden>
+  <div class="modal" role="dialog">
+    <h2 id="modal-trab-title">Trabajador</h2>
+    <form id="form-trab" onsubmit="return saveTrab(event)">
+      <input type="hidden" name="id" id="trab-id" value="">
+      <div class="form-grid">
+        <div class="full">
+          <label>Nombre (mostrar)</label>
+          <input name="nombre_mostrar" id="trab-nombre" required>
+        </div>
+        <div class="full">
+          <label>Nombre completo</label>
+          <input name="nombre_completo" id="trab-completo">
+        </div>
+        <div>
+          <label>Ubicación</label>
+          <input name="ubic" id="trab-ubic" type="number" min="1" required>
+        </div>
+        <div>
+          <label>Tipo</label>
+          <select name="tipo" id="trab-tipo">
+            <option>PLT</option><option>PIT</option><option>TLL</option>
+            <option>PLT/PIT</option><option>Mixto</option>
+          </select>
+        </div>
+        <div>
+          <label>Puesto</label>
+          <input name="puesto" id="trab-puesto" placeholder="solo TLL / opcional">
+        </div>
+        <div>
+          <label>Incorporación</label>
+          <input name="fecha_incorporacion" id="trab-fecha" type="date">
+        </div>
+        <div class="full">
+          <label>Notas</label>
+          <input name="notas" id="trab-notas">
+        </div>
+        <div>
+          <label>Estado</label>
+          <select name="activo" id="trab-activo">
+            <option value="1">Activo</option>
+            <option value="0">Baja</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-trab')">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}
 
+{% block scripts %}
 <script>
-function filterTrab() {
-  const q = (document.getElementById('flt-trab').value || '').toLowerCase();
-  document.querySelectorAll('table tbody tr').forEach(tr => {
-    tr.style.display = !q || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+function showToast(msg, err) {
+  if (window.FajosLive) return FajosLive.showToast(msg, err);
+  const el = document.getElementById('toast');
+  if (!el) { alert(msg); return; }
+  el.hidden = false;
+  el.textContent = msg;
+  el.className = 'toast-web' + (err ? ' err' : ' ok');
+  clearTimeout(window._tt); window._tt = setTimeout(() => el.hidden = true, 2800);
+}
+function openModal(id) { const el = document.getElementById(id); if (el) el.hidden = false; }
+function closeModal(id) { const el = document.getElementById(id); if (el) el.hidden = true; }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop:not([hidden])').forEach(m => m.hidden = true);
+});
+
+function fillForm(t) {
+  document.getElementById('modal-trab-title').textContent = t ? 'Editar trabajador' : 'Nuevo trabajador';
+  document.getElementById('trab-id').value = t ? t.id : '';
+  document.getElementById('trab-nombre').value = t ? (t.nombre_mostrar || '') : '';
+  document.getElementById('trab-completo').value = t ? (t.nombre_completo || '') : '';
+  document.getElementById('trab-ubic').value = t ? (t.ubic || '') : '';
+  document.getElementById('trab-tipo').value = t ? (t.tipo || 'PLT') : 'PLT';
+  document.getElementById('trab-puesto').value = t ? (t.puesto || '') : '';
+  document.getElementById('trab-fecha').value = t && t.fecha_incorporacion ? String(t.fecha_incorporacion).slice(0,10) : '';
+  document.getElementById('trab-notas').value = t ? (t.notas || '') : '';
+  document.getElementById('trab-activo').value = t && !t.activo ? '0' : '1';
+}
+function openEdit(t) { fillForm(t); openModal('modal-trab'); }
+async function openEditId(id) {
+  if (!id) { fillForm(null); openModal('modal-trab'); return; }
+  try {
+    const res = await fetch('/api/trabajadores/' + id);
+    const t = await res.json();
+    if (!res.ok) { showToast(t.message || 'No encontrado', true); return; }
+    fillForm(t);
+    openModal('modal-trab');
+  } catch (e) { showToast('Error al cargar', true); }
+}
+
+
+async function saveTrab(e) {
+  e.preventDefault();
+  const form = document.getElementById('form-trab');
+  const fd = new FormData(form);
+  const id = fd.get('id');
+  const body = new FormData();
+  ['nombre_mostrar','nombre_completo','ubic','tipo','puesto','fecha_incorporacion','notas','activo'].forEach(k => {
+    const v = fd.get(k);
+    if (v !== null && v !== undefined) body.set(k, v);
+  });
+  let res;
+  if (id) {
+    res = await fetch('/api/trabajadores/' + id, { method: 'PUT', body });
+  } else {
+    res = await fetch('/api/trabajadores', { method: 'POST', body });
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    showToast(id ? 'Trabajador actualizado' : 'Trabajador creado');
+    closeModal('modal-trab');
+    setTimeout(() => location.reload(), 350);
+  } else {
+    showToast(data.user_message || data.message || 'Error al guardar', true);
+  }
+  return false;
+}
+
+async function baja(id, nombre) {
+  if (!confirm('¿Dar de baja a ' + nombre + '?\\nNo se borran historiales; deja de aparecer en captura nueva.')) return;
+  const res = await fetch('/api/trabajadores/' + id + '/baja', { method: 'POST', body: new FormData() });
+  if (res.ok) { showToast('Baja registrada'); setTimeout(() => location.reload(), 350); }
+  else showToast('No se pudo dar de baja', true);
+}
+async function activar(id) {
+  const res = await fetch('/api/trabajadores/' + id + '/activar', { method: 'POST', body: new FormData() });
+  if (res.ok) { showToast('Reactivado'); setTimeout(() => location.reload(), 350); }
+  else showToast('No se pudo reactivar', true);
+}
+
+function filterRows() {
+  const solo = document.getElementById('flt-activos').checked;
+  const q = (document.getElementById('flt-local').value || '').toLowerCase();
+  document.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    let show = true;
+    if (solo && tr.dataset.activo !== '1') show = false;
+    if (q && !tr.textContent.toLowerCase().includes(q)) show = false;
+    tr.style.display = show ? '' : 'none';
   });
 }
+document.addEventListener('DOMContentLoaded', filterRows);
 </script>
+{% endblock %}

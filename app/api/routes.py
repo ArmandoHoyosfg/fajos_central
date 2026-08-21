@@ -432,16 +432,83 @@ async def api_crear_trabajador(
     tipo: str = Form("PLT"),
     puesto: str | None = Form(None),
     fecha_incorporacion: str | None = Form(None),
+    nombre_completo: str | None = Form(None),
+    notas: str | None = Form(None),
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
+    from app.core.normalize import canonical_name
     new_id = repo.agregar({
-        "nombre_mostrar": nombre_mostrar,
+        "nombre_mostrar": canonical_name(nombre_mostrar),
+        "nombre_completo": (nombre_completo or nombre_mostrar).strip(),
         "ubic": ubic,
         "tipo": tipo,
         "puesto": puesto,
         "fecha_incorporacion": fecha_incorporacion or None,
+        "notas": notas,
     })
     return {"id": new_id, "ok": True}
+
+
+
+@router.get("/api/trabajadores/{trabajador_id}")
+async def api_get_trabajador(
+    trabajador_id: int,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    return repo.obtener(trabajador_id)
+
+
+@router.put("/api/trabajadores/{trabajador_id}")
+@router.patch("/api/trabajadores/{trabajador_id}")
+async def api_update_trabajador(
+    trabajador_id: int,
+    nombre_mostrar: str | None = Form(None),
+    nombre_completo: str | None = Form(None),
+    ubic: int | None = Form(None),
+    tipo: str | None = Form(None),
+    puesto: str | None = Form(None),
+    fecha_incorporacion: str | None = Form(None),
+    notas: str | None = Form(None),
+    activo: int | None = Form(None),
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    from app.core.normalize import canonical_name
+    data: dict = {}
+    if nombre_mostrar is not None and nombre_mostrar.strip():
+        data["nombre_mostrar"] = canonical_name(nombre_mostrar)
+    if nombre_completo is not None:
+        data["nombre_completo"] = nombre_completo.strip() or data.get("nombre_mostrar")
+    if ubic is not None:
+        data["ubic"] = ubic
+    if tipo is not None:
+        data["tipo"] = tipo
+    if puesto is not None:
+        data["puesto"] = puesto or None
+    if fecha_incorporacion is not None:
+        data["fecha_incorporacion"] = fecha_incorporacion or None
+    if notas is not None:
+        data["notas"] = notas or None
+    if activo is not None:
+        data["activo"] = 1 if int(activo) else 0
+    return repo.actualizar(trabajador_id, data)
+
+
+@router.post("/api/trabajadores/{trabajador_id}/baja")
+async def api_baja_trabajador(
+    trabajador_id: int,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    repo.desactivar(trabajador_id)
+    return {"ok": True, "id": trabajador_id, "activo": 0}
+
+
+@router.post("/api/trabajadores/{trabajador_id}/activar")
+async def api_activar_trabajador(
+    trabajador_id: int,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    repo.activar(trabajador_id)
+    return {"ok": True, "id": trabajador_id, "activo": 1}
 
 
 @router.get("/api/semanas")

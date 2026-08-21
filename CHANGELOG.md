@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.3.0] — 2026-08-21
+
+### Trabajadores: edición, cambios y bajas
+- Web: modal editar / nuevo, Baja y Reactivar
+- API: PUT/PATCH, POST baja, POST activar
+- Desktop: diálogo editar, baja y reactivar (doble clic en fila)
+
 ## [3.2.4] — 2026-08-21
 
 ### Revisión exhaustiva

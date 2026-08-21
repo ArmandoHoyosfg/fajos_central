@@ -81,7 +81,13 @@ class TrabajadoresRepo(BaseRepo):
         cur.execute(sql, (*fields.values(), trabajador_id))
         cur.close()
 
+    def activar(self, trabajador_id: int) -> None:
+        cur = self.db.cursor()
+        cur.execute("UPDATE trabajadores SET activo = 1 WHERE id = %s", (trabajador_id,))
+        cur.close()
+
     def desactivar(self, trabajador_id: int) -> None:
+
         self.actualizar(trabajador_id, activo=0)
 
 
