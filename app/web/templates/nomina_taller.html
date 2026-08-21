@@ -53,11 +53,15 @@
     <col class="col-nombre"><col class="col-ubic"><col class="col-puesto">
     <col class="col-sueldo"><col class="col-extras"><col class="col-total"><col class="col-firma">
   </colgroup>
-  <tr><th>Nombre</th><th>Ubic</th><th>Puesto</th><th>Sueldo</th><th>Extras</th><th>Total</th><th>Firma</th></tr>
+  <tr><th></th><th>Nombre</th><th>Ubic</th><th>Puesto</th><th>Sueldo</th><th>Extras</th><th>Total</th><th>Firma</th></tr>
   </thead>
   <tbody>
   {% for r in lineas %}
     <tr data-id="{{ r.id }}">
+      <td>
+        <button type="button" class="btn btn-danger" style="padding:0.12rem 0.4rem;font-size:0.7rem;min-height:0"
+                onclick="delTll({{ r.id }})" title="Eliminar línea">✕</button>
+      </td>
       <td>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="puesto" value="{{ r.puesto or '' }}" readonly title="Doble clic para editar"></td>
@@ -70,7 +74,7 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="7" class="muted">Sin líneas de taller esta semana.</td></tr>
+    <tr><td colspan="8" class="muted">Sin líneas de taller esta semana.</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -126,7 +130,14 @@ async function patchTll(id, field, value) {
   }
   return true;
 }
+async function delTll(id) {
+  if (!confirm('¿Eliminar esta línea de taller?')) return;
+  const res = await fetch('/api/nomina-taller/linea/' + id, { method: 'DELETE' });
+  if (res.ok) location.reload();
+  else toast('No se pudo eliminar', true);
+}
 document.addEventListener('DOMContentLoaded', () => {
+
   document.querySelectorAll('input.cell-edit').forEach(inp => {
     inp.addEventListener('dblclick', () => {
       if (!inp.readOnly) return;

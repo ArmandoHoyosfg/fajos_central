@@ -997,3 +997,21 @@ async def api_export_master(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.delete("/api/nomina-pita/linea/{row_id}")
+async def api_del_pita(
+    row_id: int,
+    repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+):
+    repo.eliminar(row_id)
+    return {"ok": True, "id": row_id}
+
+
+@router.delete("/api/nomina-taller/linea/{row_id}")
+async def api_del_taller(
+    row_id: int,
+    repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
+):
+    repo.eliminar(row_id)
+    return {"ok": True, "id": row_id}

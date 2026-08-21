@@ -51,11 +51,12 @@
 <div class="table-wrap table-compact">
 <table>
   <colgroup>
-    <col class="col-nombre"><col class="col-ubic"><col class="col-modelo"><col class="col-folio">
+    <col style="width:4%"><col class="col-nombre"><col class="col-ubic"><col class="col-modelo"><col class="col-folio">
     <col class="col-mat"><col class="col-prod"><col class="col-pitas"><col class="col-efec"><col class="col-firma">
   </colgroup>
   <thead>
     <tr>
+      <th></th>
       <th>Nombre</th><th>Ubic</th><th>Modelo</th><th>Folio</th>
       <th>Material</th><th>Producto</th><th>Pitas</th><th>Efectivo</th><th>Firma</th>
     </tr>
@@ -63,6 +64,10 @@
   <tbody>
   {% for r in lineas %}
     <tr data-id="{{ r.id }}">
+      <td>
+        <button type="button" class="btn btn-danger" style="padding:0.12rem 0.4rem;font-size:0.7rem;min-height:0"
+                onclick="delPit({{ r.id }})" title="Eliminar línea">✕</button>
+      </td>
       <td title="{{ r.nombre }}">{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="modelo" value="{{ r.modelo or '' }}" readonly title="Doble clic para editar"></td>
@@ -77,7 +82,7 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="9" class="muted">Sin líneas de pita esta semana.</td></tr>
+    <tr><td colspan="10" class="muted">Sin líneas de pita esta semana.</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -131,7 +136,14 @@ function recalcKpi() {
   const el = document.getElementById('kpi-total');
   if (el) el.textContent = '$' + sum.toFixed(2);
 }
+async function delPit(id) {
+  if (!confirm('¿Eliminar esta línea de pita?')) return;
+  const res = await fetch('/api/nomina-pita/linea/' + id, { method: 'DELETE' });
+  if (res.ok) location.reload();
+  else toast('No se pudo eliminar', true);
+}
 document.addEventListener('DOMContentLoaded', () => {
+
   document.querySelectorAll('input.cell-edit').forEach(inp => {
     inp.addEventListener('dblclick', () => {
       if (!inp.readOnly) return;
