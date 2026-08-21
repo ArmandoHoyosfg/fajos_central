@@ -1,81 +1,96 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Fajos Piteados Central{% endblock %}
+{% block title %}Inicio — Fajos Piteados Central{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Dashboard</h1>
-    <p class="muted">Resumen del taller · misma información que la app de escritorio</p>
+    <h1>Inicio</h1>
+    <p class="muted">{{ fecha_hoy_larga }} · Resumen del taller</p>
   </div>
   <form class="search-box" action="/buscar" method="get">
-    <input type="search" name="q" placeholder="Buscar trabajador o semana..." aria-label="Buscar">
-    <button type="submit" title="Buscar"><i data-lucide="search"></i></button>
+    <input type="search" name="q" placeholder="Buscar trabajador o semana…" aria-label="Buscar">
+    <button type="submit" class="btn btn-secondary" type="submit">Buscar</button>
   </form>
 </div>
 
 {% if not db_ok %}
 <div class="flash err">
-  No hay conexión a MariaDB. Configura usuario/contraseña en el <strong>launcher</strong> (config.ini) y reinicia el servidor.
+  <strong>Sin conexión a la base de datos.</strong><br>
+  Abre el <strong>launcher</strong> en la computadora del taller → Configurar conexión → Probar → reinicia el servidor.
 </div>
 {% endif %}
 
-<div class="actions">
-  <a class="btn" href="/produccion"><i data-lucide="hammer"></i> Producción</a>
-  <a class="btn btn-secondary" href="/trabajadores"><i data-lucide="users"></i> Trabajadores</a>
-  <a class="btn btn-secondary" href="/buscar"><i data-lucide="search"></i> Búsqueda</a>
-  <a class="btn btn-secondary" href="/docs" target="_blank"><i data-lucide="book-open"></i> API</a>
+<div class="help-guide" id="guia-inicio">
+  <h2>¿Primera vez aquí? Haz esto en orden</h2>
+  <ol>
+    <li><span class="step-num">1</span> Revisa que haya <strong>trabajadores activos</strong> (menú Trabajadores).</li>
+    <li><span class="step-num">2</span> Entra a <strong>Producción</strong> y elige o crea la <strong>semana actual</strong> (botón ★).</li>
+    <li><span class="step-num">3</span> Usa <strong>＋ Un día</strong> para anotar gramos del día (es lo más sencillo).</li>
+    <li><span class="step-num">4</span> Al terminar la semana, descarga <strong>Formal Excel</strong> para pagar e imprimir.</li>
+  </ol>
+  <p class="tip">Si algo falla: revisa la IP en la barra de arriba y que el launcher tenga el servidor <strong>Iniciado</strong>.</p>
+  <a class="btn" href="/produccion">Ir a Producción</a>
+  <a class="btn btn-secondary" href="/trabajadores">Ver trabajadores</a>
+  <a class="btn btn-secondary" href="/trabajos">Trabajos activos</a>
+  <button type="button" class="help-toggle" onclick="document.getElementById('guia-inicio').hidden=true; localStorage.setItem('fajos_hide_guide','1')">Ocultar esta guía</button>
+</div>
+
+<div class="actions" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.25rem;">
+  <a class="btn" href="/produccion">Producción (nómina)</a>
+  <a class="btn btn-secondary" href="/trabajos">Trabajos del día</a>
+  <a class="btn btn-secondary" href="/trabajadores">Trabajadores</a>
+  <a class="btn btn-secondary" href="/buscar">Buscar</a>
 </div>
 
 <div class="grid">
   <div class="card">
-    <div class="label"><i data-lucide="user-check"></i> Activos</div>
+    <div class="label">Trabajadores activos</div>
     <div class="value">{{ kpis.trabajadores_activos | default(0) }}</div>
   </div>
   <div class="card">
-    <div class="label"><i data-lucide="sparkles"></i> Activos PLT</div>
+    <div class="label">Activos PLT</div>
     <div class="value">{{ kpis.trabajadores_plt | default(0) }}</div>
   </div>
   <div class="card">
-    <div class="label"><i data-lucide="calendar"></i> Semanas</div>
+    <div class="label">Semanas registradas</div>
     <div class="value">{{ kpis.total_semanas | default(0) }}</div>
   </div>
   <div class="card">
-    <div class="label"><i data-lucide="scale"></i> Gramos hist.</div>
+    <div class="label">Gramos (histórico)</div>
     <div class="value">{{ kpis.total_gramos_historico | default(0) }}</div>
   </div>
   <div class="card accent">
-    <div class="label"><i data-lucide="banknote"></i> Efectivo prod.</div>
+    <div class="label">Efectivo producción</div>
     <div class="value money">${{ '%.2f'|format( (kpis.total_efectivo_historico or 0)|float ) }}</div>
   </div>
   <div class="card accent">
-    <div class="label"><i data-lucide="wallet"></i> Nómina acum.</div>
+    <div class="label">Nómina acumulada</div>
     <div class="value money">${{ '%.2f'|format( (kpis.nomina_total_acumulada or 0)|float ) }}</div>
   </div>
 </div>
 
-<h2><i data-lucide="calendar-range" style="width:18px;height:18px;vertical-align:middle"></i> Últimas semanas</h2>
+<h2 style="margin-top:1.5rem">Últimas semanas</h2>
 {% if semanas %}
 <div class="table-wrap">
 <table>
   <thead>
     <tr>
-      <th>Código</th><th>Inicio</th><th>Fin</th>
-      <th>PLT</th><th>PIT</th><th>TLL</th><th>Total</th><th></th>
+      <th>Semana</th><th>Del</th><th>Al</th>
+      <th>PLT</th><th>PIT</th><th>TLL</th><th>Total</th><th>Qué hacer</th>
     </tr>
   </thead>
   <tbody>
     {% for s in semanas %}
     <tr>
-      <td><strong>{% if s.es_actual %}<span class="badge-actual"><img src="/static/icons/star.svg" width="12" height="12" alt=""> ACTUAL</span> {% endif %}{{ s.codigo }}</strong></td>
+      <td><strong>{% if s.es_actual %}<span class="badge-actual">ACTUAL</span> {% endif %}{{ s.codigo }}</strong></td>
       <td>{{ s.fecha_inicio }}</td>
       <td>{{ s.fecha_fin }}</td>
       <td>${{ '%.2f'|format( (s.nomina_plt or 0)|float ) }}</td>
       <td>${{ '%.2f'|format( (s.nomina_pit or 0)|float ) }}</td>
       <td>${{ '%.2f'|format( (s.nomina_tll or 0)|float ) }}</td>
       <td><strong>${{ '%.2f'|format( (s.total_semana or 0)|float ) }}</strong></td>
-      <td>
-        <a class="btn btn-sm btn-secondary" href="/produccion?semana_id={{ s.id }}">Ver</a>
-        <a class="btn btn-sm" href="/api/export/produccion/{{ s.id }}?fmt=xlsx&formal=1">Excel</a>
-        <a class="btn btn-sm btn-secondary" href="/api/export/produccion/{{ s.id }}?fmt=pdf&formal=1">PDF</a>
+      <td style="white-space:nowrap">
+        <a class="btn btn-sm" href="/produccion?semana_id={{ s.id }}">Abrir</a>
+        <a class="btn btn-sm btn-secondary" href="/api/export/produccion/{{ s.id }}?fmt=xlsx&formal=1">Excel formal</a>
       </td>
     </tr>
     {% endfor %}
@@ -83,6 +98,19 @@
 </table>
 </div>
 {% else %}
-<p class="empty">Aún no hay semanas. Crea una en Producción o importa el Excel desde el launcher.</p>
+<div class="empty-state">
+  <div class="big">Aún no hay semanas</div>
+  <p>Ve a Producción y pulsa <strong>★ Semana actual</strong> para crear la de esta semana.</p>
+  <a class="btn" href="/produccion">Ir a Producción</a>
+</div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+if (localStorage.getItem('fajos_hide_guide') === '1') {
+  const g = document.getElementById('guia-inicio');
+  if (g) g.hidden = true;
+}
+</script>
 {% endblock %}

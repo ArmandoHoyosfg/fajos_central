@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Producción — Fajos Piteados Central{% endblock %}
 {% block content %}
+
+<div class="help-panel" id="help-panel">
+  <strong>Consejo:</strong> Lo más fácil es <strong>＋ Un día</strong>: eliges trabajador, folio (si ya existe), el día y los gramos. Solo edita la columna de <em>hoy</em> en la tabla; otros días piden confirmación. Al final de la semana usa <strong>Formal Excel</strong> para imprimir y pagar.
+  <button type="button" class="help-toggle" style="display:block;margin-top:0.4rem"
+          onclick="this.parentElement.hidden=true">Entendido, ocultar</button>
+</div>
 <div class="semana-ctx">
   <strong>Hoy:</strong> {{ fecha_hoy_larga }}
   {% if semanas %}

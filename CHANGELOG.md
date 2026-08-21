@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.3.1] — 2026-08-21
+
+### UX para usuarios poco experimentados
+- Guía de 4 pasos en Inicio (se puede ocultar)
+- Consejos en Producción, Trabajadores y Trabajos
+- Botones más grandes; estados vacíos con instrucciones
+- Textos en español sencillo
+
 ## [3.3.0] — 2026-08-21
 
 ### Trabajadores: edición, cambios y bajas

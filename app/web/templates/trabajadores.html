@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Trabajadores — Fajos Piteados Central{% endblock %}
 {% block content %}
+
+<div class="help-panel" id="help-panel">
+  <strong>Consejo:</strong> <strong>＋ Nuevo</strong> da de alta. <strong>Editar</strong> corrige nombre o ubicación. <strong>Baja</strong> no borra el historial: solo deja de salir en capturas nuevas. Puedes <strong>Reactivar</strong> después.
+  <button type="button" class="help-toggle" style="display:block;margin-top:0.4rem"
+          onclick="this.parentElement.hidden=true">Entendido, ocultar</button>
+</div>
 <div class="page-head">
   <div>
     <h1>Trabajadores</h1>

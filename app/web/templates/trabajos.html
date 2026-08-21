@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Trabajos activos — Fajos Piteados Central{% endblock %}
 {% block content %}
+
+<div class="help-panel" id="help-panel">
+  <strong>Consejo:</strong> Aquí ves cada folio ligado a su persona. Anota gramos del día de hoy en la columna resaltada. <strong>Cerrar hoy</strong> guarda un resumen de control. <strong>Suministro</strong> imprime la hoja para anotar a mano.
+  <button type="button" class="help-toggle" style="display:block;margin-top:0.4rem"
+          onclick="this.parentElement.hidden=true">Entendido, ocultar</button>
+</div>
 <div class="semana-ctx">
   <strong>Hoy:</strong> {{ fecha_hoy_larga }}
   {% if col_hoy_label %} · Día de nómina: <span class="badge-actual">{{ col_hoy_label }}</span>{% endif %}
