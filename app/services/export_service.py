@@ -757,3 +757,238 @@ class ExportService:
         buf = BytesIO()
         wb.save(buf)
         return buf.getvalue()
+
+
+    def export_master(self, db=None) -> tuple[bytes, str, str]:
+        """
+        Exporta toda la base operativa a un Excel multi-hoja (archivo Master).
+        Incluye catálogos, semanas, producción PLT/PIT, taller, trabajos y resumen.
+        """
+        from datetime import datetime
+        from openpyxl.utils import get_column_letter
+
+        from app.db.connection import get_db
+
+        database = db or get_db()
+        generado = datetime.now().strftime("%Y-%m-%d_%H%M")
+        wb = Workbook()
+
+        # Definición de hojas: (nombre_hoja, SQL, columnas opcionales ordenadas)
+        sheets_spec = [
+            (
+                "00_Indice",
+                None,
+                None,
+            ),
+            (
+                "Trabajadores",
+                """
+                SELECT id, nombre_mostrar, nombre_completo, ubic, tipo, puesto,
+                       activo, fecha_incorporacion, notas, creado_en, actualizado_en
+                FROM trabajadores
+                ORDER BY tipo, nombre_mostrar, ubic
+                """,
+                None,
+            ),
+            (
+                "Semanas",
+                """
+                SELECT id, codigo, fecha_inicio, fecha_fin, anio, cerrada,
+                       cerrada_en, cerrada_por, notas, creado_en
+                FROM semanas
+                ORDER BY fecha_inicio DESC
+                """,
+                None,
+            ),
+            (
+                "Produccion_Plata",
+                """
+                SELECT id, semana_id, trabajador_id, trabajo_id, nombre, ubic,
+                       folio, modelo, material, tarifa_gr,
+                       gm_sab, gm_dom, gm_lun, gm_mar, gm_mie, gm_jue, gm_vie,
+                       total_gramos, efectivo, firmado, notas, creado_en
+                FROM produccion_plata
+                ORDER BY semana_id, ubic, nombre
+                """,
+                None,
+            ),
+            (
+                "Produccion_Pita",
+                """
+                SELECT id, semana_id, trabajador_id, nombre, ubic, modelo, folio,
+                       material, producto, pitas, efectivo, firmado, notas, creado_en
+                FROM produccion_pita
+                ORDER BY semana_id, ubic, nombre
+                """,
+                None,
+            ),
+            (
+                "Nomina_Taller",
+                """
+                SELECT id, semana_id, trabajador_id, nombre, ubic, puesto,
+                       sueldo, extras, total, firmado, notas, creado_en
+                FROM nomina_taller
+                ORDER BY semana_id, ubic, nombre
+                """,
+                None,
+            ),
+            (
+                "Trabajos",
+                """
+                SELECT id, trabajador_id, folio, modelo, material, tarifa_gr,
+                       activo, notas, creado_en
+                FROM trabajos
+                ORDER BY trabajador_id, folio
+                """,
+                None,
+            ),
+            (
+                "Modelos",
+                """
+                SELECT id, modelo, tipo, material_default, tarifa_default, notas
+                FROM modelos
+                ORDER BY tipo, modelo
+                """,
+                None,
+            ),
+            (
+                "Tarifas_Material",
+                """
+                SELECT id, material, tarifa_por_gramo, descripcion, activo
+                FROM tarifas_material
+                ORDER BY material
+                """,
+                None,
+            ),
+            (
+                "Resumen_Nominas",
+                """
+                SELECT r.id, r.semana_id, s.codigo AS semana_codigo,
+                       r.nomina_plt, r.nomina_pit, r.nomina_tll, r.total_semana, r.notas, r.creado_en
+                FROM resumen_nominas r
+                LEFT JOIN semanas s ON s.id = r.semana_id
+                ORDER BY r.semana_id DESC
+                """,
+                None,
+            ),
+            (
+                "Totales_Semana",
+                """
+                SELECT * FROM v_totales_semana
+                ORDER BY fecha_inicio DESC
+                """,
+                None,
+            ),
+        ]
+
+        header_fill = self.HEADER_FILL
+        header_font = self.HEADER_FONT
+        thin = self.THIN
+        alt = self.ALT_FILL
+
+        # Remove default sheet; rebuild
+        default = wb.active
+        wb.remove(default)
+
+        indice_rows = []
+        for sheet_name, sql, _cols in sheets_spec:
+            ws = wb.create_sheet(sheet_name)
+            if sheet_name == "00_Indice":
+                ws["A1"] = "FAJOS PITEADOS CENTRAL — ARCHIVO MASTER"
+                ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
+                ws["A2"] = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+                ws["A3"] = "Contiene catálogos y movimientos de la base de datos operativa."
+                ws["A5"] = "Hoja"
+                ws["B5"] = "Descripción"
+                ws["A5"].font = header_font
+                ws["A5"].fill = header_fill
+                ws["B5"].font = header_font
+                ws["B5"].fill = header_fill
+                descriptions = {
+                    "Trabajadores": "Catálogo unificado (PLT / PIT / TLL)",
+                    "Semanas": "Semanas de nómina",
+                    "Produccion_Plata": "Captura semanal plata (gramos)",
+                    "Produccion_Pita": "Nómina pita (efectivo)",
+                    "Nomina_Taller": "Nómina taller (sueldo + extras)",
+                    "Trabajos": "Folios/modelos ligados a trabajador",
+                    "Modelos": "Catálogo de modelos",
+                    "Tarifas_Material": "Tarifas por material PLT",
+                    "Resumen_Nominas": "Totales guardados por semana",
+                    "Totales_Semana": "Vista calculada Taller+Plata+Pita",
+                }
+                r = 6
+                for name, desc in descriptions.items():
+                    ws.cell(r, 1, name)
+                    ws.cell(r, 2, desc)
+                    r += 1
+                ws.column_dimensions["A"].width = 22
+                ws.column_dimensions["B"].width = 48
+                continue
+
+            rows = []
+            try:
+                with database.cursor() as cur:
+                    cur.execute(sql)
+                    rows = list(cur.fetchall() or [])
+            except Exception as e:
+                logger.warning("Master sheet %s omitida: %s", sheet_name, e)
+                ws["A1"] = f"No disponible: {e}"
+                indice_rows.append((sheet_name, 0, str(e)))
+                continue
+
+            if not rows:
+                ws["A1"] = "(sin registros)"
+                indice_rows.append((sheet_name, 0, "vacío"))
+                continue
+
+            # Column order from first row keys
+            keys = list(rows[0].keys())
+            for col, key in enumerate(keys, 1):
+                cell = ws.cell(1, col, key)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.border = thin
+                cell.alignment = Alignment(horizontal="center", wrap_text=True)
+
+            for i, row in enumerate(rows):
+                for col, key in enumerate(keys, 1):
+                    val = row.get(key)
+                    if hasattr(val, "isoformat"):
+                        try:
+                            val = val.isoformat()
+                        except Exception:
+                            val = str(val)
+                    elif isinstance(val, (bytes, bytearray)):
+                        val = val.decode("utf-8", errors="replace")
+                    cell = ws.cell(i + 2, col, val)
+                    cell.border = thin
+                    if i % 2 == 1:
+                        cell.fill = alt
+
+            for col, key in enumerate(keys, 1):
+                width = min(max(len(str(key)) + 2, 10), 28)
+                ws.column_dimensions[get_column_letter(col)].width = width
+
+            ws.auto_filter.ref = ws.dimensions
+            ws.freeze_panes = "A2"
+            indice_rows.append((sheet_name, len(rows), "ok"))
+
+        # Update index counts if sheet exists
+        if "00_Indice" in wb.sheetnames:
+            ws = wb["00_Indice"]
+            ws["A16"] = "Conteos al exportar"
+            ws["A16"].font = Font(bold=True)
+            r = 17
+            for name, n, st in indice_rows:
+                ws.cell(r, 1, name)
+                ws.cell(r, 2, n if st == "ok" else f"{st}")
+                r += 1
+
+        buf = BytesIO()
+        wb.save(buf)
+        fname = f"fajos_master_{generado}.xlsx"
+        return (
+            buf.getvalue(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fname,
+        )

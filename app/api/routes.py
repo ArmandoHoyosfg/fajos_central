@@ -997,3 +997,16 @@ async def api_patch_taller(
         data["firmado"] = 1 if int(firmado) else 0
     repo.actualizar(row_id, data)
     return {"ok": True, "id": row_id}
+
+
+@router.get("/api/export/master")
+async def api_export_master(
+    export_svc: ExportService = Depends(get_export_service),
+):
+    """Descarga Excel Master con toda la base operativa (multi-hoja)."""
+    content, media_type, filename = export_svc.export_master()
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
