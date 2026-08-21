@@ -361,19 +361,22 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
   max-height: min(70vh, 720px);
   overflow: auto;
   border-radius: 10px;
-  border: 1px solid #45475a;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
 }
 .table-wrap table {
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
+  color: var(--text);
 }
 .table-wrap thead th {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #1e1e2e;
-  box-shadow: 0 1px 0 #45475a;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 0 var(--border);
   white-space: nowrap;
 }
 
@@ -562,31 +565,32 @@ input.cell-gm {
     box-shadow var(--dur-1) var(--ease-out);
 }
 input.cell-gm:focus {
-  background: #1e3a5f !important;
+  background: var(--surface) !important;
   border-color: var(--blue) !important;
 }
 input.cell-gm.cell-ok {
   animation: cellOk 0.55s var(--ease-out);
 }
 @keyframes cellOk {
-  0% { background: #a6e3a144; border-color: var(--green); }
-  100% { background: #11111b; }
+  0% { background: color-mix(in srgb, var(--green) 25%, transparent); border-color: var(--green); }
+  100% { background: transparent; }
 }
 
-/* Sticky primera columna (trabajador) */
-.table-wrap th:first-child,
-.table-wrap td:first-child {
+/* Sticky primera columna (trabajador) — solo tablas anchas, no compactas */
+.table-wrap:not(.table-compact) th:first-child,
+.table-wrap:not(.table-compact) td:first-child {
   position: sticky;
   left: 0;
   z-index: 2;
-  background: #1e1e2e;
+  background: var(--bg-elev);
+  color: var(--text);
 }
-.table-wrap thead th:first-child {
+.table-wrap:not(.table-compact) thead th:first-child {
   z-index: 6;
-  background: #1e1e2e;
+  background: var(--surface);
 }
-.table-wrap tbody tr:hover td:first-child {
-  background: #2a2b3d;
+.table-wrap:not(.table-compact) tbody tr:hover td:first-child {
+  background: var(--surface);
 }
 
 /* Modal fluido */
@@ -962,4 +966,141 @@ select:active,
 .modal select:focus {
   background-color: var(--bg) !important;
   color: var(--text) !important;
+}
+
+
+/* === Theme polish layer (coherencia oscuro/claro/taller) === */
+.kpi-bar {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+.kpi-bar .kpi-item { color: var(--text) !important; }
+.kpi-bar .kpi-item b { color: var(--accent) !important; }
+.kpi-bar .money b { color: var(--green) !important; }
+.kpi-bar .muted { color: var(--muted) !important; }
+
+.card {
+  background: var(--bg-elev) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+.card .label { color: var(--muted) !important; }
+.card .value { color: var(--text) !important; }
+.card.accent .value,
+.card .value.money { color: var(--green) !important; }
+
+.badge-actual {
+  background: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+  color: var(--accent) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent) !important;
+}
+.version-badge, .lan-badge, .topbar-fecha {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+.lan-badge { color: var(--blue) !important; }
+
+.flash {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.help-guide, .help-panel {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+.help-guide { border-left-color: var(--blue) !important; }
+.help-guide h2 { color: var(--blue) !important; }
+.help-guide .tip, .help-panel { color: var(--muted) !important; }
+.help-panel strong { color: var(--text) !important; }
+
+.toast-web {
+  background: var(--bg-elev) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow) !important;
+}
+.toast-web.err { color: var(--red) !important; border-color: var(--red) !important; }
+.toast-web.ok { border-color: var(--green) !important; }
+
+/* Filas de tabla legibles en claro */
+.table-wrap tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+.table-wrap tbody tr:hover {
+  filter: none;
+  background: color-mix(in srgb, var(--blue) 12%, var(--bg-elev)) !important;
+}
+.table-wrap td, .table-wrap th {
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.table-wrap a { color: var(--blue); }
+
+/* Dashboard: sin sticky lateral en tablas cortas de semanas */
+.table-wrap.no-sticky-col th:first-child,
+.table-wrap.no-sticky-col td:first-child {
+  position: static !important;
+  left: auto !important;
+  background: transparent !important;
+}
+.table-wrap.no-sticky-col thead th:first-child {
+  background: var(--surface) !important;
+}
+
+/* Nav activa legible en claro */
+.nav a.active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Empty state */
+.empty-state {
+  background: var(--bg-elev);
+  border-color: var(--border);
+  color: var(--muted);
+}
+.empty-state .big { color: var(--text); }
+
+/* Botones secondary en claro */
+.btn-secondary, a.btn-secondary, button.btn-secondary {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+.btn-secondary:hover, a.btn-secondary:hover {
+  background: color-mix(in srgb, var(--surface) 70%, var(--border)) !important;
+}
+
+/* Inputs globales */
+input, select, textarea {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+input::placeholder, textarea::placeholder {
+  color: var(--faint);
+}
+
+/* topbar en claro ya definido; asegurar contraste de chips */
+.status-chip {
+  background: var(--surface) !important;
+  color: var(--muted) !important;
+}
+
+/* Material row tints suaves (no chocan con claro) */
+.mat-ag3 { background: color-mix(in srgb, #5dade2 12%, transparent) !important; }
+.mat-ag4 { background: color-mix(in srgb, #58d68d 12%, transparent) !important; }
+.mat-dol { background: color-mix(in srgb, #f4d03f 14%, transparent) !important; }
+.mat-dlo { background: color-mix(in srgb, #e67e22 12%, transparent) !important; }
+
+/* Evitar brillar demasiado en hover oscuro */
+[data-theme="oscuro"] .table-wrap tbody tr:hover,
+html:not([data-theme]) .table-wrap tbody tr:hover,
+[data-theme="taller"] .table-wrap tbody tr:hover {
+  background: color-mix(in srgb, var(--surface) 80%, #000) !important;
 }
