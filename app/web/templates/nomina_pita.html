@@ -51,7 +51,7 @@
 <div class="table-wrap table-compact">
 <table>
   <colgroup>
-    <col style="width:4%"><col class="col-nombre"><col class="col-ubic"><col class="col-modelo"><col class="col-folio">
+    <col class="col-del"><col class="col-nombre"><col class="col-ubic"><col class="col-modelo"><col class="col-folio">
     <col class="col-mat"><col class="col-prod"><col class="col-pitas"><col class="col-efec"><col class="col-firma">
   </colgroup>
   <thead>
@@ -65,8 +65,7 @@
   {% for r in lineas %}
     <tr data-id="{{ r.id }}">
       <td>
-        <button type="button" class="btn btn-danger" style="padding:0.12rem 0.4rem;font-size:0.7rem;min-height:0"
-                onclick="delPit({{ r.id }})" title="Eliminar línea">✕</button>
+        <button type="button" class="btn-icon-del" onclick="delPit({{ r.id }})" title="Eliminar">×</button>
       </td>
       <td title="{{ r.nombre }}">{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>

@@ -92,7 +92,7 @@
     <tr class="mat-{{ (r.material or '')|lower }}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
       <td>
         {% if not semana_cerrada %}
-        <button type="button" class="btn btn-danger" onclick="delLinea({{ r.id }})" title="Eliminar">✕</button>
+        <button type="button" class="btn-icon-del" onclick="delLinea({{ r.id }})" title="Eliminar">×</button>
         {% endif %}
       </td>
       <td title="{{ r.nombre }}">{{ r.nombre }}</td>

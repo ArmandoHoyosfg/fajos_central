@@ -50,7 +50,7 @@
 <table>
   <thead>
     <colgroup>
-    <col class="col-nombre"><col class="col-ubic"><col class="col-puesto">
+    <col class="col-del"><col class="col-nombre"><col class="col-ubic"><col class="col-puesto">
     <col class="col-sueldo"><col class="col-extras"><col class="col-total"><col class="col-firma">
   </colgroup>
   <tr><th></th><th>Nombre</th><th>Ubic</th><th>Puesto</th><th>Sueldo</th><th>Extras</th><th>Total</th><th>Firma</th></tr>
@@ -59,8 +59,7 @@
   {% for r in lineas %}
     <tr data-id="{{ r.id }}">
       <td>
-        <button type="button" class="btn btn-danger" style="padding:0.12rem 0.4rem;font-size:0.7rem;min-height:0"
-                onclick="delTll({{ r.id }})" title="Eliminar línea">✕</button>
+        <button type="button" class="btn-icon-del" onclick="delTll({{ r.id }})" title="Eliminar">×</button>
       </td>
       <td>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
