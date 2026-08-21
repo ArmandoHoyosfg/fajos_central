@@ -1065,3 +1065,20 @@ async def api_rarezas(semana_id: int, svc=Depends(get_insights_service)):
 @router.get("/api/insights/checklist/{semana_id}")
 async def api_checklist(semana_id: int, svc=Depends(get_insights_service)):
     return svc.checklist_export(semana_id)
+
+
+@router.get("/api/insights/pronostico/{semana_id}")
+async def api_pronostico(semana_id: int, svc=Depends(get_insights_service)):
+    return svc.pronostico_semana(semana_id)
+
+
+@router.post("/api/insights/duplicar/{semana_id}")
+async def api_duplicar_completa(
+    semana_id: int,
+    destino_id: int | None = Form(None),
+    areas: str | None = Form("plt,pit,tll"),
+    svc=Depends(get_insights_service),
+):
+    """Duplica estructuras PLT+PIT+TLL a la semana siguiente (sin gramos/montos variables)."""
+    lista = [a.strip().lower() for a in (areas or "plt,pit,tll").split(",") if a.strip()]
+    return svc.duplicar_a_siguiente(semana_id, destino_id=destino_id, areas=lista)

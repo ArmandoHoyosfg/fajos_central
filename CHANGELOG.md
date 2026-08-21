@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.8.0] — 2026-08-21
+
+### Pronóstico, duplicar 3 nóminas y alertas de cierre
+- **Pronóstico de cierre Plata**: estima gramos/$ con promedio diario de días capturados
+- **Duplicar → sig. semana** en Inicio, Plata, Pita y Taller (PLT + PIT + TLL)
+- Alertas: semana vencida sin cerrar, último día de semana, **día anterior sin gramos** en Plata
+- API: `GET /api/insights/pronostico/{id}`, `POST /api/insights/duplicar/{id}`
+
 ## [3.7.0] — 2026-08-21
 
 ### Inteligencia operativa (reglas + estadísticas)

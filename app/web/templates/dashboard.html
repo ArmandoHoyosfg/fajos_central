@@ -42,7 +42,32 @@
   <a class="btn btn-secondary" href="/trabajos">Trabajos del día</a>
   <a class="btn btn-secondary" href="/trabajadores">Trabajadores</a>
   <a class="btn btn-secondary" href="/buscar">Buscar</a>
+  {% if insights and insights.semana and insights.semana.id %}
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ insights.semana.id }})">
+    Duplicar a sig. semana (PLT+PIT+TLL)
+  </button>
+  {% endif %}
 </div>
+<script>
+async function duplicarSemana(sid) {
+  if (!confirm('¿Copiar líneas de Plata, Pita y Taller a la siguiente semana?\n(No copia gramos ni efectivos de pita; en taller copia sueldo base).')) return;
+  const body = new FormData();
+  body.set('areas', 'plt,pit,tll');
+  try {
+    const res = await fetch('/api/insights/duplicar/' + sid, { method: 'POST', body });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail || data.message || 'Error al duplicar'); return; }
+    alert(
+      'Listo → semana ' + (data.destino_codigo || data.destino_id) + '\n' +
+      'Plata: +' + (data.plt && data.plt.created) + ' (omitidas ' + (data.plt && data.plt.skipped) + ')\n' +
+      'Pita: +' + (data.pit && data.pit.created) + '\n' +
+      'Taller: +' + (data.tll && data.tll.created)
+    );
+    location.reload();
+  } catch (e) { alert('Error de red'); }
+}
+</script>
+
 
 
 {% if insights and insights.avisos %}
@@ -65,6 +90,19 @@
     {% endfor %}
   </ul>
 </section>
+{% endif %}
+
+{% if insights and insights.pronostico and insights.pronostico.ok %}
+<div class="card accent pronostico-card" style="margin-bottom:1rem;">
+  <div class="label">Pronóstico cierre Plata · Semana {{ insights.pronostico.codigo }}</div>
+  <div class="value money">${{ '%.2f'|format(insights.pronostico.estimado_efectivo) }}</div>
+  <p class="muted" style="margin:0.35rem 0 0;">
+    Actual ${{ '%.2f'|format(insights.pronostico.efectivo_actual) }}
+    · ≈ {{ '%.1f'|format(insights.pronostico.estimado_gramos) }} g
+    · {{ insights.pronostico.dias_con_captura }} día(s) con captura
+    · faltan {{ insights.pronostico.dias_restantes }}
+  </p>
+</div>
 {% endif %}
 
 <div class="grid">

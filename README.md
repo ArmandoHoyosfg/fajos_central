@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 3.7.0  
+**Versión:** 3.8.0  
 **Entorno principal:** Windows + PowerShell 7 + MariaDB/HeidiSQL  
 
 Sistema de nóminas del **Taller de Fajos Central** (Plata, Pita y Taller).
@@ -15,6 +15,8 @@ Sistema de nóminas del **Taller de Fajos Central** (Plata, Pita y Taller).
   - Panel **Qué revisar hoy**
   - Autocompletar trabajos al agregar líneas
   - Checklist y rarezas antes de exportar formal
+  - Pronóstico de cierre y duplicar semana (3 áreas)
+  - Alertas de cierre de semana y día anterior en Plata
 - Temas visuales: Oscuro, Claro, Taller
 - Tests con pytest y errores estructurados
 

@@ -22,6 +22,7 @@
   </form>
   {% if semana_id %}
   <a class="btn" href="/api/export/nomina-taller/{{ semana_id }}">Excel formal Taller</a>
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }})">Duplicar → sig. semana</button>
   <a class="btn btn-secondary" href="/api/export/resumen/{{ semana_id }}">Resumen 3 nóminas</a>
   <div class="kpi-bar">
     <span class="kpi-item"><b id="kpi-lineas">{{ totales.lineas or 0 }}</b> líneas</span>
@@ -83,6 +84,29 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+
+<script>
+async function duplicarSemana(sid) {
+  if (!sid) return;
+  if (!confirm('¿Copiar estructuras de Plata, Pita y Taller a la siguiente semana?\n(Sin gramos; Pita en $0; Taller conserva sueldo).')) return;
+  const body = new FormData();
+  body.set('areas', 'plt,pit,tll');
+  const res = await fetch('/api/insights/duplicar/' + sid, { method: 'POST', body });
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    alert((data && (data.detail || data.message)) || 'No se pudo duplicar');
+    return;
+  }
+  alert('Duplicado → ' + (data.destino_codigo || data.destino_id) +
+    '\nPLT +' + ((data.plt||{}).created||0) +
+    ' · PIT +' + ((data.pit||{}).created||0) +
+    ' · TLL +' + ((data.tll||{}).created||0));
+  if (data.destino_id) location.href = location.pathname + '?semana_id=' + data.destino_id;
+  else location.reload();
+}
+</script>
+
 <script src="/static/cell_edit.js"></script>
 <script>
 const SID = {{ semana_id or 'null' }};
