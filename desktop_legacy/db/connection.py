@@ -23,7 +23,9 @@ class Database:
     def connect(self) -> MySQLConnection:
         if self._conn is None or not self._conn.is_connected():
             try:
-                self._conn = mysql.connector.connect(**DB_CONFIG)
+                cfg = dict(DB_CONFIG)
+                cfg.setdefault("autocommit", True)
+                self._conn = mysql.connector.connect(**cfg)
             except Error as e:
                 raise ConnectionError(f"No se pudo conectar a la base de datos: {e}") from e
         return self._conn
@@ -31,6 +33,11 @@ class Database:
     def cursor(self, dictionary: bool = True):
         conn = self.connect()
         return conn.cursor(dictionary=dictionary)
+
+    def commit(self) -> None:
+        conn = self.connect()
+        if not getattr(conn, "autocommit", False):
+            conn.commit()
 
     def close(self) -> None:
         if self._conn and self._conn.is_connected():

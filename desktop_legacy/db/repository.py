@@ -244,6 +244,11 @@ class ProduccionRepo(BaseRepo):
         cur.close()
 
     def actualizar_gramos_dia(self, prod_id: int, col: str, gramos) -> None:
+        aliases = {
+            "sab": "gm_sab", "dom": "gm_dom", "lun": "gm_lun", "mar": "gm_mar",
+            "mie": "gm_mie", "jue": "gm_jue", "vie": "gm_vie",
+        }
+        col = aliases.get((col or "").strip().lower(), (col or "").strip().lower())
         allowed = {"gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"}
         if col not in allowed:
             raise ValueError(f"Columna de día inválida: {col}")

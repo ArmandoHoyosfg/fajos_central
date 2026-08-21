@@ -25,13 +25,16 @@ class Database:
         if self._conn is not None and self._conn.is_connected():
             return self._conn
         try:
-            self._conn = mysql.connector.connect(**self._config)
+            cfg = dict(self._config)
+            # autocommit evita pérdida de INSERT/CREATE si se olvida commit
+            cfg.setdefault("autocommit", True)
+            self._conn = mysql.connector.connect(**cfg)
             logger.info(
                 "Conectado a %s@%s:%s/%s",
-                self._config["user"],
-                self._config["host"],
-                self._config["port"],
-                self._config["database"],
+                cfg.get("user"),
+                cfg.get("host"),
+                cfg.get("port"),
+                cfg.get("database"),
             )
             return self._conn
         except Error as e:
@@ -58,15 +61,29 @@ class Database:
         cur = conn.cursor(dictionary=dictionary)
         try:
             yield cur
+            if not getattr(conn, "autocommit", False):
+                conn.commit()
         except Error as e:
-            logger.exception("Error en consulta SQL")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            # 1146 table missing → warning, not stack trace noise for callers that recover
+            errno = getattr(e, "errno", None)
+            if errno == 1146:
+                logger.warning("Tabla inexistente: %s", e)
+            else:
+                logger.exception("Error en consulta SQL")
             raise DatabaseError(
                 "Error al ejecutar consulta en la base de datos.",
-                details={"mysql_errno": getattr(e, "errno", None)},
+                details={"mysql_errno": errno, "msg": str(e)},
                 cause=e,
             ) from e
         finally:
-            cur.close()
+            try:
+                cur.close()
+            except Exception:
+                pass
 
 
 _db: Optional[Database] = None

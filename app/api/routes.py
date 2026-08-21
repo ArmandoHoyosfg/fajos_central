@@ -266,6 +266,9 @@ async def api_duplicar(
     from app.core.calendar_util import parse_db_date
 
     origen = sem_repo.obtener(semana_id)
+    if not origen:
+        from app.core.exceptions import ValidationAppError
+        raise ValidationAppError('Semana origen no encontrada')
     if destino_id is None:
         ff = parse_db_date(origen.get("fecha_fin"))
         if not ff:

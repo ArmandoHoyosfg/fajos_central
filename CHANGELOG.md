@@ -5,6 +5,16 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.2.4] — 2026-08-21
+
+### Revisión exhaustiva
+- **CRÍTICO:** `autocommit=True` en conexiones MySQL (app + desktop) — los INSERT ya persisten
+- Plantilla producción: `{% endif %}` faltante en toolbar
+- Formularios inline duplicados eliminados (quedan popups)
+- `api/duplicar` valida semana origen
+- Alias de días (sab→gm_sab) en desktop
+- Error 1146 (tabla faltante) se registra como warning
+
 ## [3.2.3] — 2026-08-21
 
 ### UI web más fluida
