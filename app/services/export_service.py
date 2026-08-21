@@ -21,6 +21,23 @@ logger = get_logger(__name__)
 
 ExportFormat = Literal["xlsx", "csv", "pdf", "json"]
 
+def linea_tiene_gramos(row: dict) -> bool:
+    """True si la línea tiene al menos un día con gramos > 0 (o total_gramos > 0)."""
+    try:
+        if float(row.get("total_gramos") or 0) > 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    for col in ("gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"):
+        try:
+            if float(row.get(col) or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+
 
 def _json_default(obj: Any) -> Any:
     if isinstance(obj, Decimal):
@@ -87,6 +104,8 @@ class ExportService:
                 f"Formato no soportado: {fmt}",
                 details={"format": fmt, "allowed": ["xlsx", "csv", "pdf", "json"]},
             )
+        # Nómina formal/limpia: excluir filas sin gramos en ningún día
+        lineas = [r for r in lineas if linea_tiene_gramos(r)]
         try:
             if fmt == "xlsx":
                 data = self._to_xlsx(lineas, codigo_semana)
@@ -162,10 +181,8 @@ class ExportService:
             cell.border = self.THIN
             cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
-        data_rows = [
-            r for r in lineas
-            if r.get("folio") or r.get("modelo") or float(r.get("total_gramos") or 0) > 0
-        ]
+        # Solo filas con gramos en al menos un día (nómina limpia para imprimir)
+        data_rows = [r for r in lineas if linea_tiene_gramos(r)]
         def _pk(r):
             try:
                 u = int(float(r.get("ubic") or 0))

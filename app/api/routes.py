@@ -23,7 +23,7 @@ from app.api.deps import (
 from app.core.exceptions import AppError
 from app.db.repository import ProduccionRepo, ProduccionPitaRepo, NominaTallerRepo, SemanasRepo, TrabajadoresRepo
 from app.services.dashboard_service import DashboardService
-from app.services.export_service import ExportService
+from app.services.export_service import ExportService, linea_tiene_gramos
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "web" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -297,7 +297,7 @@ async def api_duplicar(
 @router.get("/api/export/suministro")
 async def api_export_suministro():
     from app.services.dia_service import DiaService
-    from app.services.export_service import ExportService
+    from app.services.export_service import ExportService, linea_tiene_gramos
     from fastapi.responses import Response
     st = DiaService().estado_hoy()
     # simple xlsx via openpyxl in export or reuse bytes
@@ -678,7 +678,12 @@ async def api_export(
     export_svc: ExportService = Depends(get_export_service),
 ):
     semana = sem_repo.obtener(semana_id)
+    if not semana:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Semana no encontrada")
     lineas = prod_repo.listar_por_semana(semana_id)
+    # Formal (y siempre limpio): solo filas con gramos en al menos un día
+    lineas = [r for r in lineas if linea_tiene_gramos(r)]
     if formal:
         def _key(row: dict):
             try:
@@ -687,11 +692,6 @@ async def api_export(
                 u = 0
             return (u, str(row.get("nombre") or "").upper(), str(row.get("folio") or "").upper())
         lineas = sorted(lineas, key=_key)
-        # solo líneas con datos útiles
-        lineas = [
-            r for r in lineas
-            if r.get("folio") or r.get("modelo") or float(r.get("total_gramos") or 0) > 0
-        ]
     stem = f"nomina_formal_{semana['codigo']}" if formal else f"nomina_{semana['codigo']}"
     content, media_type, filename = export_svc.export_produccion(
         lineas,
@@ -849,7 +849,10 @@ async def api_export_taller(
     if not sem:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    lineas = repo.listar_por_semana(semana_id)
+    lineas = [
+        r for r in repo.listar_por_semana(semana_id)
+        if float(r.get("total") or 0) > 0 or float(r.get("sueldo") or 0) > 0 or float(r.get("extras") or 0) > 0
+    ]
     resumen = None
     if include_resumen:
         t_plt = plt.totales_semana(semana_id)
@@ -886,7 +889,10 @@ async def api_export_pita(
     if not sem:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    lineas = repo.listar_por_semana(semana_id)
+    lineas = [
+        r for r in repo.listar_por_semana(semana_id)
+        if float(r.get("efectivo") or 0) > 0
+    ]
     resumen = None
     if include_resumen:
         t_plt = plt.totales_semana(semana_id)

@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.4.2] — 2026-08-21
+
+### Export limpio
+- Filas sin gramos en ningún día no salen en Excel/PDF/CSV formal de Plata
+- Taller/Pita: se omiten líneas con total/efectivo en cero
+
 ## [3.4.1] — 2026-08-21
 
 ### Export Excel formal por área
