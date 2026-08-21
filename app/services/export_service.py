@@ -679,29 +679,6 @@ class ExportService:
         cell.number_format = money
         cell.border = self.THIN
 
-        if resumen:
-            row_i += 2
-            ws.cell(row_i, 1, "RESUMEN DE NÓMINAS DE LA SEMANA").font = Font(
-                bold=True, size=12, color="1F4E79"
-            )
-            row_i += 1
-            labels = [
-                ("Nómina Taller", float(resumen.get("nomina_taller") or 0)),
-                ("Nómina Plata", float(resumen.get("nomina_plata") or 0)),
-                ("Nómina Pita", float(resumen.get("nomina_pita") or total_ef)),
-            ]
-            for label, amount in labels:
-                ws.cell(row_i, 1, label)
-                cell = ws.cell(row_i, 2, amount)
-                cell.number_format = money
-                row_i += 1
-            gran = sum(a for _, a in labels)
-            ws.cell(row_i, 1, "Total Nómina").font = Font(bold=True, size=12)
-            cell = ws.cell(row_i, 2, gran)
-            cell.font = Font(bold=True, size=12)
-            cell.fill = self.GREEN_FILL
-            cell.number_format = money
-
         widths = [18, 8, 14, 12, 14, 12, 10, 12, 10]
         for i, w in enumerate(widths, 1):
             ws.column_dimensions[get_column_letter(i)].width = w

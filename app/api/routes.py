@@ -877,14 +877,11 @@ async def api_export_taller(
 @router.get("/api/export/nomina-pita/{semana_id}")
 async def api_export_pita(
     semana_id: int,
-    include_resumen: int = Query(1),
     repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
-    tll: NominaTallerRepo = Depends(get_nomina_taller_repo),
-    plt: ProduccionRepo = Depends(get_produccion_repo),
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
     export_svc: ExportService = Depends(get_export_service),
 ):
-    """Excel formal de nómina Pita (imprimible)."""
+    """Excel formal de nómina Pita (imprimible). Sin bloque de totales generales."""
     sem = sem_repo.obtener(semana_id)
     if not sem:
         from app.core.exceptions import NotFoundError
@@ -893,19 +890,9 @@ async def api_export_pita(
         r for r in repo.listar_por_semana(semana_id)
         if float(r.get("efectivo") or 0) > 0
     ]
-    resumen = None
-    if include_resumen:
-        t_plt = plt.totales_semana(semana_id)
-        t_pit = repo.totales(semana_id)
-        t_tll = tll.totales(semana_id)
-        resumen = {
-            "nomina_taller": float(t_tll.get("total") or 0),
-            "nomina_plata": float(t_plt.get("total_efectivo") or 0),
-            "nomina_pita": float(t_pit.get("total") or 0),
-        }
     codigo = sem.get("codigo") or str(semana_id)
     data, media, fname = export_svc.export_nomina_pita(
-        lineas, codigo_semana=codigo, filename_stem=f"nomina_pita_{codigo}", resumen=resumen
+        lineas, codigo_semana=codigo, filename_stem=f"nomina_pita_{codigo}", resumen=None
     )
     return Response(
         content=data,
