@@ -1104,3 +1104,84 @@ html:not([data-theme]) .table-wrap tbody tr:hover,
 [data-theme="taller"] .table-wrap tbody tr:hover {
   background: color-mix(in srgb, var(--surface) 80%, #000) !important;
 }
+
+
+/* === Tabla Plata compacta (minimizar scroll horizontal) === */
+main.container.wide {
+  max-width: min(1480px, 100%);
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+.table-wrap.table-plt {
+  overflow-x: auto; /* fallback si la pantalla es muy estrecha */
+  -webkit-overflow-scrolling: touch;
+}
+.table-wrap.table-plt table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.table-wrap.table-plt th,
+.table-wrap.table-plt td {
+  padding: 0.18rem 0.15rem;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Sin sticky lateral: con muchas columnas rompe el layout */
+.table-wrap.table-plt th:first-child,
+.table-wrap.table-plt td:first-child {
+  position: static !important;
+  left: auto !important;
+  background: transparent !important;
+  z-index: auto !important;
+}
+.table-wrap.table-plt thead th {
+  font-size: 0.7rem;
+  padding: 0.35rem 0.12rem;
+  text-align: center;
+}
+.table-wrap.table-plt .col-del { width: 2.2%; }
+.table-wrap.table-plt .col-nom { width: 9%; text-align: left; }
+.table-wrap.table-plt .col-ubic { width: 3.5%; text-align: center; }
+.table-wrap.table-plt .col-folio { width: 6%; }
+.table-wrap.table-plt .col-mod { width: 7%; }
+.table-wrap.table-plt .col-mat { width: 3.8%; text-align: center; }
+.table-wrap.table-plt .col-tar { width: 4%; text-align: right; }
+.table-wrap.table-plt .col-dia { width: 5.2%; }
+.table-wrap.table-plt .col-tot { width: 5%; text-align: right; }
+.table-wrap.table-plt .col-efe { width: 6.5%; text-align: right; }
+.table-wrap.table-plt .col-fir { width: 3%; text-align: center; }
+
+.table-wrap.table-plt input.cell-gm {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.12rem 0.1rem;
+  font-size: 0.75rem;
+  text-align: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+}
+.table-wrap.table-plt .btn-danger {
+  padding: 0.1rem 0.35rem !important;
+  font-size: 0.7rem !important;
+  min-height: 0 !important;
+}
+.table-wrap.table-plt .cell-total,
+.table-wrap.table-plt .cell-efectivo {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
+/* Día de hoy resaltado sin ensanchar */
+.table-wrap.table-plt input.cell-gm[data-hoy="1"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
