@@ -78,3 +78,8 @@ def get_nomina_taller_repo() -> NominaTallerRepo:
 
 def get_produccion_pita_repo() -> ProduccionPitaRepo:
     return ProduccionPitaRepo()
+
+
+def get_insights_service():
+    from app.services.insights_service import InsightsService
+    return InsightsService()

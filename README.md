@@ -1,17 +1,22 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 2.2.1  
+**Versión:** 3.7.0  
 **Entorno principal:** Windows + PowerShell 7 + MariaDB/HeidiSQL  
 
-Sistema de nóminas del **Taller de Fajos Central**.
+Sistema de nóminas del **Taller de Fajos Central** (Plata, Pita y Taller).
 
-- Interfaz web accesible en la red local
-- API REST
-- Dashboard con KPIs
-- Exportación a Excel, CSV, PDF y JSON
-- Base de datos MariaDB
-- Tests con pytest
-- Errores estructurados (humanos + IA)
+## Qué incluye
+
+- Interfaz web en la red local (HTTPS recomendado) + launcher Windows
+- API REST y dashboard con KPIs
+- Captura diaria de gramos (Plata), efectivo (Pita) y sueldos (Taller)
+- Exportación formal Excel/CSV/PDF y **Excel Master** (toda la BD)
+- Inteligencia operativa ligera:
+  - Panel **Qué revisar hoy**
+  - Autocompletar trabajos al agregar líneas
+  - Checklist y rarezas antes de exportar formal
+- Temas visuales: Oscuro, Claro, Taller
+- Tests con pytest y errores estructurados
 
 ---
 
@@ -19,25 +24,22 @@ Sistema de nóminas del **Taller de Fajos Central**.
 
 ```
 fajos_central/
-├── VERSION                 # Versión actual (semver)
+├── VERSION                 # Semver actual
 ├── CHANGELOG.md
 ├── README.md
 ├── requirements.txt
-├── pytest.ini
-├── launcher.py             # Launcher GUI (iniciar/detener servidor)
-├── run.py                  # Arranque del servidor web (CLI)
-├── .env.example
-├── app/                    # Aplicación principal (FastAPI + web)
-│   ├── core/               # Config, excepciones, logging
-│   ├── db/                 # Conexión y repositorios
-│   ├── services/           # Dashboard, export multi-formato
-│   ├── api/                # Rutas REST y páginas
-│   └── web/templates/      # HTML
-├── tests/                  # Pytest
-├── db/schema/              # Scripts SQL versionados
-├── templates_excel/        # Excel optimizado de referencia
-├── scripts/                # Utilidades CLI
-└── desktop_legacy/         # GUI PySide6 (referencia / legado)
+├── launcher.py             # Control principal (servidor + config BD)
+├── run.py                  # Arranque CLI del servidor
+├── app/                    # FastAPI + web + servicios
+│   ├── core/
+│   ├── db/
+│   ├── services/           # dashboard, export, insights, día…
+│   ├── api/
+│   └── web/
+├── tests/
+├── db/schema/              # SQL (000 completo, migraciones)
+├── templates_excel/
+└── desktop_legacy/         # GUI PySide6 de referencia
 ```
 
 ---
@@ -46,122 +48,51 @@ fajos_central/
 
 - Python 3.10+
 - MariaDB con la base `fajos_central`
+- Dependencias: `pip install -r requirements.txt`
 
+---
 
+## Arranque rápido (Windows / PowerShell 7)
 
-## Importar Excel a MariaDB (seguro)
-
-En PowerShell 7, con el venv activado y la migración SQL aplicada:
-
-```powershell
-# 1) En HeidiSQL ejecuta:
-#    db\schema\001_schema_inicial.sql   (si aún no)
-#    db\schema\002_suministro_e_import.sql
-
-# 2) Simulación (no escribe nada)
-python scripts\import_excel.py .\templates_excel\NOMINA_FAJOS_OPTIMIZADA_2026.xlsx
-
-# 3) Aplicar
-python scripts\import_excel.py .\templates_excel\NOMINA_FAJOS_OPTIMIZADA_2026.xlsx --apply --codigo "16-22" --inicio 2026-08-16 --fin 2026-08-22
-```
-
-La importación:
-- **No borra** datos existentes
-- Solo **agrega** trabajadores nuevos (mismo nombre + ubic = ya existe)
-- No duplica líneas de producción con el mismo folio en la semana
-- Por defecto es **dry-run** (simulación)
-
-## Windows (PowerShell 7)
+1. Configura la BD en el **launcher** (usuario, contraseña, host, puerto).
+2. Ejecuta el esquema si es necesario: `db/schema/000_fajos_central_completo.sql` en HeidiSQL.
+3. Desde la carpeta del proyecto:
 
 ```powershell
-# Primera vez
-pwsh -File .\setup_windows.ps1
-
-# Si Activate.ps1 está bloqueado:
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-
-# Abrir launcher
-pwsh -File .\start.ps1
-# o
-python launcher.py
+python .\launcher.py
 ```
 
-MariaDB/HeidiSQL debe tener la base `fajos_central` creada (script en `db\schema\001_schema_inicial.sql`).
-Edita `.env` con usuario y contraseña.
+O solo el servidor:
 
-## Instalación
-
-```bash
-cd fajos_central
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
-# Edita .env con usuario y contraseña de MariaDB
+```powershell
+python .\run.py
 ```
 
-### Base de datos
+Abre la URL que muestra el launcher (IP local + puerto).
 
-En HeidiSQL (o cliente SQL), ejecuta:
+---
 
-```
-db/schema/001_schema_inicial.sql
-```
+## Uso diario
 
-(sobre la base `fajos_central` ya creada).
+1. **Inicio** — revisa el panel *Qué revisar hoy*.
+2. **Plata** — captura gramos (＋ Un día / celdas). Al exportar formal verás un checklist.
+3. **Pita / Taller** — líneas de efectivo y sueldos; edición con doble clic.
+4. Exporta **Formal** por área; el **resumen de 3 nóminas** está en Taller.
+5. **Master Excel** — respaldo completo de la base desde Inicio.
 
-## Ejecutar
+---
 
-```bash
-python run.py
-```
+## API de insights (v3.7)
 
-| URL | Descripción |
-|-----|-------------|
-| http://localhost:8000 | Dashboard |
-| http://localhost:8000/trabajadores | Catálogo |
-| http://localhost:8000/produccion | Producción / nómina |
-| http://localhost:8000/docs | API interactiva |
-| http://IP_LAN:8000 | Acceso desde otros equipos de la red |
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /api/insights/hoy` | Avisos del día |
+| `GET /api/insights/sugerir-trabajo?trabajador_id=` | Último folio/modelo/material |
+| `GET /api/insights/rarezas/{semana_id}` | Desvíos ±30 % vs historial |
+| `GET /api/insights/checklist/{semana_id}` | Checklist pre-export |
 
-## Exportar nómina
+---
 
-```
-GET /api/export/produccion/{semana_id}?fmt=xlsx
-GET /api/export/produccion/{semana_id}?fmt=csv
-GET /api/export/produccion/{semana_id}?fmt=pdf
-GET /api/export/produccion/{semana_id}?fmt=json
-```
+## Licencia / uso
 
-## Tests
-
-```bash
-pytest
-pytest --cov=app
-```
-
-## Versionado
-
-- Formato: **SemVer** (`MAJOR.MINOR.PATCH`) en el archivo `VERSION`
-- Historial de cambios: `CHANGELOG.md`
-- Repositorio Git inicializado en esta carpeta
-
-| Versión | Notas |
-|---------|--------|
-| 2.0.0 | Web FastAPI, dashboard, multi-export, tests, consolidación del proyecto |
-| 1.x | Excel optimizado + scripts CLI + GUI PySide6 (en `desktop_legacy/`) |
-
-## Errores estructurados
-
-```json
-{
-  "error": true,
-  "code": "NOT_FOUND",
-  "message": "Trabajador id=99 no existe.",
-  "user_message": "No se encontró el recurso solicitado.",
-  "http_status": 404,
-  "details": { "trabajador_id": 99 }
-}
-```
-
-Códigos: `NOT_FOUND`, `VALIDATION_ERROR`, `DATABASE_ERROR`, `EXPORT_ERROR`, `CONFLICT`, `INTERNAL_ERROR`.
+Uso interno del Taller de Fajos Central.

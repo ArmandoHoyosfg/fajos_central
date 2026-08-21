@@ -1226,3 +1226,85 @@ main.container.wide {
   word-break: break-word;
   line-height: 1.25;
 }
+
+
+/* === Inteligencia operativa === */
+.insights-panel {
+  margin: 0 0 1.25rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  box-shadow: var(--shadow);
+}
+.insights-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+.insights-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.insights-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.insight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.insight-body { flex: 1 1 12rem; min-width: 0; }
+.insight-body p { margin: 0.15rem 0 0; font-size: 0.85rem; }
+.insight-warn {
+  border-left: 3px solid var(--peach);
+}
+.insight-ok {
+  border-left: 3px solid var(--green);
+}
+.insight-info {
+  border-left: 3px solid var(--blue);
+}
+.btn-sm {
+  padding: 0.3rem 0.65rem !important;
+  font-size: 0.8rem !important;
+  min-height: 0 !important;
+}
+
+/* Checklist modal pre-export */
+.checklist-box {
+  max-height: 50vh;
+  overflow: auto;
+  margin: 0.75rem 0;
+}
+.checklist-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.checklist-item .mark { font-weight: 700; width: 1.2rem; }
+.checklist-item.ok .mark { color: var(--green); }
+.checklist-item.bad .mark { color: var(--peach); }
+.checklist-item ul {
+  margin: 0.25rem 0 0 1.2rem;
+  padding: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}

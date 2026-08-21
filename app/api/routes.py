@@ -14,6 +14,7 @@ from app.api.deps import (
     common_template_context,
     get_dashboard_service,
     get_export_service,
+    get_insights_service,
     get_produccion_repo,
     get_produccion_pita_repo,
     get_nomina_taller_repo,
@@ -44,14 +45,19 @@ def _ctx(request: Request, **kwargs):
 async def page_dashboard(
     request: Request,
     svc: DashboardService = Depends(get_dashboard_service),
+    insights=Depends(get_insights_service),
 ):
     from app.core.calendar_util import marcar_semanas
     data = svc.get_dashboard()
     semanas = marcar_semanas(data["ultimas_semanas"])
+    try:
+        avisos = insights.avisos_hoy() if data.get("db_ok", True) else {"avisos": [], "resumen": {"n": 0}}
+    except Exception:
+        avisos = {"avisos": [], "resumen": {"n": 0}}
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        _ctx(request, kpis=data["kpis"], semanas=semanas),
+        _ctx(request, kpis=data["kpis"], semanas=semanas, insights=avisos, db_ok=data.get("db_ok", True)),
     )
 
 
@@ -1033,3 +1039,29 @@ async def api_del_taller(
 ):
     repo.eliminar(row_id)
     return {"ok": True, "id": row_id}
+
+
+# ---------- Inteligencia operativa ----------
+@router.get("/api/insights/hoy")
+async def api_insights_hoy(svc=Depends(get_insights_service)):
+    return svc.avisos_hoy()
+
+
+@router.get("/api/insights/sugerir-trabajo")
+async def api_sugerir_trabajo(
+    trabajador_id: int | None = None,
+    nombre: str | None = None,
+    ubic: int | None = None,
+    svc=Depends(get_insights_service),
+):
+    return svc.sugerir_trabajo(trabajador_id=trabajador_id, nombre=nombre, ubic=ubic)
+
+
+@router.get("/api/insights/rarezas/{semana_id}")
+async def api_rarezas(semana_id: int, svc=Depends(get_insights_service)):
+    return svc.rarezas_semana(semana_id)
+
+
+@router.get("/api/insights/checklist/{semana_id}")
+async def api_checklist(semana_id: int, svc=Depends(get_insights_service)):
+    return svc.checklist_export(semana_id)

@@ -58,7 +58,7 @@
     <span class="kpi-item"><b>{{ totales.total_gramos or 0 }}</b> g</span>
     <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}</b></span>
   </div>
-  <a class="btn" href="/api/export/produccion/{{ semana_id }}?fmt=xlsx&formal=1">Formal Excel Plata</a>
+  <button type="button" class="btn" id="btn-formal-xlsx" onclick="checklistExport({{ semana_id }})">Formal Excel Plata</button>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
   {% endif %}
@@ -213,6 +213,85 @@
 {% endblock %}
 
 {% block scripts %}
+
+<script>
+async function sugerirTrabajo(selectEl) {
+  const v = selectEl.value || '';
+  const parts = v.split('|');
+  if (parts.length < 2) return;
+  const nombre = parts[0];
+  const ubic = parts[1];
+  const tid = parts[2] || '';
+  let url = '/api/insights/sugerir-trabajo?';
+  if (tid) url += 'trabajador_id=' + encodeURIComponent(tid);
+  else url += 'nombre=' + encodeURIComponent(nombre) + '&ubic=' + encodeURIComponent(ubic);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    const s = data.sugerencia;
+    if (!s) return;
+    const form = selectEl.closest('form') || document;
+    const set = (name, val) => {
+      const el = form.querySelector('[name="'+name+'"]') || document.querySelector('[name="'+name+'"]');
+      if (el && val != null && val !== '') el.value = val;
+    };
+    set('folio', s.folio);
+    set('modelo', s.modelo);
+    set('material', s.material);
+    set('tarifa_gr', s.tarifa_gr);
+    if (window.FajosLive) FajosLive.showToast('Sugerido: ' + (s.folio || s.modelo || s.material || 'datos previos'));
+  } catch (e) { console.warn(e); }
+}
+
+async function checklistExport(semanaId) {
+  if (!semanaId) return;
+  try {
+    const res = await fetch('/api/insights/checklist/' + semanaId);
+    const data = await res.json();
+    const items = data.items || [];
+    let html = '<div class="checklist-box">';
+    items.forEach(it => {
+      const ok = it.ok;
+      html += '<div class="checklist-item ' + (ok ? 'ok' : 'bad') + '">';
+      html += '<span class="mark">' + (ok ? '✓' : '!') + '</span>';
+      html += '<div><div>' + (it.texto || '') + '</div>';
+      if (it.detalle && it.detalle.length) {
+        html += '<ul>' + it.detalle.map(d => '<li>' + d + '</li>').join('') + '</ul>';
+      }
+      html += '</div></div>';
+    });
+    html += '</div>';
+    const go = confirm(
+      'Checklist antes de exportar formal:\n\n' +
+      items.map(it => (it.ok ? '✓ ' : '! ') + it.texto).join('\n') +
+      (items.some(i => i.detalle && i.detalle.length)
+        ? '\n\nRarezas:\n' + items.filter(i => i.detalle).flatMap(i => i.detalle).slice(0,5).join('\n')
+        : '') +
+      '\n\n¿Descargar Excel formal de Plata?'
+    );
+    if (go) {
+      window.location.href = '/api/export/produccion/' + semanaId + '?fmt=xlsx&formal=1';
+    }
+  } catch (e) {
+    console.warn(e);
+    window.location.href = '/api/export/produccion/' + semanaId + '?fmt=xlsx&formal=1';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('select[name="trab"], select[name="trabajador"], select#sel-trab, select.add-trab').forEach(sel => {
+    sel.addEventListener('change', () => sugerirTrabajo(sel));
+  });
+  // modals may use different names
+  document.querySelectorAll('select').forEach(sel => {
+    if ((sel.name || '').match(/trab/i) || (sel.id || '').match(/trab/i)) {
+      sel.addEventListener('change', () => sugerirTrabajo(sel));
+    }
+  });
+});
+</script>
+
 <script>
 const SEMANA_ID = {{ semana_id or 'null' }};
 const COL_HOY = "{{ col_hoy|default('gm_lun') }}";

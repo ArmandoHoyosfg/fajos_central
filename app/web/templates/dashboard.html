@@ -44,6 +44,29 @@
   <a class="btn btn-secondary" href="/buscar">Buscar</a>
 </div>
 
+
+{% if insights and insights.avisos %}
+<section class="insights-panel" aria-label="Qué revisar hoy">
+  <div class="insights-head">
+    <h2>Qué revisar hoy</h2>
+    <span class="muted">{{ insights.col_hoy_label or '' }}{% if insights.semana %} · Semana {{ insights.semana.codigo }}{% endif %}</span>
+  </div>
+  <ul class="insights-list">
+    {% for a in insights.avisos %}
+    <li class="insight insight-{{ a.nivel }}">
+      <div class="insight-body">
+        <strong>{{ a.titulo }}</strong>
+        {% if a.detalle %}<p class="muted">{{ a.detalle }}</p>{% endif %}
+      </div>
+      {% if a.href %}
+      <a class="btn btn-secondary btn-sm" href="{{ a.href }}">{{ a.accion or 'Ver' }}</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 <div class="grid">
   <div class="card">
     <div class="label">Trabajadores activos</div>

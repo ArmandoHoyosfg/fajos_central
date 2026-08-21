@@ -5,6 +5,21 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.7.0] — 2026-08-21
+
+### Inteligencia operativa (reglas + estadísticas)
+- **Qué revisar hoy** en el dashboard (semana, gramos de hoy, firmas, PLT sin línea)
+- **Autocompletar** folio/modelo/material/tarifa al elegir trabajador (último trabajo o producción)
+- **Checklist pre-export** Formal Excel Plata (líneas con gramos, firmas, rarezas ±30 % vs historial)
+- API: `/api/insights/hoy`, `/api/insights/sugerir-trabajo`, `/api/insights/rarezas/{id}`, `/api/insights/checklist/{id}`
+
+## [3.6.2] — 2026-08-21
+
+### Edición de campos robusta
+- Parseo numérico seguro, solo claves enviadas en PATCH
+- Escape restaura valor; sin cambios no llama API
+- `cell_edit.js` compartido Pita/Taller
+
 ## [3.5.0] — 2026-08-21
 
 ### Edición inline + temas
