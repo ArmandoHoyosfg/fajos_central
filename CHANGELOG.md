@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.2.2] — 2026-08-21
+
+- Solo SQL `000_fajos_central_completo.sql` (incluye `cierre_dia`)
+- Excel: trabajadores faltantes en catálogo desde producción
+- Encabezados de tabla fijos al scroll (web)
+- Agregar día / fila en popup modal
+
 ## [3.2.1] — 2026-08-21
 
 ### Corregido

@@ -339,3 +339,73 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
   cursor: default;
   user-select: all;
 }
+
+/* Encabezados fijos al hacer scroll */
+.table-wrap {
+  max-height: min(70vh, 720px);
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid #45475a;
+}
+.table-wrap table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+.table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #1e1e2e;
+  box-shadow: 0 1px 0 #45475a;
+  white-space: nowrap;
+}
+
+/* Modal popup */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #000a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+.modal-backdrop[hidden] { display: none !important; }
+.modal {
+  background: #1e1e2e;
+  border: 1px solid #45475a;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  width: min(520px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 12px 40px #0008;
+}
+.modal h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+  color: #cdd6f4;
+}
+.modal .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem 0.75rem;
+}
+.modal .form-grid .full { grid-column: 1 / -1; }
+.modal label { display: block; font-size: 0.75rem; color: #a6adc8; margin-bottom: 0.2rem; }
+.modal input, .modal select {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  background: #11111b;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  color: #cdd6f4;
+}
+.modal .actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
