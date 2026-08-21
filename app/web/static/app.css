@@ -723,3 +723,103 @@ main.page-enter {
   font-size: 0.85rem;
   margin-right: 0.35rem;
 }
+
+
+/* ========== Temas (oscuro / claro / taller) ========== */
+[data-theme="claro"] {
+  --bg: #f4f6fb;
+  --bg-elev: #ffffff;
+  --surface: #eef1f8;
+  --border: #d0d7e5;
+  --text: #1e2433;
+  --muted: #5c6578;
+  --faint: #8b93a7;
+  --accent: #c9a227;
+  --accent-dim: #a68520;
+  --blue: #3b6fd9;
+  --green: #2f9e6b;
+  --red: #d6455d;
+  --peach: #d97706;
+  --mauve: #7c5cbf;
+  --shadow: 0 4px 18px rgba(30,36,51,.08);
+}
+[data-theme="claro"] body { background: var(--bg); color: var(--text); }
+[data-theme="claro"] .topbar { background: #fff; border-bottom-color: var(--border); }
+[data-theme="claro"] input, select, textarea {
+  background: #fff !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+[data-theme="claro"] .table-wrap table { background: #fff; }
+[data-theme="claro"] .table-wrap th { background: #e8ecf5 !important; color: var(--text) !important; }
+[data-theme="claro"] .btn { color: #11111b; }
+
+[data-theme="taller"] {
+  --bg: #1a1612;
+  --bg-elev: #241f19;
+  --surface: #2e2820;
+  --border: #4a4034;
+  --text: #f0e6d8;
+  --muted: #b8a894;
+  --faint: #8a7b68;
+  --accent: #e8b84a;
+  --accent-dim: #c49a30;
+  --blue: #7eb8d4;
+  --green: #8fbc8f;
+  --red: #e07a6a;
+  --peach: #e09a5a;
+  --mauve: #c4a0d0;
+  --shadow: 0 4px 20px rgba(0,0,0,.4);
+}
+[data-theme="taller"] body { background: var(--bg); color: var(--text); }
+[data-theme="taller"] .topbar { background: var(--bg-elev); border-bottom-color: var(--border); }
+
+.theme-switch {
+  display: inline-flex;
+  gap: 0.2rem;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem;
+}
+.theme-switch button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.theme-switch button.active {
+  background: var(--accent);
+  color: #11111b;
+}
+.theme-switch button:hover:not(.active) {
+  color: var(--text);
+}
+
+/* Celdas editables inline (mismo estilo, readOnly hasta confirmar) */
+input.cell-edit {
+  width: 100%;
+  max-width: 7rem;
+  padding: 0.2rem 0.35rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+}
+input.cell-edit:not([readonly]) {
+  background: var(--bg);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px #89b4fa33;
+}
+input.cell-edit.money { max-width: 5.5rem; text-align: right; }
+td.editable-hint { cursor: pointer; }
+td.editable-hint:hover input.cell-edit[readonly] {
+  border-color: var(--border);
+  background: var(--surface);
+}

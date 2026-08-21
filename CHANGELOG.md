@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.5.0] — 2026-08-21
+
+### Edición inline + temas
+- Pita/Taller: celdas editables con doble clic + confirmación
+- Temas: Oscuro, Claro, Taller (persistidos en localStorage)
+- PATCH `/api/nomina-pita/linea/{id}` y `/api/nomina-taller/linea/{id}`
+
 ## [3.4.2] — 2026-08-21
 
 ### Export limpio

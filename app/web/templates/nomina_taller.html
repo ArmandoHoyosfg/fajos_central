@@ -2,8 +2,8 @@
 {% block title %}Nómina Taller — Fajos Central{% endblock %}
 {% block content %}
 <div class="help-panel">
-  <strong>Taller (TLL):</strong> solo sueldo semanal + extras. No usa material ni gramos.
-  Total de fila = Sueldo + Extras.
+  <strong>Taller (TLL):</strong> doble clic en Puesto, Sueldo o Extras para editar (pide confirmación).
+  Total = Sueldo + Extras.
 </div>
 <div class="page-head">
   <div>
@@ -24,8 +24,8 @@
   <a class="btn" href="/api/export/nomina-taller/{{ semana_id }}">Excel formal Taller</a>
   <a class="btn btn-secondary" href="/api/export/resumen/{{ semana_id }}">Resumen 3 nóminas</a>
   <div class="kpi-bar">
-    <span class="kpi-item"><b>{{ totales.lineas or 0 }}</b> líneas</span>
-    <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total or 0)|float) }}</b> total taller</span>
+    <span class="kpi-item"><b id="kpi-lineas">{{ totales.lineas or 0 }}</b> líneas</span>
+    <span class="kpi-item money"><b id="kpi-total">${{ '%.2f'|format((totales.total or 0)|float) }}</b> total taller</span>
   </div>
   {% endif %}
 </div>
@@ -53,14 +53,17 @@
   </thead>
   <tbody>
   {% for r in lineas %}
-    <tr>
+    <tr data-id="{{ r.id }}">
       <td>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
-      <td>{{ r.puesto or '—' }}</td>
-      <td>${{ '%.2f'|format((r.sueldo or 0)|float) }}</td>
-      <td>${{ '%.2f'|format((r.extras or 0)|float) }}</td>
-      <td><strong>${{ '%.2f'|format((r.total or 0)|float) }}</strong></td>
-      <td>{% if r.firmado %}✓{% else %}—{% endif %}</td>
+      <td class="editable-hint"><input class="cell-edit" data-field="puesto" value="{{ r.puesto or '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="sueldo" type="number" step="0.01" value="{{ r.sueldo if r.sueldo is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="extras" type="number" step="0.01" value="{{ r.extras if r.extras is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="cell-total"><strong>${{ '%.2f'|format((r.total or 0)|float) }}</strong></td>
+      <td>
+        <input type="checkbox" {% if r.firmado %}checked{% endif %}
+               onchange="patchTll({{ r.id }}, 'firmado', this.checked ? '1' : '0')">
+      </td>
     </tr>
   {% else %}
     <tr><td colspan="7" class="muted">Sin líneas de taller esta semana.</td></tr>
@@ -74,6 +77,11 @@
 {% endblock %}
 {% block scripts %}
 <script>
+const SID = {{ semana_id or 'null' }};
+function toast(msg, err) {
+  if (window.FajosLive) return FajosLive.showToast(msg, err);
+  alert(msg);
+}
 document.getElementById('tll-trab')?.addEventListener('change', function() {
   const p = (this.value||'').split('|');
   const puesto = document.getElementById('tll-puesto');
@@ -81,8 +89,7 @@ document.getElementById('tll-trab')?.addEventListener('change', function() {
 });
 async function addTll(e) {
   e.preventDefault();
-  const sid = {{ semana_id or 'null' }};
-  if (!sid) return false;
+  if (!SID) return false;
   const form = e.target;
   const parts = (form.trab.value||'').split('|');
   const body = new FormData();
@@ -92,10 +99,52 @@ async function addTll(e) {
   body.set('puesto', form.puesto.value || parts[3] || '');
   body.set('sueldo', form.sueldo.value);
   body.set('extras', form.extras.value || '0');
-  const res = await fetch('/api/nomina-taller/' + sid, { method: 'POST', body });
+  const res = await fetch('/api/nomina-taller/' + SID, { method: 'POST', body });
   if (res.ok) location.reload();
-  else alert('Error al guardar');
+  else toast('Error al guardar', true);
   return false;
 }
+async function patchTll(id, field, value) {
+  const body = new FormData();
+  body.set(field, value);
+  const res = await fetch('/api/nomina-taller/linea/' + id, { method: 'PATCH', body });
+  if (!res.ok) { toast('No se pudo guardar', true); return false; }
+  toast('Guardado');
+  if (field === 'sueldo' || field === 'extras') {
+    // update total cell client-side
+    const tr = document.querySelector('tr[data-id="'+id+'"]');
+    if (tr) {
+      const s = parseFloat(tr.querySelector('[data-field="sueldo"]').value || 0);
+      const x = parseFloat(tr.querySelector('[data-field="extras"]').value || 0);
+      const cell = tr.querySelector('.cell-total strong');
+      if (cell) cell.textContent = '$' + (s+x).toFixed(2);
+    }
+  }
+  return true;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('input.cell-edit').forEach(inp => {
+    inp.addEventListener('dblclick', () => {
+      if (!inp.readOnly) return;
+      if (!confirm('¿Editar este campo?')) return;
+      inp.readOnly = false;
+      inp.focus();
+      inp.select();
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+      if (e.key === 'Escape') { inp.readOnly = true; inp.blur(); }
+    });
+    inp.addEventListener('blur', async () => {
+      if (inp.readOnly) return;
+      const tr = inp.closest('tr');
+      const id = tr && tr.dataset.id;
+      if (!id) return;
+      const ok = await patchTll(id, inp.dataset.field, inp.value);
+      inp.readOnly = true;
+      if (!ok) location.reload();
+    });
+  });
+});
 </script>
 {% endblock %}

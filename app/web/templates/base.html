@@ -1,10 +1,15 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="oscuro">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Fajos Piteados Central{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
+  <script>
+(function(){ try { var t = localStorage.getItem('fajos_theme') || 'oscuro';
+  document.documentElement.setAttribute('data-theme', t === 'oscuro' ? 'oscuro' : t);
+} catch(e){} })();
+</script>
   <script src="/static/live_totals.js" defer></script>
   <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/logo.png">
@@ -53,6 +58,11 @@
       <a href="/docs" target="_blank" rel="noopener">
         <i data-lucide="book-open"></i> API
       </a>
+      <div class="theme-switch" title="Tema visual">
+        <button type="button" data-theme-set="oscuro">Oscuro</button>
+        <button type="button" data-theme-set="claro">Claro</button>
+        <button type="button" data-theme-set="taller">Taller</button>
+      </div>
       {% if db_ok is defined %}
       <span class="status-chip {% if db_ok %}ok{% else %}err{% endif %}" title="MariaDB">
         <span class="dot"></span> BD
@@ -74,5 +84,23 @@
     });
   </script>
   {% block scripts %}{% endblock %}
+<script>
+(function(){
+  function applyTheme(t) {
+    if (!t) t = 'oscuro';
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem('fajos_theme', t); } catch(e){}
+    document.querySelectorAll('[data-theme-set]').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-theme-set') === t);
+    });
+  }
+  var cur = 'oscuro';
+  try { cur = localStorage.getItem('fajos_theme') || 'oscuro'; } catch(e){}
+  applyTheme(cur);
+  document.querySelectorAll('[data-theme-set]').forEach(function(b){
+    b.addEventListener('click', function(){ applyTheme(b.getAttribute('data-theme-set')); });
+  });
+})();
+</script>
 </body>
 </html>

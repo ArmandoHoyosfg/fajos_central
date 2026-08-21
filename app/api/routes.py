@@ -944,3 +944,56 @@ async def api_export_resumen(
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
+
+@router.patch("/api/nomina-pita/linea/{row_id}")
+async def api_patch_pita(
+    row_id: int,
+    modelo: str | None = Form(None),
+    folio: str | None = Form(None),
+    material: str | None = Form(None),
+    producto: str | None = Form(None),
+    pitas: str | None = Form(None),
+    efectivo: str | None = Form(None),
+    firmado: int | None = Form(None),
+    repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+):
+    data = {}
+    if modelo is not None:
+        data["modelo"] = modelo or None
+    if folio is not None:
+        data["folio"] = folio or None
+    if material is not None:
+        data["material"] = material or None
+    if producto is not None:
+        data["producto"] = producto or None
+    if pitas is not None:
+        data["pitas"] = float(pitas) if str(pitas).strip() != "" else None
+    if efectivo is not None:
+        data["efectivo"] = float(efectivo) if str(efectivo).strip() != "" else 0
+    if firmado is not None:
+        data["firmado"] = 1 if int(firmado) else 0
+    repo.actualizar(row_id, data)
+    return {"ok": True, "id": row_id}
+
+
+@router.patch("/api/nomina-taller/linea/{row_id}")
+async def api_patch_taller(
+    row_id: int,
+    puesto: str | None = Form(None),
+    sueldo: str | None = Form(None),
+    extras: str | None = Form(None),
+    firmado: int | None = Form(None),
+    repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
+):
+    data = {}
+    if puesto is not None:
+        data["puesto"] = puesto or None
+    if sueldo is not None:
+        data["sueldo"] = float(sueldo) if str(sueldo).strip() != "" else 0
+    if extras is not None:
+        data["extras"] = float(extras) if str(extras).strip() != "" else 0
+    if firmado is not None:
+        data["firmado"] = 1 if int(firmado) else 0
+    repo.actualizar(row_id, data)
+    return {"ok": True, "id": row_id}
