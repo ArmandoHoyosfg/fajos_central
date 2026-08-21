@@ -390,19 +390,20 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
 }
 .modal-backdrop[hidden] { display: none !important; }
 .modal {
-  background: #1e1e2e;
-  border: 1px solid #45475a;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 1.25rem 1.5rem;
   width: min(520px, 100%);
   max-height: 90vh;
   overflow: auto;
-  box-shadow: 0 12px 40px #0008;
+  box-shadow: var(--shadow);
+  color: var(--text);
 }
 .modal h2 {
   margin: 0 0 0.75rem;
   font-size: 1.15rem;
-  color: #cdd6f4;
+  color: var(--text);
 }
 .modal .form-grid {
   display: grid;
@@ -410,20 +411,52 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
   gap: 0.65rem 0.75rem;
 }
 .modal .form-grid .full { grid-column: 1 / -1; }
-.modal label { display: block; font-size: 0.75rem; color: #a6adc8; margin-bottom: 0.2rem; }
-.modal input, .modal select {
+.modal label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+.modal input,
+.modal select,
+.modal textarea {
   width: 100%;
-  padding: 0.4rem 0.5rem;
-  background: #11111b;
-  border: 1px solid #45475a;
-  border-radius: 6px;
-  color: #cdd6f4;
+  box-sizing: border-box;
+  padding: 0.45rem 0.55rem;
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px;
+  color: var(--text) !important;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color-scheme: inherit;
+  appearance: auto;
+}
+.modal select {
+  cursor: pointer;
+  /* evita el fondo blanco nativo al enfocar en Windows */
+  background-image: none;
+}
+.modal select option,
+.modal select optgroup {
+  background: var(--bg-elev);
+  color: var(--text);
+}
+.modal input[type="date"] {
+  color-scheme: dark;
+  min-height: 2.2rem;
+}
+.modal input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.7;
+  cursor: pointer;
+  filter: invert(0.85);
 }
 .modal .actions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
   margin-top: 1rem;
+  flex-wrap: wrap;
 }
 
 
@@ -896,4 +929,37 @@ td.editable-hint:hover input.cell-edit[readonly] {
 .form-alta-compact select[name="trab"] {
   max-width: 14rem;
   flex: 1 1 12rem;
+}
+
+
+/* Form controls theme-safe (evita blancos nativos en select/date) */
+html[data-theme="oscuro"],
+html:not([data-theme]),
+html[data-theme="taller"] {
+  color-scheme: dark;
+}
+html[data-theme="claro"] {
+  color-scheme: light;
+}
+html[data-theme="claro"] .modal input[type="date"] {
+  color-scheme: light;
+}
+html[data-theme="claro"] .modal input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+}
+select, input[type="date"], input[type="number"], input[type="text"], input[type="search"], textarea {
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+select option {
+  background-color: var(--bg-elev);
+  color: var(--text);
+}
+/* Select abierto / focus no debe ir a blanco */
+select:focus,
+select:active,
+.modal select:focus {
+  background-color: var(--bg) !important;
+  color: var(--text) !important;
 }
