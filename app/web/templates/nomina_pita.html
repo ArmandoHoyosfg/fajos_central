@@ -49,8 +49,8 @@
     <input name="folio" placeholder="Folio">
     <input name="material" placeholder="Material" value="PITA 6X6">
     <input name="producto" placeholder="Producto" value="Cinturón">
-    <input name="pitas" type="number" step="0.01" placeholder="Pitas">
-    <input name="efectivo" type="number" step="0.01" placeholder="Efectivo $" required>
+    <input name="pitas" type="number" step="0.1" placeholder="Pitas">
+    <input name="efectivo" type="number" step="0.1" placeholder="Efectivo $" required>
     <button class="btn" type="submit" {% if semana_cerrada %}disabled{% endif %}>Agregar</button>
   </form>
 </div>
@@ -98,8 +98,8 @@
       <td class="editable-hint"><input class="cell-edit" data-field="folio" value="{{ r.folio or '' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint"><input class="cell-edit" data-field="material" value="{{ r.material or '' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint"><input class="cell-edit" data-field="producto" value="{{ r.producto or '' }}" readonly title="Doble clic para editar"></td>
-      <td class="editable-hint"><input class="cell-edit money" data-field="pitas" type="number" step="0.01" value="{{ r.pitas if r.pitas is not none else '' }}" readonly title="Doble clic para editar"></td>
-      <td class="editable-hint"><input class="cell-edit money" data-field="efectivo" type="number" step="0.01" value="{{ r.efectivo if r.efectivo is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="pitas" type="number" step="0.1" value="{{ r.pitas if r.pitas is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="efectivo" type="number" step="0.1" value="{{ r.efectivo if r.efectivo is not none else '' }}" readonly title="Doble clic para editar"></td>
       <td>
         <input type="checkbox" {% if r.firmado %}checked{% endif %}
                onchange="patchPit({{ r.id }}, 'firmado', this.checked ? '1' : '0')">
@@ -122,8 +122,8 @@
         <div><label>Folio</label><input name="folio"></div>
         <div><label>Material</label><input name="material" placeholder="PITA 6X6"></div>
         <div><label>Producto</label><input name="producto" placeholder="Cinturón"></div>
-        <div><label>Pitas</label><input name="pitas" type="number" step="0.01" min="0"></div>
-        <div><label>Efectivo $</label><input name="efectivo" type="number" step="0.01" min="0"></div>
+        <div><label>Pitas</label><input name="pitas" type="number" step="0.1" min="0"></div>
+        <div><label>Efectivo $</label><input name="efectivo" type="number" step="0.1" min="0"></div>
         <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
       </div>
       <div class="actions">

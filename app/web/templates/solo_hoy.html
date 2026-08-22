@@ -43,7 +43,7 @@
         {% if captura.semana.cerrada %}
           {{ r.gramos_hoy or '' }}
         {% else %}
-          <input class="cell-gm hoy-input" type="number" step="0.01" min="0"
+          <input class="cell-gm hoy-input" type="number" step="0.1" min="0"
                  data-id="{{ r.id }}" data-dia="{{ captura.col_hoy }}"
                  value="{{ r.gramos_hoy if r.gramos_hoy else '' }}"
                  placeholder="0">
@@ -60,31 +60,31 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/capture_guard.js?v=3130"></script>
 <script>
-document.querySelectorAll('input.hoy-input').forEach(inp => {
-  let orig = inp.value;
-  inp.addEventListener('focus', () => { orig = inp.value; });
-  async function save() {
-    if (String(inp.value) === String(orig)) return;
-    const body = new FormData();
-    body.set('dia', inp.dataset.dia);
-    body.set('gramos', inp.value === '' ? '' : inp.value);
-    const res = await fetch('/api/produccion/linea/' + inp.dataset.id + '/dia', { method: 'PATCH', body });
-    if (!res.ok) {
-      alert('No se pudo guardar');
-      inp.value = orig;
-      return;
-    }
-    orig = inp.value;
-    const tr = inp.closest('tr');
-    if (tr) {
-      if (parseFloat(inp.value||'0') > 0) tr.classList.remove('row-pendiente');
-      else tr.classList.add('row-pendiente');
-    }
-    if (window.FajosLive) FajosLive.showToast('Guardado');
+window.COL_HOY = {{ (captura.col_hoy|tojson) if captura else 'null' }};
+async function saveHoy(inp) {
+  if (window.FajosCaptureGuard) FajosCaptureGuard.normalizeInput(inp);
+  const body = new FormData();
+  body.set('dia', inp.dataset.dia);
+  body.set('gramos', inp.value === '' ? '' : inp.value);
+  const res = await fetch('/api/produccion/linea/' + inp.dataset.id + '/dia', { method: 'PATCH', body });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    if (window.FajosLive) FajosLive.showToast(data.user_message || 'No se pudo guardar', true);
+    else alert('No se pudo guardar');
+    throw new Error('save');
   }
-  inp.addEventListener('blur', save);
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+  const tr = inp.closest('tr');
+  if (tr) {
+    if (parseFloat(inp.value || '0') > 0) tr.classList.remove('row-pendiente');
+    else tr.classList.add('row-pendiente');
+  }
+  if (window.FajosLive) FajosLive.showToast('Guardado');
+}
+window.__fajosSaveGram = saveHoy;
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.FajosCaptureGuard) FajosCaptureGuard.init();
 });
 </script>
 {% endblock %}

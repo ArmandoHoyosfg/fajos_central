@@ -27,7 +27,7 @@
   <button type="button" class="btn btn-secondary" onclick="openModal('modal-linea')" {% if semana_cerrada %}disabled{% endif %}>＋ Fila</button>
   <button type="button" class="btn btn-secondary" onclick="cerrarSemana()" {% if semana_cerrada %}disabled{% endif %}>🔒 Cerrar semana</button>
   <button type="button" class="btn btn-secondary" onclick="reabrirSemana()" {% if not semana_cerrada %}disabled{% endif %}>🔓 Reabrir</button>
-  <a class="btn btn-secondary" href="/api/semanas/{{ semana_id }}/historial" target="_blank">Historial</a>
+  <a class="btn btn-secondary" href="/historial/{{ semana_id }}" target="_blank">Historial</a>
   {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;">SEMANA CERRADA</span>{% endif %}
   {% endif %}
   <button type="button" class="btn btn-secondary" onclick="crearSemanaActual()">★ Semana actual</button>
@@ -133,7 +133,7 @@
         {% if semana_cerrada %}
           {{ r[d] or '' }}
         {% else %}
-          <input class="cell-gm" type="number" step="0.01" min="0"
+          <input class="cell-gm" type="number" step="0.1" min="0"
                  data-id="{{ r.id }}" data-dia="{{ d }}"
                  data-hoy="{% if d == col_hoy %}1{% else %}0{% endif %}"
                  value="{{ r[d] if r[d] else '' }}" title="{{ d }}">
@@ -190,7 +190,7 @@
         </div>
         <div>
           <label>Gramos</label>
-          <input name="gramos" type="number" step="0.01" min="0.01" required>
+          <input name="gramos" type="number" step="0.1" min="0.01" required>
         </div>
         <div><label>Folio</label><input name="folio" placeholder="ST-149"></div>
         <div><label>Modelo</label><input name="modelo"></div>
@@ -198,7 +198,7 @@
           <label>Material</label>
           <select name="material"><option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option></select>
         </div>
-        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.01" value="12"></div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
       </div>
       <div class="actions">
         <button type="button" class="btn btn-secondary" onclick="closeModal('modal-un-dia')">Cancelar</button>
@@ -222,14 +222,14 @@
             <option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option>
           </select>
         </div>
-        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.01" min="0"></div>
-        <div><label>Sáb</label><input name="gm_sab" type="number" step="0.01" min="0"></div>
-        <div><label>Dom</label><input name="gm_dom" type="number" step="0.01" min="0"></div>
-        <div><label>Lun</label><input name="gm_lun" type="number" step="0.01" min="0"></div>
-        <div><label>Mar</label><input name="gm_mar" type="number" step="0.01" min="0"></div>
-        <div><label>Mié</label><input name="gm_mie" type="number" step="0.01" min="0"></div>
-        <div><label>Jue</label><input name="gm_jue" type="number" step="0.01" min="0"></div>
-        <div><label>Vie</label><input name="gm_vie" type="number" step="0.01" min="0"></div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" min="0"></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="0.1" min="0"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="0.1" min="0"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="0.1" min="0"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="0.1" min="0"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="0.1" min="0"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="0.1" min="0"></div>
         <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
       </div>
       <div class="actions">
@@ -260,7 +260,7 @@
           <label>Material</label>
           <select name="material"><option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option></select>
         </div>
-        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.01" value="12"></div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
       </div>
       <div class="actions">
         <button type="button" class="btn btn-secondary" onclick="closeModal('modal-linea')">Cancelar</button>
@@ -272,6 +272,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/capture_guard.js?v=3130"></script>
+
 <script src="/static/semana_ops.js?v=3122"></script>
 <script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "plt";</script>
 
@@ -545,6 +547,7 @@ async function toggleFirmado(id, checked) {
 }
 async function saveGramCell(inp) {
   if (inp.readOnly) return;
+  if (window.FajosCaptureGuard) FajosCaptureGuard.normalizeInput(inp);
   const id = inp.dataset.id;
   const dia = inp.dataset.dia;
   const map = {gm_sab:'sab',gm_dom:'dom',gm_lun:'lun',gm_mar:'mar',gm_mie:'mie',gm_jue:'jue',gm_vie:'vie'};
@@ -556,7 +559,16 @@ async function saveGramCell(inp) {
   if (res.ok) {
     showToast('Guardado');
     if (window.FajosLive) { FajosLive.flashCell(inp); FajosLive.flashRow(inp); FajosLive.pulseKpi('#kpi-live'); }
-  } else showToast(data.user_message || data.message || 'Error', true);
+    // actualizar total g / $ de la fila si el API los devuelve
+    const tr = inp.closest('tr');
+    if (tr && data.total_gramos != null) {
+      const tg = tr.querySelector('.cell-total');
+      if (tg) tg.textContent = FajosCaptureGuard ? FajosCaptureGuard.formatGram(data.total_gramos) : data.total_gramos;
+    }
+  } else {
+    showToast(data.user_message || data.message || 'Error', true);
+    throw new Error(data.message || 'save failed');
+  }
 }
 
 function applyTableFilters() {

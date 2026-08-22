@@ -390,6 +390,24 @@ async def api_reabrir_semana(
     return {"ok": True, "semana_id": semana_id, "cerrada": False}
 
 
+
+@router.get("/historial/{semana_id}", response_class=HTMLResponse)
+async def page_historial(
+    request: Request,
+    semana_id: int,
+    limit: int = Query(100, ge=1, le=500),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    from app.services.audit_service import AuditService
+    semana = sem_repo.obtener(semana_id)
+    rows = AuditService().listar_por_semana(semana_id, limit=limit)
+    return templates.TemplateResponse(
+        request,
+        "historial.html",
+        _ctx(request, semana_id=semana_id, semana=semana, rows=rows),
+    )
+
+
 @router.get("/api/semanas/{semana_id}/historial")
 async def api_historial(semana_id: int, limit: int = Query(50, ge=1, le=500)):
     from app.services.audit_service import AuditService
@@ -636,7 +654,15 @@ async def api_patch_dia(
 ):
     """Registra o corrige un solo día de trabajo en una línea existente."""
     repo.actualizar_gramos_dia(prod_id, dia, gramos)
-    return {"ok": True, "prod_id": prod_id, "dia": dia, "gramos": gramos}
+    row = repo.obtener(prod_id)
+    out = {"ok": True, "prod_id": prod_id, "dia": dia, "gramos": gramos}
+    if row:
+        try:
+            out["total_gramos"] = float(row.get("total_gramos") or 0)
+            out["total_efectivo"] = float(row.get("total_efectivo") or 0)
+        except (TypeError, ValueError):
+            pass
+    return out
 
 
 @router.post("/api/produccion/{semana_id}/dia")

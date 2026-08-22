@@ -5,6 +5,16 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.13.0] — 2026-08-22
+
+### Bloque A — captura diaria + gramos a 1 decimal
+- Gramos y precios: `step=0.1` (flechas de 0.1, no 0.01)
+- Confirmación si gramos raros vs promedio / umbral
+- Deshacer último gramo (botón ↩)
+- Enter en Solo hoy / Plata avanza al siguiente pendiente
+- Página `/historial/{semana_id}` (ya no JSON crudo)
+- Script SQL `002_historial.sql` si falta la tabla
+
 ## [3.12.2] — 2026-08-22
 
 ### No re-duplicar semanas ya copiadas

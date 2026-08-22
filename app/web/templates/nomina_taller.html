@@ -47,8 +47,8 @@
       {% endfor %}
     </select>
     <input name="puesto" id="tll-puesto" placeholder="Puesto" style="width:110px;">
-    <input name="sueldo" type="number" step="0.01" placeholder="Sueldo" required style="width:100px;">
-    <input name="extras" type="number" step="0.01" placeholder="Extras" value="0" style="width:90px;">
+    <input name="sueldo" type="number" step="0.1" placeholder="Sueldo" required style="width:100px;">
+    <input name="extras" type="number" step="0.1" placeholder="Extras" value="0" style="width:90px;">
     <button class="btn" type="submit" {% if semana_cerrada %}disabled{% endif %}>Agregar</button>
   </form>
 </div>
@@ -89,8 +89,8 @@
           ondblclick='openEditTll({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="puesto" value="{{ r.puesto or '' }}" readonly title="Doble clic para editar"></td>
-      <td class="editable-hint"><input class="cell-edit money" data-field="sueldo" type="number" step="0.01" value="{{ r.sueldo if r.sueldo is not none else '' }}" readonly title="Doble clic para editar"></td>
-      <td class="editable-hint"><input class="cell-edit money" data-field="extras" type="number" step="0.01" value="{{ r.extras if r.extras is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="sueldo" type="number" step="0.1" value="{{ r.sueldo if r.sueldo is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="extras" type="number" step="0.1" value="{{ r.extras if r.extras is not none else '' }}" readonly title="Doble clic para editar"></td>
       <td class="cell-total"><strong>${{ '%.2f'|format((r.total or 0)|float) }}</strong></td>
       <td>
         <input type="checkbox" {% if r.firmado %}checked{% endif %}
@@ -111,8 +111,8 @@
     <form id="form-edit-tll" onsubmit="return FajosRowEdit.submit({formId:'form-edit-tll', modalId:'modal-edit-tll', urlBase:'/api/nomina-taller/linea/'})">
       <div class="form-grid">
         <div class="full"><label>Puesto</label><input name="puesto" autocomplete="off"></div>
-        <div><label>Sueldo</label><input name="sueldo" type="number" step="0.01" min="0"></div>
-        <div><label>Extras</label><input name="extras" type="number" step="0.01" min="0"></div>
+        <div><label>Sueldo</label><input name="sueldo" type="number" step="0.1" min="0"></div>
+        <div><label>Extras</label><input name="extras" type="number" step="0.1" min="0"></div>
         <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
       </div>
       <div class="actions">

@@ -216,6 +216,11 @@ class SemanasRepo(BaseRepo):
 
 
 class ProduccionRepo(BaseRepo):
+    def obtener(self, prod_id: int) -> dict | None:
+        with self.db.cursor() as cur:
+            cur.execute("SELECT * FROM produccion_plata WHERE id = %s", (prod_id,))
+            return cur.fetchone()
+
     def listar_por_semana(self, semana_id: int) -> list[dict]:
         sql = """
             SELECT id, semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo,
@@ -524,8 +529,13 @@ class ProduccionRepo(BaseRepo):
     }
 
     def actualizar_gramos_dia(self, prod_id: int, dia: str, gramos: float | None) -> None:
-        """Actualiza un solo día de una línea existente (None o 0 = vacío)."""
+        """Actualiza un solo día de una línea existente (None o 0 = vacío). Gramos a 1 decimal."""
         from app.services.audit_service import AuditService
+        if gramos is not None:
+            try:
+                gramos = round(float(gramos), 1)
+            except (TypeError, ValueError):
+                gramos = None
         audit = AuditService(self.db)
         col = self.DAY_COLS.get((dia or "").strip().lower())
         if not col:
