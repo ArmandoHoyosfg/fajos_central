@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.11.1] — 2026-08-22
+
+### Acciones compactas (⋮) + doble clic en nombre
+- Columna ACC reducida a un solo ⋮ (Plata, Pita, Taller, Folios)
+- Menú: Editar fila… / Eliminar (o Desactivar en Folios)
+- Doble clic en el nombre abre el mismo modal de edición
+- Se conservan edición por celda (gramos, inline Pita/Taller)
+
 ## [3.11.0] — 2026-08-22
 
 ### Plata edición + Trabajos como catálogo

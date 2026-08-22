@@ -48,25 +48,29 @@
     <tr data-activo="{{ 1 if r.trabajo_activo else 0 }}"
         data-sin-hoy="{{ 1 if r.sin_hoy else 0 }}"
         data-txt="{{ (r.nombre or '')|lower }} {{ (r.folio or '')|lower }} {{ (r.modelo or '')|lower }}">
-      <td class="col-actions">
-        <button type="button" class="btn-icon-edit" title="Editar trabajo"
-          onclick='openEditTrabajo({{ r.trabajo_id }}, {{ {
+{% set row_data = {
             "folio": r.folio or "",
             "modelo": r.modelo or "",
             "material": r.material or "AG3",
             "tarifa_gr": r.tarifa_gr if r.tarifa_gr is not none else 12,
             "nombre": r.nombre,
             "ubic": r.ubic
-          }|tojson }})'>✎</button>
-        {% if r.trabajo_activo %}
-        <button type="button" class="btn-icon-del" title="Desactivar"
-          onclick="toggleTrabajo({{ r.trabajo_id }}, false)">×</button>
-        {% else %}
-        <button type="button" class="btn-icon-edit" title="Reactivar"
-          onclick="toggleTrabajo({{ r.trabajo_id }}, true)">↻</button>
-        {% endif %}
+          } %}
+      <td class="col-actions">
+        <div class="row-menu">
+          <button type="button" class="btn-row-menu" title="Acciones" onclick="FajosRowMenu.toggle(this, event)">⋮</button>
+          <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
+            <button type="button" onclick='openEditTrabajo({{ r.trabajo_id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar…</button>
+            {% if r.trabajo_activo %}
+            <button type="button" class="danger" onclick="toggleTrabajo({{ r.trabajo_id }}, false); FajosRowMenu.closeAll()">Desactivar</button>
+            {% else %}
+            <button type="button" onclick="toggleTrabajo({{ r.trabajo_id }}, true); FajosRowMenu.closeAll()">Reactivar</button>
+            {% endif %}
+          </div>
+        </div>
       </td>
-      <td class="col-nombre">{{ r.nombre }}</td>
+      <td class="col-nombre name-edit" title="Doble clic para editar"
+          ondblclick='openEditTrabajo({{ r.trabajo_id }}, {{ row_data|tojson }})'>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td>{{ r.folio or '—' }}</td>
       <td>{{ r.modelo or '—' }}</td>
@@ -115,6 +119,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="/static/row_menu.js"></script>
 <script src="/static/row_edit.js"></script>
 <script>
 const COL_HOY = {{ col_hoy|tojson }};

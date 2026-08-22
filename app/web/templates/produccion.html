@@ -82,7 +82,7 @@
   </colgroup>
   <thead>
     <tr>
-      <th class="col-actions">Acc</th>
+      <th class="col-actions" title="Acciones">⋮</th>
       <th>Nombre</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>$/g</th>
       <th>Sáb</th><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th>
       <th>Gr</th><th>$</th><th>✓</th>
@@ -91,10 +91,7 @@
   <tbody>
     {% for r in lineas %}
     <tr class="mat-{{ (r.material or '')|lower }}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
-      <td class="col-actions">
-        {% if not semana_cerrada %}
-        <button type="button" class="btn-icon-edit" title="Editar fila completa"
-          onclick='openEditPlt({{ r.id }}, {{ {
+      {% set row_data = {
             "nombre": r.nombre,
             "ubic": r.ubic,
             "folio": r.folio or "",
@@ -109,13 +106,23 @@
             "gm_jue": r.gm_jue if r.gm_jue else "",
             "gm_vie": r.gm_vie if r.gm_vie else "",
             "firmado": 1 if r.firmado else 0
-          }|tojson }})'>✎</button>
-        <button type="button" class="btn-icon-del" onclick="delLinea({{ r.id }})" title="Eliminar línea">×</button>
+          } %}
+      <td class="col-actions">
+        {% if not semana_cerrada %}
+        <div class="row-menu">
+          <button type="button" class="btn-row-menu" title="Acciones" aria-label="Acciones"
+            onclick="FajosRowMenu.toggle(this, event)">⋮</button>
+          <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
+            <button type="button" onclick='openEditPlt({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
+            <button type="button" class="danger" onclick="delLinea({{ r.id }}); FajosRowMenu.closeAll()">Eliminar</button>
+          </div>
+        </div>
         {% else %}
         <span class="muted">—</span>
         {% endif %}
       </td>
-      <td class="col-nombre" title="{{ r.nombre }}">{{ r.nombre }}</td>
+      <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
+          {% if not semana_cerrada %}ondblclick='openEditPlt({{ r.id }}, {{ row_data|tojson }})'{% endif %}>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td title="{{ r.folio or '' }}">{{ r.folio or '—' }}</td>
       <td title="{{ r.modelo or '' }}">{{ r.modelo or '—' }}</td>
@@ -265,6 +272,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/row_menu.js"></script>
 <script src="/static/row_edit.js"></script>
 <script>
 function openEditPlt(id, data) {

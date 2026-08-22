@@ -55,25 +55,33 @@
   </colgroup>
   <thead>
     <tr>
-      <th></th><th class="col-nombre">Nombre</th><th>Ubic</th><th>Puesto</th>
+      <th class="col-actions" title="Acciones">⋮</th><th class="col-nombre">Nombre</th><th>Ubic</th><th>Puesto</th>
       <th>Sueldo</th><th>Extras</th><th>Total</th><th>Firma</th>
     </tr>
   </thead>
   <tbody>
   {% for r in lineas %}
     <tr data-id="{{ r.id }}">
-      <td>
-        <button type="button" class="btn-icon-del" onclick="delTll({{ r.id }})" title="Eliminar">×</button>
-        <button type="button" class="btn-icon-edit" onclick='openEditTll({{ r.id }}, {{ {
+      <td class="col-actions">
+{% set row_data = {
           "puesto": r.puesto or "",
           "sueldo": r.sueldo if r.sueldo is not none else "",
           "extras": r.extras if r.extras is not none else 0,
           "firmado": 1 if r.firmado else 0,
           "nombre": r.nombre,
           "ubic": r.ubic
-        }|tojson }})' title="Editar fila">✎</button>
+        } %}
+        <div class="row-menu">
+          <button type="button" class="btn-row-menu" title="Acciones" aria-label="Acciones"
+            onclick="FajosRowMenu.toggle(this, event)">⋮</button>
+          <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
+            <button type="button" onclick='openEditTll({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
+            <button type="button" class="danger" onclick="delTll({{ r.id }}); FajosRowMenu.closeAll()">Eliminar</button>
+          </div>
+        </div>
       </td>
-      <td class="col-nombre" title="{{ r.nombre }}">{{ r.nombre }}</td>
+      <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
+          ondblclick='openEditTll({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="puesto" value="{{ r.puesto or '' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint"><input class="cell-edit money" data-field="sueldo" type="number" step="0.01" value="{{ r.sueldo if r.sueldo is not none else '' }}" readonly title="Doble clic para editar"></td>
@@ -115,6 +123,7 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/row_menu.js"></script>
 <script src="/static/row_edit.js"></script>
 <script>
 function openEditTll(id, data) {
