@@ -849,10 +849,45 @@ input.cell-edit {
   color: inherit;
   font: inherit;
 }
-input.cell-edit:not([readonly]) {
-  background: var(--bg);
-  border-color: var(--blue);
+input.cell-edit:not([readonly]),
+input.cell-edit.is-editing {
+  background: var(--bg) !important;
+  border-color: var(--blue) !important;
   box-shadow: 0 0 0 2px #89b4fa33;
+  pointer-events: auto !important;
+  cursor: text;
+}
+input.cell-edit[readonly] {
+  cursor: default;
+}
+td.cell-with-edit {
+  position: relative;
+  padding-right: 1.4rem !important;
+}
+.btn-edit-cell {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+}
+.btn-edit-cell:hover {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--surface);
+}
+td.cell-with-edit input.cell-edit {
+  padding-right: 1.1rem;
 }
 input.cell-edit.money { max-width: 5.5rem; text-align: right; }
 td.editable-hint { cursor: pointer; }

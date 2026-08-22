@@ -180,13 +180,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  if (window.FajosCellEdit) {
+  function bind() {
+    if (!window.FajosCellEdit) {
+      setTimeout(bind, 50);
+      return;
+    }
     FajosCellEdit.bindCellEdits({
       selector: 'input.cell-edit',
       urlFor: (id) => '/api/nomina-pita/linea/' + id,
       onSaved: onSaved
     });
   }
+  bind();
 });
 </script>
 {% endblock %}

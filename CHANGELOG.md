@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.8.1] — 2026-08-21
+
+### Fix edición inline Taller/Pita
+- `readonly` HTML se quita/pone correctamente al editar
+- Evita carrera blur tras `confirm()`
+- Botón ✎ en cada celda editable (además de doble clic)
+- HTML `colgroup` corregido en tabla Taller
+
 ## [3.8.0] — 2026-08-21
 
 ### Pronóstico, duplicar 3 nóminas y alertas de cierre

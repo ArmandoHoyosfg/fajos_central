@@ -49,12 +49,15 @@
 </div>
 <div class="table-wrap table-compact">
 <table>
-  <thead>
-    <colgroup>
+  <colgroup>
     <col class="col-del"><col class="col-nombre"><col class="col-ubic"><col class="col-puesto">
     <col class="col-sueldo"><col class="col-extras"><col class="col-total"><col class="col-firma">
   </colgroup>
-  <tr><th></th><th class="col-nombre">Nombre</th><th>Ubic</th><th>Puesto</th><th>Sueldo</th><th>Extras</th><th>Total</th><th>Firma</th></tr>
+  <thead>
+    <tr>
+      <th></th><th class="col-nombre">Nombre</th><th>Ubic</th><th>Puesto</th>
+      <th>Sueldo</th><th>Extras</th><th>Total</th><th>Firma</th>
+    </tr>
   </thead>
   <tbody>
   {% for r in lineas %}
@@ -179,13 +182,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  if (window.FajosCellEdit) {
+  function bind() {
+    if (!window.FajosCellEdit) {
+      setTimeout(bind, 50);
+      return;
+    }
     FajosCellEdit.bindCellEdits({
       selector: 'input.cell-edit',
       urlFor: (id) => '/api/nomina-taller/linea/' + id,
       onSaved: onSaved
     });
   }
+  bind();
 });
 </script>
 {% endblock %}
