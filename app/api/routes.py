@@ -809,7 +809,10 @@ async def page_nomina_taller(
     return templates.TemplateResponse(
         request,
         "nomina_taller.html",
-        _ctx(request, semanas=semanas, semana_id=semana_id, lineas=lineas, totales=totales, trabajadores=trabajadores),
+        _ctx(
+            request, semanas=semanas, semana_id=semana_id, lineas=lineas, totales=totales, trabajadores=trabajadores,
+            semana_cerrada=bool(next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")) if semana_id else False,
+        ),
     )
 
 
@@ -832,7 +835,10 @@ async def page_nomina_pita(
     return templates.TemplateResponse(
         request,
         "nomina_pita.html",
-        _ctx(request, semanas=semanas, semana_id=semana_id, lineas=lineas, totales=totales, trabajadores=trabajadores),
+        _ctx(
+            request, semanas=semanas, semana_id=semana_id, lineas=lineas, totales=totales, trabajadores=trabajadores,
+            semana_cerrada=bool(next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")) if semana_id else False,
+        ),
     )
 
 

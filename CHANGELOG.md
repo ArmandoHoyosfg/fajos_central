@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.12.1] — 2026-08-22
+
+### Cerrar semana en todas las áreas + duplicar con opciones
+- Cerrar / Reabrir en **Pita** y **Taller** (semana global)
+- Duplicar: las tres áreas o solo la actual
+- Bloqueo de edición si la semana está cerrada
+- `semana_ops.js` compartido
+
 ## [3.12.0] — 2026-08-22
 
 ### Paridad escritorio ↔ web

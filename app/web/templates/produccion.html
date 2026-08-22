@@ -59,7 +59,7 @@
     <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}</b></span>
   </div>
   <button type="button" class="btn" id="btn-formal-xlsx" onclick="checklistExport({{ semana_id }})">Formal Excel Plata</button>
-  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }})" title="Copia PLT+PIT+TLL a la semana siguiente">Duplicar → sig. semana</button>
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'plt')" title="Duplicar semana (elige áreas)">Duplicar → sig. semana</button>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
   {% endif %}
@@ -272,6 +272,9 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/semana_ops.js?v=3121"></script>
+<script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "plt";</script>
+
 <script src="/static/row_menu.js?v=3113"></script>
 <script src="/static/row_edit.js?v=3112"></script>
 <script>
@@ -299,25 +302,7 @@ function openEditPlt(id, data) {
 
 
 <script>
-async function duplicarSemana(sid) {
-  if (!sid) return;
-  if (!confirm('¿Copiar estructuras de Plata, Pita y Taller a la siguiente semana?\n(Sin gramos; Pita en $0; Taller conserva sueldo).')) return;
-  const body = new FormData();
-  body.set('areas', 'plt,pit,tll');
-  const res = await fetch('/api/insights/duplicar/' + sid, { method: 'POST', body });
-  let data = {};
-  try { data = await res.json(); } catch (e) {}
-  if (!res.ok) {
-    alert((data && (data.detail || data.message)) || 'No se pudo duplicar');
-    return;
-  }
-  alert('Duplicado → ' + (data.destino_codigo || data.destino_id) +
-    '\nPLT +' + ((data.plt||{}).created||0) +
-    ' · PIT +' + ((data.pit||{}).created||0) +
-    ' · TLL +' + ((data.tll||{}).created||0));
-  if (data.destino_id) location.href = location.pathname + '?semana_id=' + data.destino_id;
-  else location.reload();
-}
+/* duplicarSemana → semana_ops.js */
 </script>
 
 
@@ -543,20 +528,8 @@ async function crearSemanaActual() {
   location.href = '/produccion?semana_id=' + data.semana.id;
 }
 
-async function cerrarSemana() {
-  if (!confirm('¿Cerrar esta semana?')) return;
-  const fd = new FormData();
-  fd.append('usuario', 'web');
-  const res = await fetch('/api/semanas/' + SEMANA_ID + '/cerrar', { method: 'POST', body: fd });
-  if (res.ok) location.reload();
-  else showToast('No se pudo cerrar', true);
-}
-async function reabrirSemana() {
-  if (!confirm('¿Reabrir la semana?')) return;
-  const res = await fetch('/api/semanas/' + SEMANA_ID + '/reabrir', { method: 'POST', body: new FormData() });
-  if (res.ok) location.reload();
-  else showToast('No se pudo reabrir', true);
-}
+async function cerrarSemana() { return FajosSemanaOps.cerrarSemana(SEMANA_ID); }
+async function reabrirSemana() { return FajosSemanaOps.reabrirSemana(SEMANA_ID); }
 async function delLinea(id) {
   if (!confirm('¿Eliminar esta línea?')) return;
   const res = await fetch('/api/produccion/linea/' + id, { method: 'DELETE' });

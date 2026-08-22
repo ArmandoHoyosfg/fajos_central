@@ -21,8 +21,13 @@
     </select>
   </form>
   {% if semana_id %}
+
+  <button type="button" class="btn btn-secondary" onclick="cerrarSemana({{ semana_id }})" {% if semana_cerrada %}disabled{% endif %}>Cerrar semana</button>
+  <button type="button" class="btn btn-secondary" onclick="reabrirSemana({{ semana_id }})" {% if not semana_cerrada %}disabled{% endif %}>Reabrir</button>
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'tll')" title="Duplicar a la semana siguiente">Duplicar → sig. semana</button>
+  {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;">SEMANA CERRADA</span>{% endif %}
+
   <a class="btn" href="/api/export/nomina-taller/{{ semana_id }}">Excel formal Taller</a>
-  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }})">Duplicar → sig. semana</button>
   <a class="btn btn-secondary" href="/api/export/resumen/{{ semana_id }}">Resumen 3 nóminas</a>
   <div class="kpi-bar">
     <span class="kpi-item"><b id="kpi-lineas">{{ totales.lineas or 0 }}</b> líneas</span>
@@ -44,7 +49,7 @@
     <input name="puesto" id="tll-puesto" placeholder="Puesto" style="width:110px;">
     <input name="sueldo" type="number" step="0.01" placeholder="Sueldo" required style="width:100px;">
     <input name="extras" type="number" step="0.01" placeholder="Extras" value="0" style="width:90px;">
-    <button class="btn" type="submit">Agregar</button>
+    <button class="btn" type="submit" {% if semana_cerrada %}disabled{% endif %}>Agregar</button>
   </form>
 </div>
 <div class="table-wrap table-compact">
@@ -123,6 +128,9 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/semana_ops.js?v=3121"></script>
+<script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "tll";</script>
+
 <script src="/static/row_menu.js?v=3113"></script>
 <script src="/static/row_edit.js?v=3112"></script>
 <script>
@@ -141,25 +149,7 @@ function openEditTll(id, data) {
 
 
 <script>
-async function duplicarSemana(sid) {
-  if (!sid) return;
-  if (!confirm('¿Copiar estructuras de Plata, Pita y Taller a la siguiente semana?\n(Sin gramos; Pita en $0; Taller conserva sueldo).')) return;
-  const body = new FormData();
-  body.set('areas', 'plt,pit,tll');
-  const res = await fetch('/api/insights/duplicar/' + sid, { method: 'POST', body });
-  let data = {};
-  try { data = await res.json(); } catch (e) {}
-  if (!res.ok) {
-    alert((data && (data.detail || data.message)) || 'No se pudo duplicar');
-    return;
-  }
-  alert('Duplicado → ' + (data.destino_codigo || data.destino_id) +
-    '\nPLT +' + ((data.plt||{}).created||0) +
-    ' · PIT +' + ((data.pit||{}).created||0) +
-    ' · TLL +' + ((data.tll||{}).created||0));
-  if (data.destino_id) location.href = location.pathname + '?semana_id=' + data.destino_id;
-  else location.reload();
-}
+/* duplicarSemana → semana_ops.js */
 </script>
 
 <script src="/static/cell_edit.js"></script>
@@ -248,4 +238,27 @@ document.addEventListener('DOMContentLoaded', () => {
   bind();
 });
 </script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var cerrada = {{ 'true' if semana_cerrada else 'false' }};
+  if (!cerrada) return;
+  document.querySelectorAll('input.cell-edit').forEach(function (el) {
+    el.readOnly = true; el.disabled = true;
+  });
+  document.querySelectorAll('input[type="checkbox"]').forEach(function (el) {
+    el.disabled = true;
+  });
+  document.querySelectorAll('.btn-row-menu').forEach(function (b) {
+    b.disabled = true; b.title = 'Semana cerrada';
+  });
+  document.querySelectorAll('td.name-edit').forEach(function (td) {
+    td.ondblclick = null; td.title = 'Semana cerrada';
+  });
+  document.querySelectorAll('form.inline button[type="submit"]').forEach(function (b) {
+    b.disabled = true;
+  });
+});
+</script>
+
 {% endblock %}

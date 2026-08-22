@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Inicio — Fajos Piteados Central{% endblock %}
 {% block content %}
+<script src="/static/semana_ops.js?v=3121"></script>
+
 <div class="page-head">
   <div>
     <h1>Inicio</h1>
@@ -50,23 +52,7 @@
   {% endif %}
 </div>
 <script>
-async function duplicarSemana(sid) {
-  if (!confirm('¿Copiar líneas de Plata, Pita y Taller a la siguiente semana?\n(No copia gramos ni efectivos de pita; en taller copia sueldo base).')) return;
-  const body = new FormData();
-  body.set('areas', 'plt,pit,tll');
-  try {
-    const res = await fetch('/api/insights/duplicar/' + sid, { method: 'POST', body });
-    const data = await res.json();
-    if (!res.ok) { alert(data.detail || data.message || 'Error al duplicar'); return; }
-    alert(
-      'Listo → semana ' + (data.destino_codigo || data.destino_id) + '\n' +
-      'Plata: +' + (data.plt && data.plt.created) + ' (omitidas ' + (data.plt && data.plt.skipped) + ')\n' +
-      'Pita: +' + (data.pit && data.pit.created) + '\n' +
-      'Taller: +' + (data.tll && data.tll.created)
-    );
-    location.reload();
-  } catch (e) { alert('Error de red'); }
-}
+/* use FajosSemanaOps.duplicarSemana */
 </script>
 
 
