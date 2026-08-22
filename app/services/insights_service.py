@@ -618,6 +618,163 @@ class InsightsService:
         return {"created": created, "skipped": skipped}
 
     # ---------------------------------------------------------- 3) Rarezas + checklist
+
+    def tendencias(self, limit_semanas: int = 8) -> dict[str, Any]:
+        """
+        Serie temporal de totales (Plata/Pita/Taller) + comparación semana actual vs anterior.
+        """
+        semanas = self.semanas.listar()
+        # orden por fecha_inicio asc para sparkline
+        def _key(s):
+            d = parse_db_date(s.get("fecha_inicio"))
+            return d or date.min
+
+        ordered = sorted(semanas, key=_key)
+        if len(ordered) > limit_semanas:
+            ordered = ordered[-limit_semanas:]
+
+        serie = []
+        for s in ordered:
+            sid = int(s["id"])
+            try:
+                t_plt = self.prod.totales_semana(sid)
+                t_pit = self.pita.totales(sid)
+                t_tll = self.taller.totales(sid)
+            except Exception as e:
+                logger.warning("tendencias semana %s: %s", sid, e)
+                t_plt, t_pit, t_tll = {}, {}, {}
+            plt_e = _safe_float(t_plt.get("total_efectivo"))
+            pit_e = _safe_float(t_pit.get("total"))
+            tll_e = _safe_float(t_tll.get("total"))
+            serie.append({
+                "id": sid,
+                "codigo": s.get("codigo"),
+                "fecha_inicio": str(s.get("fecha_inicio") or ""),
+                "plt": round(plt_e, 2),
+                "pit": round(pit_e, 2),
+                "tll": round(tll_e, 2),
+                "total": round(plt_e + pit_e + tll_e, 2),
+                "gramos": round(_safe_float(t_plt.get("total_gramos")), 2),
+            })
+
+        actual = encontrar_semana_actual(semanas, today())
+        actual_id = int(actual["id"]) if actual else None
+        idx = next((i for i, x in enumerate(serie) if x["id"] == actual_id), None)
+        prev = serie[idx - 1] if idx is not None and idx > 0 else None
+        cur = serie[idx] if idx is not None else (serie[-1] if serie else None)
+
+        def delta(a, b):
+            if b is None or b == 0:
+                return None
+            return round(((a - b) / b) * 100, 1)
+
+        comparacion = None
+        if cur and prev:
+            comparacion = {
+                "actual_codigo": cur["codigo"],
+                "prev_codigo": prev["codigo"],
+                "plt_pct": delta(cur["plt"], prev["plt"]),
+                "pit_pct": delta(cur["pit"], prev["pit"]),
+                "tll_pct": delta(cur["tll"], prev["tll"]),
+                "total_pct": delta(cur["total"], prev["total"]),
+                "gramos_pct": delta(cur["gramos"], prev["gramos"]),
+                "actual": cur,
+                "prev": prev,
+            }
+
+        # top materiales semana actual
+        top_materiales = []
+        if actual_id:
+            try:
+                with self.db.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT COALESCE(material,'—') AS material,
+                               SUM(total_gramos) AS gramos,
+                               SUM(efectivo) AS efectivo
+                        FROM produccion_plata
+                        WHERE semana_id = %s
+                        GROUP BY COALESCE(material,'—')
+                        ORDER BY SUM(efectivo) DESC
+                        LIMIT 6
+                        """,
+                        (actual_id,),
+                    )
+                    top_materiales = [
+                        {
+                            "material": r["material"],
+                            "gramos": round(_safe_float(r.get("gramos")), 2),
+                            "efectivo": round(_safe_float(r.get("efectivo")), 2),
+                        }
+                        for r in (cur.fetchall() or [])
+                    ]
+            except Exception as e:
+                logger.warning("top materiales: %s", e)
+
+        return {
+            "serie": serie,
+            "comparacion": comparacion,
+            "top_materiales": top_materiales,
+        }
+
+    def captura_solo_hoy(self, ref: date | None = None) -> dict[str, Any]:
+        """Vista reducida: trabajos/líneas de la semana actual + gramos del día."""
+        ref = ref or today()
+        col = col_hoy(ref)
+        label = DAY_LABELS.get(col, col)
+        semanas = self.semanas.listar()
+        actual = encontrar_semana_actual(semanas, ref)
+        if not actual:
+            return {
+                "ok": False,
+                "fecha": ref.isoformat(),
+                "col_hoy": col,
+                "label": label,
+                "semana": None,
+                "lineas": [],
+                "capturados": 0,
+                "pendientes": 0,
+            }
+        sid = int(actual["id"])
+        lineas = self.prod.listar_por_semana(sid)
+        rows = []
+        capturados = pendientes = 0
+        for r in lineas:
+            g = _safe_float(r.get(col))
+            if g > 0:
+                capturados += 1
+            else:
+                pendientes += 1
+            rows.append({
+                "id": r.get("id"),
+                "nombre": r.get("nombre"),
+                "ubic": r.get("ubic"),
+                "folio": r.get("folio"),
+                "modelo": r.get("modelo"),
+                "material": r.get("material"),
+                "tarifa_gr": _safe_float(r.get("tarifa_gr"), 12),
+                "gramos_hoy": g if g > 0 else None,
+                "total_gramos": _safe_float(r.get("total_gramos")),
+            })
+        # orden: pendientes primero, luego nombre
+        rows.sort(key=lambda x: (0 if not x.get("gramos_hoy") else 1, str(x.get("nombre") or "")))
+        return {
+            "ok": True,
+            "fecha": ref.isoformat(),
+            "col_hoy": col,
+            "label": label,
+            "semana": {
+                "id": sid,
+                "codigo": actual.get("codigo"),
+                "cerrada": bool(actual.get("cerrada")),
+            },
+            "lineas": rows,
+            "capturados": capturados,
+            "pendientes": pendientes,
+            "total": len(rows),
+        }
+
+
     def rarezas_semana(self, semana_id: int, pct: float = ANOMALY_PCT) -> dict[str, Any]:
         alertas: list[dict] = []
         try:

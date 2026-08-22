@@ -43,6 +43,9 @@
       <a href="/trabajadores" class="{% if '/trabajadores' in request.url.path %}active{% endif %}">
         <i data-lucide="users"></i> Trabajadores
       </a>
+      <a href="/solo-hoy" class="{% if request.url.path.startswith('/solo-hoy') %}active{% endif %}">
+        <i data-lucide="sun"></i> Solo hoy
+      </a>
       <a href="/produccion" class="{% if '/produccion' in request.url.path %}active{% endif %}">
         <i data-lucide="hammer"></i> Plata
       </a>

@@ -36,7 +36,8 @@
 </div>
 
 <div class="actions" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.25rem;">
-  <a class="btn" href="/produccion">Plata</a>
+  <a class="btn" href="/solo-hoy">Solo hoy</a>
+  <a class="btn btn-secondary" href="/produccion">Plata</a>
   <a class="btn btn-secondary" href="/nomina-pita">Pita</a>
   <a class="btn btn-secondary" href="/nomina-taller">Taller</a>
   <a class="btn btn-secondary" href="/trabajos">Trabajos del día</a>
@@ -131,6 +132,91 @@ async function duplicarSemana(sid) {
     <div class="value money">${{ '%.2f'|format( (kpis.nomina_total_acumulada or 0)|float ) }}</div>
   </div>
 </div>
+
+
+{% if tendencias and tendencias.comparacion %}
+<section class="trends-panel">
+  <div class="insights-head">
+    <h2>Tendencias</h2>
+    <span class="muted">{{ tendencias.comparacion.actual_codigo }} vs {{ tendencias.comparacion.prev_codigo }}</span>
+  </div>
+  <div class="grid trends-kpis">
+    {% set c = tendencias.comparacion %}
+    <div class="card">
+      <div class="label">Plata (semana)</div>
+      <div class="value money">${{ '%.0f'|format(c.actual.plt) }}</div>
+      <div class="delta {% if c.plt_pct is not none and c.plt_pct >= 0 %}up{% elif c.plt_pct is not none %}down{% endif %}">
+        {% if c.plt_pct is not none %}{{ '▲' if c.plt_pct >= 0 else '▼' }} {{ '%.1f'|format(c.plt_pct|abs) }}%{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">Pita</div>
+      <div class="value money">${{ '%.0f'|format(c.actual.pit) }}</div>
+      <div class="delta {% if c.pit_pct is not none and c.pit_pct >= 0 %}up{% elif c.pit_pct is not none %}down{% endif %}">
+        {% if c.pit_pct is not none %}{{ '▲' if c.pit_pct >= 0 else '▼' }} {{ '%.1f'|format(c.pit_pct|abs) }}%{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">Taller</div>
+      <div class="value money">${{ '%.0f'|format(c.actual.tll) }}</div>
+      <div class="delta {% if c.tll_pct is not none and c.tll_pct >= 0 %}up{% elif c.tll_pct is not none %}down{% endif %}">
+        {% if c.tll_pct is not none %}{{ '▲' if c.tll_pct >= 0 else '▼' }} {{ '%.1f'|format(c.tll_pct|abs) }}%{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="card accent">
+      <div class="label">Total 3 nóminas</div>
+      <div class="value money">${{ '%.0f'|format(c.actual.total) }}</div>
+      <div class="delta {% if c.total_pct is not none and c.total_pct >= 0 %}up{% elif c.total_pct is not none %}down{% endif %}">
+        {% if c.total_pct is not none %}{{ '▲' if c.total_pct >= 0 else '▼' }} {{ '%.1f'|format(c.total_pct|abs) }}%{% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+  {% if tendencias.serie %}
+  <div class="spark-wrap">
+    <svg class="sparkline" id="spark-total" viewBox="0 0 320 48" preserveAspectRatio="none" aria-label="Total por semana"></svg>
+    <div class="spark-labels muted">
+      {% for p in tendencias.serie %}<span title="{{ p.codigo }}: ${{ '%.0f'|format(p.total) }}">{{ p.codigo }}</span>{% endfor %}
+    </div>
+  </div>
+  <script>
+  (function(){
+    const serie = {{ tendencias.serie|tojson }};
+    const svg = document.getElementById('spark-total');
+    if (!svg || !serie.length) return;
+    const vals = serie.map(p => Number(p.total) || 0);
+    const max = Math.max.apply(null, vals.concat([1]));
+    const min = Math.min.apply(null, vals);
+    const w = 320, h = 48, pad = 4;
+    const pts = vals.map((v, i) => {
+      const x = pad + (i * (w - 2*pad) / Math.max(vals.length - 1, 1));
+      const y = h - pad - ((v - min) / (max - min || 1)) * (h - 2*pad);
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    });
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    poly.setAttribute('points', pts.join(' '));
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', 'var(--accent, #c9a227)');
+    poly.setAttribute('stroke-width', '2.5');
+    poly.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(poly);
+  })();
+  </script>
+  {% endif %}
+  {% if tendencias.top_materiales %}
+  <h3 class="muted" style="font-size:0.9rem;margin:1rem 0 0.4rem">Materiales (semana actual)</h3>
+  <div class="mat-bars">
+    {% set max_e = tendencias.top_materiales[0].efectivo if tendencias.top_materiales else 1 %}
+    {% for m in tendencias.top_materiales %}
+    <div class="mat-bar-row">
+      <span class="mat-name">{{ m.material }}</span>
+      <div class="mat-bar-track"><div class="mat-bar-fill" style="width:{{ '%.0f'|format(100 * m.efectivo / (max_e or 1)) }}%"></div></div>
+      <span class="mat-val">${{ '%.0f'|format(m.efectivo) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
 
 <h2 style="margin-top:1.5rem">Últimas semanas</h2>
 {% if semanas %}

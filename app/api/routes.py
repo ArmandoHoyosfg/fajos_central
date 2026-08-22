@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from pathlib import Path
 
 from app.api.deps import (
@@ -28,6 +29,17 @@ from app.services.export_service import ExportService, linea_tiene_gramos
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "web" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+def _jinja_tojson_safe(value):
+    """tojson que soporta Decimal/date (evita TypeError en templates)."""
+    from app.core.jsonutil import dumps_safe
+    return Markup(dumps_safe(value, ensure_ascii=False))
+
+templates.env.filters["tojson"] = _jinja_tojson_safe
+templates.env.policies["json.dumps_function"] = lambda obj, **kw: __import__(
+    "app.core.jsonutil", fromlist=["dumps_safe"]
+).dumps_safe(obj, **kw)
+
 
 router = APIRouter()
 
@@ -54,10 +66,21 @@ async def page_dashboard(
         avisos = insights.avisos_hoy() if data.get("db_ok", True) else {"avisos": [], "resumen": {"n": 0}}
     except Exception:
         avisos = {"avisos": [], "resumen": {"n": 0}}
+    try:
+        tendencias = insights.tendencias(8) if data.get("db_ok", True) else {"serie": [], "comparacion": None, "top_materiales": []}
+    except Exception:
+        tendencias = {"serie": [], "comparacion": None, "top_materiales": []}
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        _ctx(request, kpis=data["kpis"], semanas=semanas, insights=avisos, db_ok=data.get("db_ok", True)),
+        _ctx(
+            request,
+            kpis=data["kpis"],
+            semanas=semanas,
+            insights=avisos,
+            tendencias=tendencias,
+            db_ok=data.get("db_ok", True),
+        ),
     )
 
 
@@ -1108,3 +1131,26 @@ async def api_duplicar_completa(
     """Duplica estructuras PLT+PIT+TLL a la semana siguiente (sin gramos/montos variables)."""
     lista = [a.strip().lower() for a in (areas or "plt,pit,tll").split(",") if a.strip()]
     return svc.duplicar_a_siguiente(semana_id, destino_id=destino_id, areas=lista)
+
+
+@router.get("/solo-hoy", response_class=HTMLResponse)
+async def page_solo_hoy(
+    request: Request,
+    insights=Depends(get_insights_service),
+):
+    data = insights.captura_solo_hoy()
+    return templates.TemplateResponse(
+        request,
+        "solo_hoy.html",
+        _ctx(request, captura=data),
+    )
+
+
+@router.get("/api/insights/tendencias")
+async def api_tendencias(limit: int = 8, svc=Depends(get_insights_service)):
+    return svc.tendencias(limit_semanas=min(max(limit, 3), 16))
+
+
+@router.get("/api/insights/solo-hoy")
+async def api_solo_hoy(svc=Depends(get_insights_service)):
+    return svc.captura_solo_hoy()

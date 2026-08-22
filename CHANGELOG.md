@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.10.0] — 2026-08-22
+
+### Fix Decimal + dashboard vivo + solo hoy
+- Corregido `TypeError: Decimal is not JSON serializable` en `|tojson`
+- Tendencias: % vs semana anterior, sparkline, top materiales
+- Vista **Solo hoy** (`/solo-hoy`): captura rápida del día
+- API tendencias y solo-hoy
+
 ## [3.9.0] — 2026-08-22
 
 ### Edición de fila completa (popup)

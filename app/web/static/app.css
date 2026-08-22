@@ -1371,3 +1371,59 @@ main.container.wide {
 .table-wrap td .btn-icon-edit {
   vertical-align: middle;
 }
+
+
+/* Dashboard vivo: tendencias */
+.trends-panel {
+  margin: 1.25rem 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem 1.1rem;
+}
+.trends-kpis .card { min-height: auto; }
+.delta {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 0.25rem;
+  color: var(--muted);
+}
+.delta.up { color: var(--green); }
+.delta.down { color: var(--red); }
+.spark-wrap { margin-top: 0.75rem; }
+.sparkline {
+  width: 100%;
+  height: 48px;
+  display: block;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border-radius: 8px;
+}
+.spark-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  margin-top: 0.25rem;
+  overflow: hidden;
+  gap: 0.15rem;
+}
+.spark-labels span { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mat-bars { display: flex; flex-direction: column; gap: 0.35rem; }
+.mat-bar-row { display: grid; grid-template-columns: 4rem 1fr 4.5rem; gap: 0.5rem; align-items: center; font-size: 0.85rem; }
+.mat-bar-track { height: 8px; background: var(--surface); border-radius: 99px; overflow: hidden; }
+.mat-bar-fill { height: 100%; background: var(--accent); border-radius: 99px; }
+.mat-val { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress-bar-wrap {
+  height: 8px;
+  background: var(--surface);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+}
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  border-radius: 99px;
+  transition: width 0.35s var(--ease-out);
+}
+tr.row-pendiente { background: color-mix(in srgb, var(--peach) 8%, transparent); }
