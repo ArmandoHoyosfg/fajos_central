@@ -756,6 +756,225 @@ class ExportService:
         return buf.getvalue()
 
 
+
+    def export_captura_manual(
+        self,
+        lineas: list[dict],
+        *,
+        codigo_semana: str = "",
+    ) -> tuple[bytes, str, str]:
+        """
+        Nómina en blanco para captura manual (papel).
+        - Estilo similar a formal, sin $/Gr ni Efectivo.
+        - Solo columnas de gramos + Total Gr (fórmula SUM).
+        - Una fila de identidad por trabajo de la semana + una fila en blanco
+          extra por cada trabajador (nombre+ubic) para anotar otro folio.
+        - Incluye líneas aunque aún no tengan gramos.
+        """
+        data = self._to_xlsx_captura_manual(lineas, codigo_semana)
+        stem = f"nomina_captura_{codigo_semana or 'semana'}"
+        return (
+            data,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            f"{stem}.xlsx",
+        )
+
+    def _to_xlsx_captura_manual(self, lineas: list[dict], codigo_semana: str) -> bytes:
+        from datetime import date, datetime
+        from collections import OrderedDict
+
+        hoy = date.today()
+        generado = datetime.now().strftime("%d/%m/%Y %H:%M")
+        meses = {
+            1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+            5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+            9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
+        }
+
+        def _pk(r):
+            try:
+                u = int(float(r.get("ubic") or 0))
+            except (TypeError, ValueError):
+                u = 0
+            return (u, str(r.get("nombre") or "").upper(), str(r.get("folio") or "").upper())
+
+        data_rows = sorted(list(lineas or []), key=_pk)
+
+        # Agrupar por trabajador para insertar 1 fila en blanco al final de cada grupo
+        groups: OrderedDict[tuple, list] = OrderedDict()
+        for r in data_rows:
+            try:
+                u = int(float(r.get("ubic") or 0))
+            except (TypeError, ValueError):
+                u = 0
+            key = (str(r.get("nombre") or "").strip().upper(), u)
+            groups.setdefault(key, []).append(r)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Nomina-Captura"
+
+        # --- Encabezado (similar formal, sin precios) ---
+        ws.merge_cells("A1:L1")
+        ws["A1"] = "TALLER DE FAJOS CENTRAL"
+        ws["A1"].font = Font(name="Calibri", bold=True, size=16, color="1F4E79")
+
+        ws.merge_cells("A2:L2")
+        ws["A2"] = "NÓMINA EN BLANCO — CAPTURA MANUAL (PLATA)"
+        ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="2E75B6")
+
+        ws["A3"] = "Semana"
+        ws["B3"] = codigo_semana or "—"
+        ws["C3"] = "Mes"
+        ws["D3"] = meses.get(hoy.month, "")
+        ws["E3"] = "Año"
+        ws["F3"] = hoy.year
+        ws["G3"] = "Emitido"
+        ws["H3"] = generado
+        for col in range(1, 9):
+            ws.cell(row=3, column=col).font = Font(
+                name="Calibri", size=9, bold=(col % 2 == 1)
+            )
+
+        ws.merge_cells("A4:L4")
+        ws["A4"] = (
+            "Anotar gramos por día a mano. Hay una fila extra en blanco por cada trabajador "
+            "para otro folio. Solo se totalizan gramos (sin precios)."
+        )
+        ws["A4"].font = Font(name="Calibri", size=8, italic=True, color="666666")
+
+        headers = [
+            "Nombre", "Ubic", "Folio", "Modelo", "Material",
+            "Sáb", "Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Total Gr",
+        ]
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=5, column=col, value=h)
+            cell.font = self.HEADER_FONT
+            cell.fill = self.HEADER_FILL
+            cell.border = self.THIN
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+
+        # Columnas: A–E identidad, F–L días, M Total Gr
+        row_i = 6
+        first_data = 6
+
+        def _write_identity_row(r: dict, blank_days: bool = True) -> int:
+            nonlocal row_i
+            mat = str(r.get("material") or "").upper()
+            fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else None)
+            vals = [
+                r.get("nombre") or "",
+                r.get("ubic"),
+                r.get("folio") or "",
+                r.get("modelo") or "",
+                r.get("material") or "",
+            ]
+            for col, v in enumerate(vals, 1):
+                cell = ws.cell(row=row_i, column=col, value=v if v is not None else "")
+                cell.border = self.THIN
+                if fill is not None:
+                    cell.fill = fill
+            # Días en blanco para captura
+            for col in range(6, 13):
+                cell = ws.cell(row=row_i, column=col, value="")
+                cell.border = self.THIN
+                if fill is not None:
+                    cell.fill = fill
+            # Total Gr = suma de días (fórmula)
+            cell = ws.cell(
+                row=row_i,
+                column=13,
+                value=f'=IF(SUM(F{row_i}:L{row_i})=0,"",SUM(F{row_i}:L{row_i}))',
+            )
+            cell.border = self.THIN
+            cell.number_format = "0.0"
+            if fill is not None:
+                cell.fill = fill
+            row_i += 1
+            return row_i - 1
+
+        def _write_blank_worker_row(nombre: str, ubic) -> None:
+            nonlocal row_i
+            # Fila en blanco del mismo trabajador (otro folio)
+            for col, v in enumerate([nombre, ubic, "", "", ""], 1):
+                cell = ws.cell(row=row_i, column=col, value=v if v is not None else "")
+                cell.border = self.THIN
+            for col in range(6, 13):
+                ws.cell(row=row_i, column=col, value="").border = self.THIN
+            cell = ws.cell(
+                row=row_i,
+                column=13,
+                value=f'=IF(SUM(F{row_i}:L{row_i})=0,"",SUM(F{row_i}:L{row_i}))',
+            )
+            cell.border = self.THIN
+            cell.number_format = "0.0"
+            hint = PatternFill("solid", fgColor="FFF8E7")
+            for col in range(1, 14):
+                ws.cell(row=row_i, column=col).fill = hint
+            row_i += 1
+
+        if not groups:
+            ws.cell(row=6, column=1, value="(Sin trabajadores en esta semana)")
+            row_i = 7
+        else:
+            for (nombre_key, ubic), items in groups.items():
+                display_nombre = items[0].get("nombre") or nombre_key
+                for item in items:
+                    _write_identity_row(item)
+                # Una fila en blanco por trabajador
+                _write_blank_worker_row(display_nombre, ubic)
+
+        last = row_i - 1
+        if last >= first_data:
+            tot = last + 1
+            ws.cell(row=tot, column=5, value="TOTALES").font = Font(bold=True)
+            from openpyxl.utils import get_column_letter as _gcl
+            for col in range(6, 14):
+                letter = _gcl(col)
+                cell = ws.cell(
+                    row=tot,
+                    column=col,
+                    value=f"=SUM({letter}{first_data}:{letter}{last})",
+                )
+                cell.font = Font(bold=True)
+                cell.fill = self.GREEN_FILL
+                cell.number_format = "0.0"
+                cell.border = self.THIN
+            pie = tot + 2
+        else:
+            pie = row_i + 1
+
+        ws.cell(row=pie, column=1, value="Responsable captura: ________________")
+        ws.cell(row=pie, column=5, value="Fecha: ____ / ____ / ______")
+        ws.cell(
+            row=pie + 1,
+            column=1,
+            value=(
+                f"Generado por Fajos Central el {generado}. "
+                "Solo gramos — sin precios. Filas crema = espacio extra por trabajador."
+            ),
+        ).font = Font(size=8, italic=True, color="666666")
+
+        widths = {
+            "A": 20, "B": 7, "C": 11, "D": 14, "E": 10,
+            "F": 6, "G": 6, "H": 6, "I": 6, "J": 6, "K": 6, "L": 6, "M": 10,
+        }
+        for col, w in widths.items():
+            ws.column_dimensions[col].width = w
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.print_title_rows = "1:5"
+        try:
+            ws.oddFooter.center.text = f"Captura manual {codigo_semana} · {generado}"
+        except Exception:
+            pass
+
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
     def export_master(self, db=None) -> tuple[bytes, str, str]:
         """
         Exporta toda la base operativa a un Excel multi-hoja (archivo Master).

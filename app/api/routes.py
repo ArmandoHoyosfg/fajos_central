@@ -759,6 +759,32 @@ async def api_del_produccion(prod_id: int, repo: ProduccionRepo = Depends(get_pr
     return {"ok": True}
 
 
+
+@router.get("/api/export/produccion/{semana_id}/captura-manual")
+async def api_export_captura_manual(
+    semana_id: int,
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+    prod_repo: ProduccionRepo = Depends(get_produccion_repo),
+    export_svc: ExportService = Depends(get_export_service),
+):
+    """Nómina en blanco para captura manual: sin precios, total gramos, fila extra por trabajador."""
+    semana = sem_repo.obtener(semana_id)
+    if not semana:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Semana no encontrada")
+    # Todas las líneas de la semana (también sin gramos) — es la nómina a capturar
+    lineas = prod_repo.listar_por_semana(semana_id)
+    content, media_type, filename = export_svc.export_captura_manual(
+        lineas,
+        codigo_semana=str(semana.get("codigo") or ""),
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/api/export/produccion/{semana_id}")
 async def api_export(
     semana_id: int,

@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.13.2] — 2026-08-22
+
+### Nómina en blanco para captura manual
+- Export Excel estilo formal **sin precios** (solo gramos + Total Gr con fórmula)
+- Incluye todas las líneas de la semana y **una fila en blanco extra por trabajador**
+- Botón **Captura manual** en Plata · `/api/export/produccion/{id}/captura-manual`
+
 ## [3.13.1] — 2026-08-22
 
 ### Excel formal con fórmulas
