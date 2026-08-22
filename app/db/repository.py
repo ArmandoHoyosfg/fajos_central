@@ -329,21 +329,44 @@ class ProduccionRepo(BaseRepo):
                 """
             )
             todos = list(cur.fetchall() or [])
-        # prefer origen lines; supplement with active trabajos
+        # Solo líneas de la semana origen (evita re-duplicar el catálogo completo).
+        # Si el destino está vacío y no había líneas en origen, se complementa con trabajos activos.
         seen = set()
         to_insert = []
         for r in origen:
-            key = (r.get("trabajador_id"), r.get("trabajo_id") or r.get("folio"), r.get("material"))
+            key = (
+                r.get("trabajador_id"),
+                str(r.get("trabajo_id") or ""),
+                str(r.get("folio") or ""),
+                str(r.get("material") or ""),
+                str(r.get("nombre") or "").lower(),
+                int(r.get("ubic") or 0),
+            )
             if key in seen:
                 continue
             seen.add(key)
             to_insert.append(r)
-        for r in todos:
-            key = (r.get("trabajador_id"), r.get("trabajo_id") or r.get("folio"), r.get("material"))
-            if key in seen:
-                continue
-            seen.add(key)
-            to_insert.append(r)
+        dest_count = 0
+        with self.db.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS n FROM produccion_plata WHERE semana_id=%s",
+                (semana_destino_id,),
+            )
+            dest_count = int((cur.fetchone() or {}).get("n") or 0)
+        if not to_insert and dest_count == 0:
+            for r in todos:
+                key = (
+                    r.get("trabajador_id"),
+                    str(r.get("trabajo_id") or ""),
+                    str(r.get("folio") or ""),
+                    str(r.get("material") or ""),
+                    str(r.get("nombre") or "").lower(),
+                    int(r.get("ubic") or 0),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                to_insert.append(r)
         created = 0
         skipped = 0
         for r in to_insert:
@@ -351,12 +374,25 @@ class ProduccionRepo(BaseRepo):
                 cur.execute(
                     """
                     SELECT id FROM produccion_plata
-                    WHERE semana_id=%s AND trabajador_id=%s
+                    WHERE semana_id=%s
+                      AND (
+                        (trabajador_id IS NOT NULL AND trabajador_id=%s)
+                        OR (nombre=%s AND ubic=%s)
+                      )
                       AND COALESCE(folio,'')=COALESCE(%s,'')
                       AND COALESCE(material,'')=COALESCE(%s,'')
+                      AND COALESCE(modelo,'')=COALESCE(%s,'')
                     LIMIT 1
                     """,
-                    (semana_destino_id, r.get("trabajador_id"), r.get("folio"), r.get("material")),
+                    (
+                        semana_destino_id,
+                        r.get("trabajador_id"),
+                        r.get("nombre"),
+                        r.get("ubic"),
+                        r.get("folio"),
+                        r.get("material"),
+                        r.get("modelo"),
+                    ),
                 )
                 if cur.fetchone():
                     skipped += 1

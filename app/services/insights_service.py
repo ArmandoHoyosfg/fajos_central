@@ -492,27 +492,53 @@ class InsightsService:
             "notas": f"Duplicada desde {origen.get('codigo')}",
         }))
 
+    def _conteo_area(self, semana_id: int, area: str) -> int:
+        try:
+            if area == "plt":
+                return len(self.prod.listar_por_semana(semana_id))
+            if area == "pit":
+                return len(self.pita.listar_por_semana(semana_id))
+            if area == "tll":
+                return len(self.taller.listar_por_semana(semana_id))
+        except Exception:
+            return 0
+        return 0
+
     def duplicar_a_siguiente(
         self,
         semana_origen_id: int,
         destino_id: int | None = None,
         areas: list[str] | None = None,
+        force: bool = False,
     ) -> dict[str, Any]:
         """
         Copia estructuras de captura a la semana siguiente (sin montos/gramos).
-        areas: ['plt','pit','tll'] por defecto las tres.
+        Si el destino ya tiene líneas en las áreas pedidas y force=False,
+        no vuelve a insertar: responde ya_duplicada.
         """
         areas = areas or ["plt", "pit", "tll"]
         dest_id = self._asegurar_semana_destino(semana_origen_id, destino_id)
         dest = self.semanas.obtener(dest_id)
         result: dict[str, Any] = {
+            "ok": True,
             "origen_id": semana_origen_id,
             "destino_id": dest_id,
             "destino_codigo": dest.get("codigo") if dest else None,
             "plt": {"created": 0, "skipped": 0},
             "pit": {"created": 0, "skipped": 0},
             "tll": {"created": 0, "skipped": 0},
+            "ya_duplicada": False,
+            "force": bool(force),
         }
+
+        # ¿El destino ya tiene datos de estas áreas?
+        prev = {a: self._conteo_area(dest_id, a) for a in areas}
+        result["destino_prev"] = prev
+        if not force and any(prev.get(a, 0) > 0 for a in areas):
+            # Ejecutar en seco: solo contar skips potenciales no insertar... 
+            # Mejor: intentar copia real pero las filas existentes se saltan;
+            # si al final created total == 0 → ya_duplicada
+            pass
 
         if "plt" in areas:
             try:
@@ -537,6 +563,29 @@ class InsightsService:
             + result["pit"].get("created", 0)
             + result["tll"].get("created", 0)
         )
+        result["total_skipped"] = (
+            result["plt"].get("skipped", 0)
+            + result["pit"].get("skipped", 0)
+            + result["tll"].get("skipped", 0)
+        )
+        # Si no se creó nada y el destino ya tenía datos → ya estaba duplicada
+        if result["total_created"] == 0 and any(
+            (result.get("destino_prev") or {}).get(a, 0) > 0 for a in areas
+        ):
+            result["ya_duplicada"] = True
+            result["mensaje"] = (
+                f"La semana {result.get('destino_codigo') or dest_id} ya tenía "
+                "las líneas de estas áreas. No se duplicó de nuevo."
+            )
+        elif result["total_created"] == 0:
+            result["mensaje"] = (
+                "No había líneas nuevas que copiar (origen vacío o todo ya existía)."
+            )
+        else:
+            result["mensaje"] = (
+                f"Se crearon {result['total_created']} línea(s) en "
+                f"{result.get('destino_codigo') or dest_id}."
+            )
         return result
 
     def _duplicar_pita(self, origen_id: int, destino_id: int) -> dict:

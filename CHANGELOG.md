@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.12.2] — 2026-08-22
+
+### No re-duplicar semanas ya copiadas
+- Si el destino ya tiene las líneas, no crea duplicados (`ya_duplicada`)
+- Plata solo copia líneas de la semana origen (no todo el catálogo)
+- Mensaje claro con omitidas vs creadas
+
 ## [3.12.1] — 2026-08-22
 
 ### Cerrar semana en todas las áreas + duplicar con opciones

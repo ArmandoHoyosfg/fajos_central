@@ -71,9 +71,10 @@
     return doDuplicar(semanaId, areas.join(","));
   }
 
-  async function doDuplicar(semanaId, areas) {
+  async function doDuplicar(semanaId, areas, force) {
     const body = new FormData();
     body.set("areas", areas);
+    if (force) body.set("force", "1");
     const res = await fetch("/api/insights/duplicar/" + semanaId, { method: "POST", body: body });
     let data = {};
     try { data = await res.json(); } catch (e) {}
@@ -81,13 +82,30 @@
       alert((data && (data.detail || data.message || data.user_message)) || "No se pudo duplicar");
       return;
     }
+    if (data.ya_duplicada) {
+      alert(
+        (data.mensaje || "Esta semana ya estaba duplicada.") +
+        "\n\nDestino: " + (data.destino_codigo || data.destino_id) +
+        "\nNo se crearon líneas nuevas (omitidas: " + (data.total_skipped || 0) + ")."
+      );
+      if (data.destino_id) {
+        location.href = location.pathname + "?semana_id=" + data.destino_id;
+      }
+      return;
+    }
     alert(
-      "Duplicado → semana " + (data.destino_codigo || data.destino_id) +
+      (data.mensaje || "Duplicado") +
+      "\n→ semana " + (data.destino_codigo || data.destino_id) +
       "\nPlata: +" + ((data.plt && data.plt.created) || 0) +
+        " (omitidas " + ((data.plt && data.plt.skipped) || 0) + ")" +
       "\nPita: +" + ((data.pit && data.pit.created) || 0) +
-      "\nTaller: +" + ((data.tll && data.tll.created) || 0)
+        " (omitidas " + ((data.pit && data.pit.skipped) || 0) + ")" +
+      "\nTaller: +" + ((data.tll && data.tll.created) || 0) +
+        " (omitidas " + ((data.tll && data.tll.skipped) || 0) + ")"
     );
-    if (data.destino_id) {
+    if (data.destino_id && (data.total_created || 0) > 0) {
+      location.href = location.pathname + "?semana_id=" + data.destino_id;
+    } else if (data.destino_id) {
       location.href = location.pathname + "?semana_id=" + data.destino_id;
     } else {
       location.reload();

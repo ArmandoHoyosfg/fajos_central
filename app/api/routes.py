@@ -1142,11 +1142,15 @@ async def api_duplicar_completa(
     semana_id: int,
     destino_id: int | None = Form(None),
     areas: str | None = Form("plt,pit,tll"),
+    force: str | None = Form("0"),
     svc=Depends(get_insights_service),
 ):
-    """Duplica estructuras PLT+PIT+TLL a la semana siguiente (sin gramos/montos variables)."""
+    """Duplica estructuras a la semana siguiente. No re-inserta líneas ya existentes."""
     lista = [a.strip().lower() for a in (areas or "plt,pit,tll").split(",") if a.strip()]
-    return svc.duplicar_a_siguiente(semana_id, destino_id=destino_id, areas=lista)
+    force_flag = str(force or "0").strip() in ("1", "true", "True", "yes", "on")
+    return svc.duplicar_a_siguiente(
+        semana_id, destino_id=destino_id, areas=lista, force=force_flag
+    )
 
 
 @router.get("/solo-hoy", response_class=HTMLResponse)
