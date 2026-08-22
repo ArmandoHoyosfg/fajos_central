@@ -171,24 +171,33 @@ async def page_trabajos(
     recordatorio = None
     cerrada = False
     if semana_id:
-        trabajos = TrabajosRepo().listar_con_semana(semana_id, solo_activos=True)
+        # Catálogo de trabajos + gramos de hoy de la semana
         col = col_hoy()
+        trabajos = TrabajosRepo().listar_con_semana(semana_id, solo_activos=False)
         for r in trabajos:
             try:
                 g = float(r.get(col) or 0)
             except (TypeError, ValueError):
-                g = 0
-            r["sin_hoy"] = g <= 0
-        sin = [r for r in trabajos if r["sin_hoy"]]
+                g = 0.0
+            r["gramos_hoy"] = g if g > 0 else None
+            activo = bool(r.get("trabajo_activo", 1))
+            r["trabajo_activo"] = activo
+            r["sin_hoy"] = activo and g <= 0
+            if not r.get("trabajo_id"):
+                r["trabajo_id"] = r.get("id")
+        sin = [r for r in trabajos if r.get("sin_hoy")]
+        sin_hoy_count = len(sin)
         if sin:
-            names = ", ".join(f"{x.get('nombre')}[{x.get('folio') or '—'}]" for x in sin[:8])
-            extra = f" (+{len(sin)-8})" if len(sin) > 8 else ""
+            names = ", ".join(f"{x.get('nombre')}[{x.get('folio') or '—'}]" for x in sin[:6])
+            extra = f" (+{len(sin)-6})" if len(sin) > 6 else ""
             recordatorio = (
-                f"Aún no hay gramos de {DAY_LABELS[col]} en {len(sin)} trabajo(s): {names}{extra}"
+                f"Sin gramos de {DAY_LABELS[col]} en {len(sin)} trabajo(s) activo(s): {names}{extra}"
             )
         cerrada = bool(
             next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")
         )
+    else:
+        sin_hoy_count = 0
     return templates.TemplateResponse(
         request,
         "trabajos.html",
@@ -198,6 +207,7 @@ async def page_trabajos(
             semana_id=semana_id,
             trabajos=trabajos,
             recordatorio=recordatorio,
+            sin_hoy_count=locals().get("sin_hoy_count", 0),
             col_hoy=col_hoy(),
             col_hoy_label=DAY_LABELS[col_hoy()],
             day_cols=["gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"],
@@ -1154,3 +1164,33 @@ async def api_tendencias(limit: int = 8, svc=Depends(get_insights_service)):
 @router.get("/api/insights/solo-hoy")
 async def api_solo_hoy(svc=Depends(get_insights_service)):
     return svc.captura_solo_hoy()
+
+
+@router.patch("/api/trabajos/{trabajo_id}")
+async def api_patch_trabajo(trabajo_id: int, request: Request):
+    from app.db.repository import TrabajosRepo
+    form = await request.form()
+    data = {}
+    for k in ("folio", "modelo", "material", "notas"):
+        if k in form:
+            data[k] = str(form.get(k) or "").strip() or None
+    if "tarifa_gr" in form:
+        data["tarifa_gr"] = str(form.get("tarifa_gr") or "").strip()
+    if "activo" in form:
+        data["activo"] = form.get("activo")
+    TrabajosRepo().actualizar_meta(trabajo_id, data)
+    return {"ok": True, "id": trabajo_id}
+
+
+@router.post("/api/trabajos/{trabajo_id}/desactivar")
+async def api_desactivar_trabajo(trabajo_id: int):
+    from app.db.repository import TrabajosRepo
+    TrabajosRepo().set_activo(trabajo_id, False)
+    return {"ok": True, "id": trabajo_id, "activo": False}
+
+
+@router.post("/api/trabajos/{trabajo_id}/activar")
+async def api_activar_trabajo(trabajo_id: int):
+    from app.db.repository import TrabajosRepo
+    TrabajosRepo().set_activo(trabajo_id, True)
+    return {"ok": True, "id": trabajo_id, "activo": True}

@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.11.0] — 2026-08-22
+
+### Plata edición + Trabajos como catálogo
+- Plata: columna Acciones clara (✎ editar fila / × eliminar), ayuda de captura
+- **Trabajos → Folios**: catálogo de folios activos (ya no duplica la matriz de Plata)
+- Editar/desactivar trabajos; gramos de hoy solo informativos
+- Cerrar hoy + suministro se mantienen en Folios
+
 ## [3.10.0] — 2026-08-22
 
 ### Fix Decimal + dashboard vivo + solo hoy

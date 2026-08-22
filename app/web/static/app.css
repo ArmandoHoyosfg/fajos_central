@@ -1427,3 +1427,27 @@ main.container.wide {
   transition: width 0.35s var(--ease-out);
 }
 tr.row-pendiente { background: color-mix(in srgb, var(--peach) 8%, transparent); }
+
+.col-actions {
+  width: 3.2rem !important;
+  white-space: nowrap;
+  text-align: center;
+  vertical-align: middle;
+}
+.col-actions .btn-icon-del,
+.col-actions .btn-icon-edit {
+  margin: 0 1px;
+}
+.table-wrap.table-plt .col-del,
+.table-wrap.table-plt th.col-actions,
+.table-wrap.table-plt td.col-actions {
+  width: 3.4rem !important;
+  min-width: 3.4rem;
+}
+.table-wrap.table-plt .col-nombre,
+.table-wrap.table-plt td.col-nombre {
+  width: 10%;
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

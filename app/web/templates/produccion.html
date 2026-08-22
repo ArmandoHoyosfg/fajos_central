@@ -82,7 +82,7 @@
   </colgroup>
   <thead>
     <tr>
-      <th></th>
+      <th class="col-actions">Acc</th>
       <th>Nombre</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>$/g</th>
       <th>Sáb</th><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th>
       <th>Gr</th><th>$</th><th>✓</th>
@@ -91,10 +91,9 @@
   <tbody>
     {% for r in lineas %}
     <tr class="mat-{{ (r.material or '')|lower }}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
-      <td>
+      <td class="col-actions">
         {% if not semana_cerrada %}
-        <button type="button" class="btn-icon-del" onclick="delLinea({{ r.id }})" title="Eliminar">×</button>
-        <button type="button" class="btn-icon-edit" title="Editar fila"
+        <button type="button" class="btn-icon-edit" title="Editar fila completa"
           onclick='openEditPlt({{ r.id }}, {{ {
             "nombre": r.nombre,
             "ubic": r.ubic,
@@ -111,9 +110,12 @@
             "gm_vie": r.gm_vie if r.gm_vie else "",
             "firmado": 1 if r.firmado else 0
           }|tojson }})'>✎</button>
+        <button type="button" class="btn-icon-del" onclick="delLinea({{ r.id }})" title="Eliminar línea">×</button>
+        {% else %}
+        <span class="muted">—</span>
         {% endif %}
       </td>
-      <td title="{{ r.nombre }}">{{ r.nombre }}</td>
+      <td class="col-nombre" title="{{ r.nombre }}">{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td title="{{ r.folio or '' }}">{{ r.folio or '—' }}</td>
       <td title="{{ r.modelo or '' }}">{{ r.modelo or '—' }}</td>
@@ -269,6 +271,21 @@ function openEditPlt(id, data) {
   const who = document.getElementById("edit-plt-who");
   if (who) who.textContent = (data.nombre || "") + " · ubic " + (data.ubic || "");
   FajosRowEdit.open({ modalId: "modal-edit-plt", formId: "form-edit-plt", id: id, data: data });
+  // material select: asegurar valor aunque no esté en options exacto
+  const form = document.getElementById("form-edit-plt");
+  if (form && data.material) {
+    const sel = form.elements.namedItem("material");
+    if (sel) {
+      let found = false;
+      for (const o of sel.options) { if (o.value === data.material) { found = true; break; } }
+      if (!found) {
+        const opt = document.createElement("option");
+        opt.value = data.material; opt.textContent = data.material;
+        sel.appendChild(opt);
+      }
+      sel.value = data.material;
+    }
+  }
 }
 </script>
 

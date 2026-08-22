@@ -614,6 +614,45 @@ class TrabajosRepo(BaseRepo):
             return int(cur.lastrowid)
 
 
+
+    def set_activo(self, trabajo_id: int, activo: bool) -> None:
+        with self.db.cursor() as cur:
+            cur.execute(
+                "UPDATE trabajos SET activo = %s WHERE id = %s",
+                (1 if activo else 0, trabajo_id),
+            )
+            if cur.rowcount == 0:
+                raise NotFoundError(
+                    f"Trabajo id={trabajo_id} no existe.",
+                    details={"trabajo_id": trabajo_id},
+                )
+
+    def actualizar_meta(self, trabajo_id: int, data: dict) -> None:
+        fields, params = [], []
+        for k in ("folio", "modelo", "material", "tarifa_gr", "notas", "activo"):
+            if k not in data:
+                continue
+            v = data[k]
+            if k == "tarifa_gr":
+                try:
+                    v = float(v) if v is not None and str(v).strip() != "" else None
+                except (TypeError, ValueError):
+                    raise ValidationAppError("Tarifa inválida")
+            elif k == "activo":
+                v = 1 if v in (1, True, "1", "true") else 0
+            elif k in ("folio", "modelo", "material", "notas"):
+                v = (str(v).strip() if v is not None else "") or None
+            fields.append(f"{k}=%s")
+            params.append(v)
+        if not fields:
+            return
+        params.append(trabajo_id)
+        with self.db.cursor() as cur:
+            cur.execute(
+                f"UPDATE trabajos SET {', '.join(fields)} WHERE id=%s",
+                params,
+            )
+
     def listar_con_semana(self, semana_id: int, solo_activos: bool = True) -> list[dict]:
         """
         Trabajos activos con la línea de producción de la semana (si existe).

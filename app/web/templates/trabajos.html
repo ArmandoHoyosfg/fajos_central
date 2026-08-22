@@ -1,238 +1,174 @@
 {% extends "base.html" %}
-{% block title %}Trabajos activos — Fajos Piteados Central{% endblock %}
+{% block title %}Catálogo de trabajos — Fajos Central{% endblock %}
 {% block content %}
-
-<div class="help-panel" id="help-panel">
-  <strong>Consejo:</strong> Aquí ves cada folio ligado a su persona. Anota gramos del día de hoy en la columna resaltada. <strong>Cerrar hoy</strong> guarda un resumen de control. <strong>Suministro</strong> imprime la hoja para anotar a mano.
-  <button type="button" class="help-toggle" style="display:block;margin-top:0.4rem"
-          onclick="this.parentElement.hidden=true">Entendido, ocultar</button>
+<div class="help-panel">
+  <strong>Trabajos = folios activos</strong> ligados a cada persona (catálogo).
+  La captura de gramos por día está en <a href="/solo-hoy">Solo hoy</a> o <a href="/produccion">Plata</a>.
+  Aquí administras folio/modelo/material y das de baja trabajos terminados.
 </div>
-<div class="semana-ctx">
-  <strong>Hoy:</strong> {{ fecha_hoy_larga }}
-  {% if col_hoy_label %} · Día de nómina: <span class="badge-actual">{{ col_hoy_label }}</span>{% endif %}
-</div>
-
-{% if recordatorio %}
-<div class="semana-ctx" style="border-left-color:#c9a227;color:#c9a227;">
-  ⚠ {{ recordatorio }}
-</div>
-{% endif %}
 
 <div class="page-head">
   <div>
-    <h1>Trabajos activos</h1>
-    <p class="muted">Folio / modelo ligados a cada trabajador. Edita el progreso del día; el formal usa estos datos.</p>
+    <h1>Catálogo de trabajos</h1>
+    <p class="muted">Folios y modelos activos · no es la captura semanal</p>
+  </div>
+  <div class="actions" style="display:flex;flex-wrap:wrap;gap:0.4rem;">
+    <a class="btn" href="/solo-hoy">Capturar hoy</a>
+    <a class="btn btn-secondary" href="/produccion">Plata (semana)</a>
+    <button type="button" class="btn btn-secondary" onclick="cerrarHoy()">Cerrar hoy</button>
+    <a class="btn btn-secondary" href="/api/export/suministro">Suministro</a>
   </div>
 </div>
 
-<div class="kpi-bar" id="kpi-live">
-  <span class="kpi-item"><b>{{ trabajos|length }}</b> trabajos</span>
-  <span class="muted">Totales se recalculan al editar</span>
+{% if recordatorio %}
+<div class="flash" style="border-left:3px solid var(--peach);">{{ recordatorio }}</div>
+{% endif %}
+
+<div class="toolbar" style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin:0.75rem 0;">
+  <input type="search" id="flt-trab" placeholder="Filtrar nombre, folio, modelo…" style="min-width:12rem;">
+  <label><input type="checkbox" id="flt-solo-activos" checked> Solo activos</label>
+  <label><input type="checkbox" id="flt-sin-hoy"> Sin gramos hoy</label>
+  <span class="kpi-bar" style="margin:0;">
+    <span class="kpi-item"><b id="kpi-n">{{ trabajos|length }}</b> listados</span>
+    <span class="kpi-item"><b>{{ sin_hoy_count|default(0) }}</b> sin hoy</span>
+  </span>
 </div>
 
-<div class="toolbar">
-  <form class="inline" method="get" action="/trabajos">
-    <label class="muted">Semana</label>
-    <select name="semana_id" onchange="this.form.submit()">
-      {% for s in semanas %}
-      <option value="{{ s.id }}" {% if s.id == semana_id %}selected{% endif %}>
-        {{ s.codigo }}{% if s.es_actual %} ★{% endif %}
-      </option>
-      {% endfor %}
-    </select>
-  </form>
-  <label class="muted"><input type="checkbox" id="flt-sin-hoy"> Solo sin gramos de hoy</label>
-  <button type="button" class="btn btn-secondary" onclick="cerrarHoy()">Cerrar hoy</button>
-  <a class="btn btn-secondary" href="/api/export/suministro">Suministro Excel</a>
-  <button type="button" class="btn btn-secondary" onclick="duplicarSemana()">Duplicar → sig. semana</button>
-</div>
-
-
-<div id="toast" class="toast-web" hidden></div>
-
-<div class="table-wrap">
+<div class="table-wrap table-compact no-sticky-col">
 <table>
   <thead>
     <tr>
-      <th>Trabajador</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>$/Gr</th>
-      <th>Sáb</th><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th>
-      <th>Total</th>
+      <th></th>
+      <th>Trabajador</th><th>Ubic</th><th>Folio</th><th>Modelo</th>
+      <th>Mat</th><th>$/g</th><th>Hoy ({{ col_hoy_label }})</th><th>Estado</th>
     </tr>
   </thead>
   <tbody>
   {% for r in trabajos %}
-    <tr data-sin-hoy="{{ 1 if r.sin_hoy else 0 }}" class="mat-{{ (r.material or '')|lower }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
-      <td>{{ r.nombre }}</td>
+    <tr data-activo="{{ 1 if r.trabajo_activo else 0 }}"
+        data-sin-hoy="{{ 1 if r.sin_hoy else 0 }}"
+        data-txt="{{ (r.nombre or '')|lower }} {{ (r.folio or '')|lower }} {{ (r.modelo or '')|lower }}">
+      <td class="col-actions">
+        <button type="button" class="btn-icon-edit" title="Editar trabajo"
+          onclick='openEditTrabajo({{ r.trabajo_id }}, {{ {
+            "folio": r.folio or "",
+            "modelo": r.modelo or "",
+            "material": r.material or "AG3",
+            "tarifa_gr": r.tarifa_gr if r.tarifa_gr is not none else 12,
+            "nombre": r.nombre,
+            "ubic": r.ubic
+          }|tojson }})'>✎</button>
+        {% if r.trabajo_activo %}
+        <button type="button" class="btn-icon-del" title="Desactivar"
+          onclick="toggleTrabajo({{ r.trabajo_id }}, false)">×</button>
+        {% else %}
+        <button type="button" class="btn-icon-edit" title="Reactivar"
+          onclick="toggleTrabajo({{ r.trabajo_id }}, true)">↻</button>
+        {% endif %}
+      </td>
+      <td class="col-nombre">{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td>{{ r.folio or '—' }}</td>
       <td>{{ r.modelo or '—' }}</td>
       <td>{{ r.material or '—' }}</td>
       <td>{{ r.tarifa_gr or '—' }}</td>
-      {% for d in day_cols %}
       <td>
-        {% if semana_cerrada %}
-          {{ r[d] or '' }}
+        {% if r.gramos_hoy %}{{ r.gramos_hoy }}{% else %}<span class="muted">—</span>{% endif %}
+      </td>
+      <td>
+        {% if r.trabajo_activo %}
+          <span class="badge badge-ok">Activo</span>
         {% else %}
-          <input class="cell-gm" type="number" step="0.01" min="0"
-                 {% if d != col_hoy %}readonly title="Doble clic / confirmar para editar día que no es hoy"{% endif %}
-                 data-trabajo="{{ r.trabajo_id }}"
-                 data-prod="{{ r.produccion_id or '' }}"
-                 data-tid="{{ r.trabajador_id }}"
-                 data-nombre="{{ r.nombre }}"
-                 data-ubic="{{ r.ubic }}"
-                 data-folio="{{ r.folio or '' }}"
-                 data-modelo="{{ r.modelo or '' }}"
-                 data-material="{{ r.material or '' }}"
-                 data-tarifa="{{ r.tarifa_gr or '' }}"
-                 data-dia="{{ d }}"
-                 data-old="{{ r[d] if r[d] else 0 }}"
-                 value="{{ r[d] if r[d] else '' }}"
-                 style="width:3.4rem;padding:0.15rem;background:#11111b;border:1px solid #45475a;color:#cdd6f4;border-radius:4px;">
+          <span class="badge badge-off">Baja</span>
+        {% endif %}
+        {% if r.sin_hoy and r.trabajo_activo %}
+          <span class="badge" style="margin-left:0.25rem;">Sin hoy</span>
         {% endif %}
       </td>
-      {% endfor %}
-      <td class="cell-total">{{ r.total_gramos or '' }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="14" class="muted">No hay trabajos activos. Importa el Excel o captura producción con folio.</td></tr>
+    <tr><td colspan="9" class="muted">No hay trabajos. Se crean al capturar en Plata con folio/modelo.</td></tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
-{% endblock %}
 
+<div class="modal-backdrop" id="modal-edit-trabajo" hidden>
+  <div class="modal" role="dialog">
+    <h2>Editar trabajo</h2>
+    <p class="muted" id="edit-trab-who" style="margin-top:0"></p>
+    <form id="form-edit-trabajo" onsubmit="return saveTrabajo(event)">
+      <div class="form-grid">
+        <div><label>Folio</label><input name="folio"></div>
+        <div><label>Modelo</label><input name="modelo"></div>
+        <div><label>Material</label>
+          <select name="material"><option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option></select>
+        </div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.01"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-trabajo')">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
 {% block scripts %}
+<script src="/static/row_edit.js"></script>
 <script>
+const COL_HOY = {{ col_hoy|tojson }};
+function openEditTrabajo(id, data) {
+  const who = document.getElementById('edit-trab-who');
+  if (who) who.textContent = (data.nombre || '') + ' · ubic ' + (data.ubic || '');
+  const form = document.getElementById('form-edit-trabajo');
+  form.dataset.rowId = id;
+  FajosRowEdit.open({ modalId: 'modal-edit-trabajo', formId: 'form-edit-trabajo', id: id, data: data });
+}
+async function saveTrabajo(e) {
+  e.preventDefault();
+  const form = e.target;
+  const id = form.dataset.rowId;
+  const body = new FormData(form);
+  const res = await fetch('/api/trabajos/' + id, { method: 'PATCH', body });
+  if (!res.ok) { alert('No se pudo guardar'); return false; }
+  location.reload();
+  return false;
+}
+async function toggleTrabajo(id, activar) {
+  const msg = activar ? '¿Reactivar este trabajo?' : '¿Desactivar este folio? (dejará de aparecer en capturas nuevas)';
+  if (!confirm(msg)) return;
+  const url = '/api/trabajos/' + id + (activar ? '/activar' : '/desactivar');
+  const res = await fetch(url, { method: 'POST' });
+  if (res.ok) location.reload();
+  else alert('No se pudo cambiar estado');
+}
 async function cerrarHoy() {
   const st = await fetch('/api/dia/estado').then(r => r.json());
-  let msg = `Día ${st.label_dia} (${st.fecha})\nTrabajos: ${st.trabajos_total}\nSin gramos: ${st.trabajos_sin_gramos}\nGramos: ${st.total_gramos_hoy}\n$ ${st.total_efectivo_hoy}\n¿Cerrar el día?`;
-  if (!confirm(msg)) return;
-  const fd = new FormData();
-  fd.append('usuario', 'web');
+  if (!confirm(`Día ${st.label_dia}\nSin gramos: ${st.trabajos_sin_gramos}/${st.trabajos_total}\n¿Cerrar el día?`)) return;
+  const fd = new FormData(); fd.set('usuario', 'web');
   const res = await fetch('/api/dia/cerrar', { method: 'POST', body: fd });
-  const data = await res.json().catch(() => ({}));
-  if (res.ok) {
-    if (window.FajosLive) FajosLive.showToast('Día cerrado');
-    else alert('Día cerrado');
-  } else alert(data.message || 'Error');
+  if (res.ok) alert('Día cerrado'); else alert('Error');
 }
-async function duplicarSemana() {
-  if (!SEMANA_ID) return alert('Sin semana');
-  if (!confirm('¿Copiar folios a la semana siguiente (sin gramos)?')) return;
-  const fd = new FormData();
-  const res = await fetch('/api/produccion/' + SEMANA_ID + '/duplicar', { method: 'POST', body: fd });
-  const data = await res.json().catch(() => ({}));
-  if (res.ok) {
-    alert('Creadas ' + data.created + ', omitidas ' + data.skipped);
-    if (data.destino_id) location.href = '/trabajos?semana_id=' + data.destino_id;
-  } else alert(data.message || 'Error');
-}
-// avisos al cargar
-fetch('/api/dia/avisos').then(r => r.json()).then(d => {
-  if (d.avisos && d.avisos.length) {
-    const box = document.createElement('div');
-    box.className = 'semana-ctx';
-    box.style.borderLeftColor = '#c9a227';
-    box.innerHTML = d.avisos.map(a => '• ' + a).join('<br>');
-    const main = document.querySelector('main.container');
-    if (main) main.insertBefore(box, main.firstChild);
-  }
-}).catch(() => {});
-</script>
-
-<script>
-const COL_HOY = "{{ col_hoy }}";
-const SEMANA_ID = {{ semana_id or 'null' }};
-const DAY_ORDER = ["gm_sab","gm_dom","gm_lun","gm_mar","gm_mie","gm_jue","gm_vie"];
-const DAY_LABEL = {gm_sab:"Sábado",gm_dom:"Domingo",gm_lun:"Lunes",gm_mar:"Martes",gm_mie:"Miércoles",gm_jue:"Jueves",gm_vie:"Viernes"};
-
-function showToast(msg, err) {
-  const el = document.getElementById('toast');
-  if (!el) return;
-  el.hidden = false;
-  el.textContent = msg;
-  el.classList.toggle('err', !!err);
-  clearTimeout(window._tt);
-  window._tt = setTimeout(() => el.hidden = true, 3000);
-}
-
-function isPast(col) {
-  return DAY_ORDER.indexOf(col) < DAY_ORDER.indexOf(COL_HOY);
-}
-
-function unlockIfNeeded(inp) {
-  if (!inp.readOnly) return true;
-  const col = inp.dataset.dia;
-  const old = parseFloat(inp.dataset.old || '0') || 0;
-  if (!confirm('Este día no es hoy (valor: ' + old + ' g).\n¿Confirmas editarlo?')) return false;
-  inp.readOnly = false;
-  inp.focus();
-  return false; // no guardar aún
-}
-async function saveCell(inp) {
-  if (inp.readOnly) return;
-
-  const col = inp.dataset.dia;
-  const old = parseFloat(inp.dataset.old || '0') || 0;
-  const val = inp.value === '' ? 0 : parseFloat(inp.value);
-  if (isPast(col) && old > 0) {
-    if (!confirm('Vas a modificar el ' + (DAY_LABEL[col]||col) + ' que ya tiene ' + old + ' g.\\n¿Confirmas editar un día pasado con información?')) {
-      inp.value = old > 0 ? old : '';
-      return;
-    }
-  }
-  let prodId = inp.dataset.prod;
-  if (!prodId) {
-    // crear línea de producción para este trabajo
-    const fd = new FormData();
-    fd.append('nombre', inp.dataset.nombre);
-    fd.append('ubic', inp.dataset.ubic);
-    fd.append('trabajador_id', inp.dataset.tid);
-    if (inp.dataset.trabajo) fd.append('trabajo_id', inp.dataset.trabajo);
-    if (inp.dataset.folio) fd.append('folio', inp.dataset.folio);
-    if (inp.dataset.modelo) fd.append('modelo', inp.dataset.modelo);
-    if (inp.dataset.material) fd.append('material', inp.dataset.material);
-    if (inp.dataset.tarifa) fd.append('tarifa_gr', inp.dataset.tarifa);
-    const dayMap = {gm_sab:'gm_sab',gm_dom:'gm_dom',gm_lun:'gm_lun',gm_mar:'gm_mar',gm_mie:'gm_mie',gm_jue:'gm_jue',gm_vie:'gm_vie'};
-    // POST produccion then patch day
-    const res0 = await fetch('/api/produccion/' + SEMANA_ID, { method: 'POST', body: fd });
-    const data0 = await res0.json().catch(() => ({}));
-    if (!res0.ok) { showToast(data0.message || 'No se pudo crear línea', true); return; }
-    prodId = data0.id;
-    inp.dataset.prod = prodId;
-  }
-  const map = {gm_sab:'sab',gm_dom:'dom',gm_lun:'lun',gm_mar:'mar',gm_mie:'mie',gm_jue:'jue',gm_vie:'vie'};
-  const fd = new FormData();
-  fd.append('dia', map[col] || col);
-  fd.append('gramos', val);
-  const res = await fetch('/api/produccion/linea/' + prodId + '/dia', { method: 'PATCH', body: fd });
-  if (res.ok) {
-    inp.dataset.old = val;
-    showToast('Guardado ' + (DAY_LABEL[col]||col) + ': ' + (val || 'vacío'));
-    if (window.FajosLive) { FajosLive.flashCell(inp); FajosLive.flashRow(inp); FajosLive.pulseKpi('#kpi-live'); }
-  } else {
-    const data = await res.json().catch(() => ({}));
-    showToast(data.user_message || data.message || 'Error', true);
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  if (window.FajosLive) {
-    FajosLive.bindGramInputs({
-      tableSel: '.table-wrap table',
-      kpiSel: '#kpi-live',
-      onSave: async (inp) => { await saveCell(inp); },
-    });
-  }
-  document.querySelectorAll('input.cell-gm').forEach(inp => {
-    inp.addEventListener('dblclick', () => unlockIfNeeded(inp));
+function applyFlt() {
+  const q = (document.getElementById('flt-trab').value || '').toLowerCase();
+  const soloA = document.getElementById('flt-solo-activos').checked;
+  const sinHoy = document.getElementById('flt-sin-hoy').checked;
+  let n = 0;
+  document.querySelectorAll('tbody tr[data-txt]').forEach(tr => {
+    const okQ = !q || (tr.dataset.txt || '').includes(q);
+    const okA = !soloA || tr.dataset.activo === '1';
+    const okH = !sinHoy || tr.dataset.sinHoy === '1';
+    const show = okQ && okA && okH;
+    tr.style.display = show ? '' : 'none';
+    if (show) n++;
   });
-  const flt = document.getElementById('flt-sin-hoy');
-  if (flt) flt.addEventListener('change', () => {
-    document.querySelectorAll('tr[data-sin-hoy]').forEach(tr => {
-      tr.style.display = (flt.checked && tr.dataset.sinHoy === '0') ? 'none' : '';
-    });
-  });
+  const k = document.getElementById('kpi-n');
+  if (k) k.textContent = String(n);
+}
+['flt-trab','flt-solo-activos','flt-sin-hoy'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', applyFlt);
 });
 </script>
 {% endblock %}
