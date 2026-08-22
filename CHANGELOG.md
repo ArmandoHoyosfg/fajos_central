@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.12.0] — 2026-08-22
+
+### Paridad escritorio ↔ web
+- Pestañas: Inicio, Solo hoy, Plata, Pita, Taller, Folios, Trabajadores, Resumen
+- Temas Oscuro / Claro / Taller (mismos nombres que la web)
+- Solo hoy / Pita / Taller leen la misma BD vía `app`
+- Barra: fecha, versión, tema, buscar, URL web
+
 ## [3.11.3] — 2026-08-22
 
 ### Fix menú recortado + columna estrecha

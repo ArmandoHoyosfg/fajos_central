@@ -1,5 +1,5 @@
 """
-Trabajos activos por trabajador — progreso diario con reglas de fecha.
+Folios (catálogo) por trabajador — progreso diario con reglas de fecha.
 """
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ class TrabajosWidget(QWidget):
     def _build(self):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 16, 16, 16)
-        title = QLabel("Trabajos activos")
+        title = QLabel("Folios (catálogo)")
         title.setProperty("cssClass", "title")
         lay.addWidget(title)
         self.lbl_ctx = QLabel()
@@ -211,7 +211,7 @@ class TrabajosWidget(QWidget):
             self.lbl_ctx.setText(f"Hoy: {hoy}")
             return
         self.lbl_ctx.setText(
-            f"Hoy: {hoy} ({lab}). Trabajos activos: {len(self._rows)}. "
+            f"Hoy: {hoy} ({lab}). Folios (catálogo): {len(self._rows)}. "
             f"Sin captura de hoy: {len(sin)}."
         )
         if sin:
