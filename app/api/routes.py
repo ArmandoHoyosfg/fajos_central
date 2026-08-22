@@ -668,6 +668,32 @@ async def api_add_un_dia(
     return {"id": new_id, "ok": True, "dia": dia, "gramos": gramos, "updated": False}
 
 
+
+
+@router.patch("/api/produccion/linea/{prod_id}")
+async def api_patch_produccion_linea(
+    prod_id: int,
+    request: Request,
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+):
+    """Actualiza fila completa de Plata (metadatos y/o gramos diarios)."""
+    form = await request.form()
+    data = {}
+    for key in ("folio", "modelo", "material", "notas"):
+        if key in form:
+            data[key] = str(form.get(key) or "").strip() or None
+    if "tarifa_gr" in form:
+        data["tarifa_gr"] = str(form.get("tarifa_gr") or "").strip()
+    if "firmado" in form:
+        data["firmado"] = form.get("firmado")
+    for d in ("gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"):
+        if d in form:
+            data[d] = str(form.get(d) or "").strip()
+    if not data:
+        return {"ok": True, "id": prod_id, "unchanged": True}
+    repo.actualizar_linea(prod_id, data)
+    return {"ok": True, "id": prod_id, "updated": list(data.keys())}
+
 @router.delete("/api/produccion/linea/{prod_id}")
 async def api_del_produccion(prod_id: int, repo: ProduccionRepo = Depends(get_produccion_repo)):
     repo.eliminar(prod_id)

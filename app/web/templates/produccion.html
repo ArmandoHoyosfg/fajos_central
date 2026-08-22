@@ -94,6 +94,23 @@
       <td>
         {% if not semana_cerrada %}
         <button type="button" class="btn-icon-del" onclick="delLinea({{ r.id }})" title="Eliminar">×</button>
+        <button type="button" class="btn-icon-edit" title="Editar fila"
+          onclick='openEditPlt({{ r.id }}, {{ {
+            "nombre": r.nombre,
+            "ubic": r.ubic,
+            "folio": r.folio or "",
+            "modelo": r.modelo or "",
+            "material": r.material or "AG3",
+            "tarifa_gr": r.tarifa_gr if r.tarifa_gr is not none else 12,
+            "gm_sab": r.gm_sab if r.gm_sab else "",
+            "gm_dom": r.gm_dom if r.gm_dom else "",
+            "gm_lun": r.gm_lun if r.gm_lun else "",
+            "gm_mar": r.gm_mar if r.gm_mar else "",
+            "gm_mie": r.gm_mie if r.gm_mie else "",
+            "gm_jue": r.gm_jue if r.gm_jue else "",
+            "gm_vie": r.gm_vie if r.gm_vie else "",
+            "firmado": 1 if r.firmado else 0
+          }|tojson }})'>✎</button>
         {% endif %}
       </td>
       <td title="{{ r.nombre }}">{{ r.nombre }}</td>
@@ -182,6 +199,38 @@
   </div>
 </div>
 
+
+<div class="modal-backdrop" id="modal-edit-plt" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true">
+    <h2>Editar línea de Plata</h2>
+    <p class="muted" id="edit-plt-who" style="margin-top:0"></p>
+    <form id="form-edit-plt" onsubmit="return FajosRowEdit.submit({formId:'form-edit-plt', modalId:'modal-edit-plt', urlBase:'/api/produccion/linea/'})">
+      <div class="form-grid">
+        <div><label>Folio</label><input name="folio"></div>
+        <div><label>Modelo</label><input name="modelo"></div>
+        <div><label>Material</label>
+          <select name="material">
+            <option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option>
+          </select>
+        </div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.01" min="0"></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="0.01" min="0"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="0.01" min="0"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="0.01" min="0"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="0.01" min="0"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="0.01" min="0"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="0.01" min="0"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="0.01" min="0"></div>
+        <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-plt')">Cancelar</button>
+        <button type="submit" class="btn">Guardar fila</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-linea" hidden>
   <div class="modal" role="dialog">
     <h2>Agregar fila de producción</h2>
@@ -214,6 +263,15 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/row_edit.js"></script>
+<script>
+function openEditPlt(id, data) {
+  const who = document.getElementById("edit-plt-who");
+  if (who) who.textContent = (data.nombre || "") + " · ubic " + (data.ubic || "");
+  FajosRowEdit.open({ modalId: "modal-edit-plt", formId: "form-edit-plt", id: id, data: data });
+}
+</script>
+
 
 <script>
 async function duplicarSemana(sid) {

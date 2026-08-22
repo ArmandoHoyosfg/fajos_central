@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.9.0] — 2026-08-22
+
+### Edición de fila completa (popup)
+- Botón ✎ en **Plata, Pita y Taller** abre modal con todos los campos de la línea
+- PATCH fila completa Plata (`/api/produccion/linea/{id}`)
+- `row_edit.js` compartido; cierra y recarga al guardar
+
 ## [3.8.1] — 2026-08-21
 
 ### Fix edición inline Taller/Pita

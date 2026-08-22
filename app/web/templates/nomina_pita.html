@@ -67,6 +67,17 @@
     <tr data-id="{{ r.id }}">
       <td>
         <button type="button" class="btn-icon-del" onclick="delPit({{ r.id }})" title="Eliminar">×</button>
+        <button type="button" class="btn-icon-edit" onclick='openEditPit({{ r.id }}, {{ {
+          "modelo": r.modelo or "",
+          "folio": r.folio or "",
+          "material": r.material or "",
+          "producto": r.producto or "",
+          "pitas": r.pitas if r.pitas is not none else "",
+          "efectivo": r.efectivo if r.efectivo is not none else "",
+          "firmado": 1 if r.firmado else 0,
+          "nombre": r.nombre,
+          "ubic": r.ubic
+        }|tojson }})' title="Editar fila">✎</button>
       </td>
       <td class="col-nombre" title="{{ r.nombre }}">{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
@@ -87,11 +98,43 @@
   </tbody>
 </table>
 </div>
+
+<div class="modal-backdrop" id="modal-edit-pit" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2>Editar línea de pita</h2>
+    <p class="muted" id="edit-pit-who" style="margin-top:0"></p>
+    <form id="form-edit-pit" onsubmit="return FajosRowEdit.submit({formId:'form-edit-pit', modalId:'modal-edit-pit', urlBase:'/api/nomina-pita/linea/'})">
+      <div class="form-grid">
+        <div><label>Modelo</label><input name="modelo"></div>
+        <div><label>Folio</label><input name="folio"></div>
+        <div><label>Material</label><input name="material" placeholder="PITA 6X6"></div>
+        <div><label>Producto</label><input name="producto" placeholder="Cinturón"></div>
+        <div><label>Pitas</label><input name="pitas" type="number" step="0.01" min="0"></div>
+        <div><label>Efectivo $</label><input name="efectivo" type="number" step="0.01" min="0"></div>
+        <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-pit')">Cancelar</button>
+        <button type="submit" class="btn">Guardar fila</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% else %}
 <p class="muted">Selecciona o crea una semana.</p>
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/row_edit.js"></script>
+<script>
+function openEditPit(id, data) {
+  const who = document.getElementById('edit-pit-who');
+  if (who) who.textContent = (data.nombre || '') + ' · ubic ' + (data.ubic || '');
+  FajosRowEdit.open({ modalId: 'modal-edit-pit', formId: 'form-edit-pit', id: id, data: data });
+}
+</script>
+
 
 <script>
 async function duplicarSemana(sid) {

@@ -428,6 +428,58 @@ class ProduccionRepo(BaseRepo):
                 )
 
 
+
+    def actualizar_linea(self, prod_id: int, data: dict) -> None:
+        """Actualiza metadatos y/o gramos de una línea Plata (popup fila completa)."""
+        from app.services.audit_service import AuditService
+        audit = AuditService(self.db)
+        allowed = {
+            "folio", "modelo", "material", "tarifa_gr", "firmado", "notas",
+            "gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie",
+        }
+        fields = []
+        params: list = []
+        with self.db.cursor() as cur:
+            cur.execute("SELECT semana_id FROM produccion_plata WHERE id=%s", (prod_id,))
+            row = cur.fetchone()
+            if not row:
+                raise NotFoundError(
+                    f"Línea de producción id={prod_id} no existe.",
+                    details={"produccion_id": prod_id},
+                )
+            audit.assert_semana_abierta(int(row["semana_id"]))
+            for k, v in data.items():
+                if k not in allowed:
+                    continue
+                if k == "tarifa_gr":
+                    try:
+                        v = float(v) if v is not None and str(v).strip() != "" else None
+                    except (TypeError, ValueError):
+                        raise ValidationAppError("Tarifa inválida.", details={"tarifa_gr": v})
+                elif k.startswith("gm_"):
+                    try:
+                        if v is None or str(v).strip() == "":
+                            v = None
+                        else:
+                            f = float(v)
+                            v = None if f == 0 else f
+                    except (TypeError, ValueError):
+                        raise ValidationAppError(f"Gramos inválidos en {k}.", details={k: v})
+                elif k == "firmado":
+                    v = 1 if v in (1, "1", True, "true", "on") else 0
+                elif k in ("folio", "modelo", "material", "notas"):
+                    v = (str(v).strip() if v is not None else "") or None
+                fields.append(f"{k}=%s")
+                params.append(v)
+            if not fields:
+                return
+            params.append(prod_id)
+            cur.execute(
+                f"UPDATE produccion_plata SET {', '.join(fields)} WHERE id=%s",
+                params,
+            )
+
+
     DAY_COLS = {
         "sab": "gm_sab", "dom": "gm_dom", "lun": "gm_lun",
         "mar": "gm_mar", "mie": "gm_mie", "jue": "gm_jue", "vie": "gm_vie",
