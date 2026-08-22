@@ -82,7 +82,7 @@
   </colgroup>
   <thead>
     <tr>
-      <th class="col-actions" title="Acciones">⋮</th>
+      <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
       <th>Nombre</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>$/g</th>
       <th>Sáb</th><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th>
       <th>Gr</th><th>$</th><th>✓</th>
@@ -110,8 +110,8 @@
       <td class="col-actions">
         {% if not semana_cerrada %}
         <div class="row-menu">
-          <button type="button" class="btn-row-menu" title="Acciones" aria-label="Acciones"
-            onclick="FajosRowMenu.toggle(this, event)">⋮</button>
+          <button type="button" class="btn-row-menu" title="Menú: editar o eliminar fila" aria-label="Menú de la fila" aria-expanded="false"
+            onclick="event.preventDefault();event.stopPropagation();(window.FajosRowMenu||{toggle:function(){alert('Recarga la página (Ctrl+F5)')}}).toggle(this,event)">⋯</button>
           <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
             <button type="button" onclick='openEditPlt({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
             <button type="button" class="danger" onclick="delLinea({{ r.id }}); FajosRowMenu.closeAll()">Eliminar</button>
@@ -272,8 +272,8 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/row_menu.js"></script>
-<script src="/static/row_edit.js"></script>
+<script src="/static/row_menu.js?v=3112"></script>
+<script src="/static/row_edit.js?v=3112"></script>
 <script>
 function openEditPlt(id, data) {
   const who = document.getElementById("edit-plt-who");

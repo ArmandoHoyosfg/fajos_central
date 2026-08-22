@@ -15,6 +15,7 @@ from typing import Any
 from app.core.calendar_util import encontrar_semana_actual, parse_db_date, today
 from app.core.dias import DAY_BY_WEEKDAY, DAY_LABELS, ORDERED_DAYS, col_hoy
 from app.core.logging_config import get_logger
+from app.core.ops_settings import get_anomaly_pct
 from app.db.connection import get_db
 from app.db.repository import (
     NominaTallerRepo,
@@ -775,7 +776,9 @@ class InsightsService:
         }
 
 
-    def rarezas_semana(self, semana_id: int, pct: float = ANOMALY_PCT) -> dict[str, Any]:
+    def rarezas_semana(self, semana_id: int, pct: float | None = None) -> dict[str, Any]:
+        if pct is None:
+            pct = get_anomaly_pct()
         alertas: list[dict] = []
         try:
             lineas = self.prod.listar_por_semana(semana_id)

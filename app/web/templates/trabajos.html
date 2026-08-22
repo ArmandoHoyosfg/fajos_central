@@ -58,7 +58,7 @@
           } %}
       <td class="col-actions">
         <div class="row-menu">
-          <button type="button" class="btn-row-menu" title="Acciones" onclick="FajosRowMenu.toggle(this, event)">⋮</button>
+          <button type="button" class="btn-row-menu" title="Menú: editar o eliminar fila" aria-label="Menú de la fila" aria-expanded="false" onclick="event.preventDefault();event.stopPropagation();(window.FajosRowMenu||{toggle:function(){alert('Recarga la página (Ctrl+F5)')}}).toggle(this,event)">⋯</button>
           <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
             <button type="button" onclick='openEditTrabajo({{ r.trabajo_id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar…</button>
             {% if r.trabajo_activo %}
@@ -119,8 +119,8 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/static/row_menu.js"></script>
-<script src="/static/row_edit.js"></script>
+<script src="/static/row_menu.js?v=3112"></script>
+<script src="/static/row_edit.js?v=3112"></script>
 <script>
 const COL_HOY = {{ col_hoy|tojson }};
 function openEditTrabajo(id, data) {

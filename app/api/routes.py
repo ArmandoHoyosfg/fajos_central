@@ -1194,3 +1194,30 @@ async def api_activar_trabajo(trabajo_id: int):
     from app.db.repository import TrabajosRepo
     TrabajosRepo().set_activo(trabajo_id, True)
     return {"ok": True, "id": trabajo_id, "activo": True}
+
+
+@router.get("/api/ops/settings")
+async def api_ops_settings_get():
+    from app.core.ops_settings import load
+    return load()
+
+
+@router.post("/api/ops/settings")
+async def api_ops_settings_set(request: Request):
+    from app.core.ops_settings import save, get_anomaly_pct
+    form = await request.form()
+    data = {}
+    if "anomaly_pct" in form:
+        try:
+            # aceptar 30 o 0.30
+            raw = str(form.get("anomaly_pct") or "30").replace(",", ".").strip()
+            v = float(raw)
+            if v > 1:
+                v = v / 100.0
+            data["anomaly_pct"] = v
+        except ValueError:
+            from app.core.exceptions import ValidationAppError
+            raise ValidationAppError("Umbral inválido")
+    out = save(data)
+    out["anomaly_pct_display"] = int(round(get_anomaly_pct() * 100))
+    return out

@@ -91,6 +91,36 @@ async function duplicarSemana(sid) {
     {% endfor %}
   </ul>
 </section>
+
+<div class="card" style="margin:0.75rem 0;padding:0.75rem 1rem;">
+  <form class="inline" style="flex-wrap:wrap;align-items:center;gap:0.5rem;" onsubmit="return saveUmbral(event)">
+    <label class="muted">Umbral de rarezas (± %)</label>
+    <input name="anomaly_pct" type="number" min="5" max="90" step="1" value="30" id="inp-umbral" style="width:4.5rem;" title="Si un trabajador se desvía más de este % vs su promedio, se marca como rareza">
+    <button type="submit" class="btn btn-secondary">Aplicar</button>
+    <span class="muted faint" id="umbral-msg"></span>
+  </form>
+</div>
+<script>
+(async function(){
+  try {
+    const s = await fetch('/api/ops/settings').then(r => r.json());
+    const el = document.getElementById('inp-umbral');
+    if (el && s.anomaly_pct != null) el.value = Math.round(Number(s.anomaly_pct) * 100);
+  } catch (e) {}
+})();
+async function saveUmbral(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch('/api/ops/settings', { method: 'POST', body: fd });
+  const msg = document.getElementById('umbral-msg');
+  if (res.ok) {
+    const j = await res.json();
+    if (msg) msg.textContent = 'Guardado: ±' + (j.anomaly_pct_display || Math.round(j.anomaly_pct*100)) + '%';
+  } else if (msg) msg.textContent = 'No se pudo guardar';
+  return false;
+}
+</script>
+
 {% endif %}
 
 {% if insights and insights.pronostico and insights.pronostico.ok %}
