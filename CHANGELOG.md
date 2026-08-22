@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.13.1] — 2026-08-22
+
+### Excel formal con fórmulas
+- Plata: Total Gr = `SUM` días; Efectivo = Total Gr × $/Gr; totales y SUMIF por material
+- Taller: Total = Sueldo + Extras; fila TOTAL con `SUM`
+- Pita: TOTAL Efectivo con `SUM`
+- Resumen: gran total con `SUM`
+
 ## [3.13.0] — 2026-08-22
 
 ### Bloque A — captura diaria + gramos a 1 decimal

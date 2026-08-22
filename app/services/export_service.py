@@ -192,30 +192,41 @@ class ExportService:
 
         data_rows.sort(key=_pk)
 
+        # Columnas: A nombre … F $/Gr, G–M días, N Total Gr, O Efectivo
+        # N = SUM(días)  ·  O = N * F
         for i, row in enumerate(data_rows):
             r = 6 + i
             mat = str(row.get("material") or "").upper()
             fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else None)
             for col, (key, _) in enumerate(self.COLUMNS, 1):
-                val = row.get(key)
-                if isinstance(val, Decimal):
-                    val = float(val)
-                if val is not None and key in (
-                    "tarifa_gr", "gm_sab", "gm_dom", "gm_lun", "gm_mar",
-                    "gm_mie", "gm_jue", "gm_vie", "total_gramos", "efectivo",
-                ):
-                    try:
-                        if float(val) == 0:
-                            val = None
-                    except (TypeError, ValueError):
-                        pass
-                cell = ws.cell(row=r, column=col, value=val)
+                if key == "total_gramos":
+                    # Suma automática de gramos del sábado al viernes
+                    val = f"=IF(SUM(G{r}:M{r})=0,\"\",SUM(G{r}:M{r}))"
+                elif key == "efectivo":
+                    # Efectivo = Total Gr × $/Gr
+                    val = f"=IF(OR(N{r}=\"\",N{r}=0,F{r}=\"\"),\"\",ROUND(N{r}*F{r},2))"
+                else:
+                    val = row.get(key)
+                    if isinstance(val, Decimal):
+                        val = float(val)
+                    if val is not None and key in (
+                        "tarifa_gr", "gm_sab", "gm_dom", "gm_lun", "gm_mar",
+                        "gm_mie", "gm_jue", "gm_vie",
+                    ):
+                        try:
+                            if float(val) == 0:
+                                val = None
+                        except (TypeError, ValueError):
+                            pass
+                cell = ws.cell(row=r, column=col, value=val if val is not None else "")
                 cell.border = self.THIN
                 cell.alignment = Alignment(horizontal="center" if col > 1 else "left")
                 if fill is not None:
                     cell.fill = fill
-                if key == "efectivo" and val is not None:
+                if key == "efectivo":
                     cell.number_format = '"$"#,##0.00'
+                if key in ("total_gramos", "tarifa_gr") or key.startswith("gm_"):
+                    cell.number_format = "0.0"
             firm = ws.cell(row=r, column=len(self.COLUMNS) + 1, value="")
             firm.border = self.THIN
             if fill is not None:
@@ -225,22 +236,25 @@ class ExportService:
         if data_rows:
             tot = last + 1
             ws.cell(row=tot, column=13, value="TOTALES").font = Font(bold=True)
-            ws.cell(row=tot, column=14, value=f"=SUM(N6:N{last})")
-            ws.cell(row=tot, column=15, value=f"=SUM(O6:O{last})")
-            ws.cell(row=tot, column=14).fill = self.GREEN_FILL
-            ws.cell(row=tot, column=15).fill = self.GREEN_FILL
-            ws.cell(row=tot, column=15).number_format = '"$"#,##0.00'
-            ws.cell(row=tot, column=14).font = Font(bold=True)
-            ws.cell(row=tot, column=15).font = Font(bold=True)
+            # Sumas automáticas de columnas calculadas
+            c_n = ws.cell(row=tot, column=14, value=f"=SUM(N6:N{last})")
+            c_o = ws.cell(row=tot, column=15, value=f"=SUM(O6:O{last})")
+            c_n.fill = self.GREEN_FILL
+            c_o.fill = self.GREEN_FILL
+            c_o.number_format = '"$"#,##0.00'
+            c_n.number_format = "0.0"
+            c_n.font = Font(bold=True)
+            c_o.font = Font(bold=True)
+            from openpyxl.utils import get_column_letter as _gcl
+            for col in range(7, 14):  # sumar cada día G–M
+                letter = _gcl(col)
+                cell = ws.cell(row=tot, column=col, value=f"=SUM({letter}6:{letter}{last})")
+                cell.font = Font(bold=True, size=9)
+                cell.number_format = "0.0"
 
             sub = tot + 2
-            ws.cell(row=sub, column=1, value="Resumen por material").font = Font(bold=True, color="1F4E79")
-            buckets: dict = defaultdict(lambda: [0, 0.0, 0.0])
-            for row in data_rows:
-                mat = str(row.get("material") or "—").upper()
-                buckets[mat][0] += 1
-                buckets[mat][1] += float(row.get("total_gramos") or 0)
-                buckets[mat][2] += float(row.get("efectivo") or 0)
+            ws.cell(row=sub, column=1, value="Resumen por material (fórmulas SUMIF)").font = Font(bold=True, color="1F4E79")
+            mats = sorted({str(row.get("material") or "—").upper() for row in data_rows})
             ws.cell(row=sub + 1, column=1, value="Material")
             ws.cell(row=sub + 1, column=2, value="Líneas")
             ws.cell(row=sub + 1, column=3, value="Gramos")
@@ -251,11 +265,15 @@ class ExportService:
                 cell.font = self.HEADER_FONT
                 cell.border = self.THIN
             rr = sub + 2
-            for mat, (n, gr, ef) in sorted(buckets.items()):
+            for mat in mats:
+                # Escapar comillas en material para fórmula
+                mat_esc = mat.replace('"', '""')
                 ws.cell(row=rr, column=1, value=mat).fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT)
-                ws.cell(row=rr, column=2, value=n)
-                ws.cell(row=rr, column=3, value=round(gr, 2))
-                ws.cell(row=rr, column=4, value=round(ef, 2)).number_format = '"$"#,##0.00'
+                ws.cell(row=rr, column=2, value=f'=COUNTIF($E$6:$E${last},A{rr})')
+                ws.cell(row=rr, column=3, value=f'=SUMIF($E$6:$E${last},A{rr},$N$6:$N${last})')
+                ws.cell(row=rr, column=4, value=f'=SUMIF($E$6:$E${last},A{rr},$O$6:$O${last})')
+                ws.cell(row=rr, column=3).number_format = "0.0"
+                ws.cell(row=rr, column=4).number_format = '"$"#,##0.00'
                 for c in range(1, 5):
                     ws.cell(row=rr, column=c).border = self.THIN
                 rr += 1
@@ -539,41 +557,41 @@ class ExportService:
 
         money = '"$"#,##0.00'
         row_i = 5
-        total_sueldo = total_extras = total_all = 0.0
+        first_data = 5
         for r in sorted(lineas, key=lambda x: (int(x.get("ubic") or 0), str(x.get("nombre") or ""))):
             sueldo = float(r.get("sueldo") or 0)
             extras = float(r.get("extras") or 0)
-            tot = float(r.get("total") or (sueldo + extras))
-            total_sueldo += sueldo
-            total_extras += extras
-            total_all += tot
+            # D=Sueldo E=Extras F=Total → F = D+E (fórmula)
             vals = [
                 r.get("nombre") or "",
                 r.get("ubic"),
                 r.get("puesto") or "",
                 sueldo if sueldo else None,
-                extras if extras else None,
-                tot if tot else None,
+                extras if extras else 0,
+                f"=IF(AND(OR(D{row_i}=\"\",D{row_i}=0),OR(E{row_i}=\"\",E{row_i}=0)),\"\",IF(D{row_i}=\"\",0,D{row_i})+IF(E{row_i}=\"\",0,E{row_i}))",
                 "______" if not r.get("firmado") else "✓",
             ]
             for col, v in enumerate(vals, 1):
                 cell = ws.cell(row_i, col, v if v is not None else "")
                 cell.border = self.THIN
-                if col in (4, 5, 6) and isinstance(v, (int, float)):
+                if col in (4, 5, 6):
                     cell.number_format = money
                 if row_i % 2 == 0:
                     cell.fill = self.ALT_FILL
             row_i += 1
 
-        # Total taller
+        last_data = row_i - 1
+        # Total taller con SUM
         row_i += 1
         ws.cell(row_i, 3, "TOTAL TALLER").font = Font(bold=True, size=11)
-        for col, v in [(4, total_sueldo), (5, total_extras), (6, total_all)]:
-            cell = ws.cell(row_i, col, v)
-            cell.font = Font(bold=True)
-            cell.fill = self.GREEN_FILL
-            cell.number_format = money
-            cell.border = self.THIN
+        if last_data >= first_data:
+            for col, letter in [(4, "D"), (5, "E"), (6, "F")]:
+                cell = ws.cell(row_i, col, value=f"=SUM({letter}{first_data}:{letter}{last_data})")
+                cell.font = Font(bold=True)
+                cell.fill = self.GREEN_FILL
+                cell.number_format = money
+                cell.border = self.THIN
+        total_all_formula_row = row_i
 
         # Bloque resumen tres nóminas (si se pasó)
         if resumen:
@@ -581,18 +599,18 @@ class ExportService:
             ws.cell(row_i, 1, "RESUMEN DE NÓMINAS DE LA SEMANA").font = Font(bold=True, size=12, color="1F4E79")
             row_i += 1
             labels = [
-                ("Nómina Taller", float(resumen.get("nomina_taller") or total_all)),
+                ("Nómina Taller", float(resumen.get("nomina_taller") or 0)),
                 ("Nómina Plata", float(resumen.get("nomina_plata") or 0)),
                 ("Nómina Pita", float(resumen.get("nomina_pita") or 0)),
             ]
+            start_res = row_i
             for label, amount in labels:
                 ws.cell(row_i, 1, label)
                 cell = ws.cell(row_i, 2, amount)
                 cell.number_format = money
                 row_i += 1
-            gran = sum(a for _, a in labels)
             ws.cell(row_i, 1, "Total Nómina").font = Font(bold=True, size=12)
-            cell = ws.cell(row_i, 2, gran)
+            cell = ws.cell(row_i, 2, f"=SUM(B{start_res}:B{row_i-1})")
             cell.font = Font(bold=True, size=12)
             cell.fill = self.GREEN_FILL
             cell.number_format = money
@@ -643,10 +661,9 @@ class ExportService:
         money = '"$"#,##0.00'
         pita_fill = PatternFill("solid", fgColor="FCE4D6")
         row_i = 5
-        total_ef = 0.0
+        first_data = 5
         for r in sorted(lineas, key=lambda x: (int(x.get("ubic") or 0), str(x.get("nombre") or ""))):
             ef = float(r.get("efectivo") or 0)
-            total_ef += ef
             pitas_v = r.get("pitas")
             vals = [
                 r.get("nombre") or "",
@@ -662,8 +679,8 @@ class ExportService:
             for col, v in enumerate(vals, 1):
                 cell = ws.cell(row_i, col, v if v is not None else "")
                 cell.border = self.THIN
-                if col == 8 and isinstance(v, (int, float)):
-                    cell.number_format = money
+                if col in (7, 8) and (isinstance(v, (int, float)) or col == 8):
+                    cell.number_format = money if col == 8 else "0.0"
                 mat = str(r.get("material") or "").upper()
                 if "PITA" in mat:
                     cell.fill = pita_fill
@@ -671,9 +688,13 @@ class ExportService:
                     cell.fill = self.ALT_FILL
             row_i += 1
 
+        last_data = row_i - 1
         row_i += 1
         ws.cell(row_i, 7, "TOTAL PITA").font = Font(bold=True, size=11)
-        cell = ws.cell(row_i, 8, total_ef)
+        if last_data >= first_data:
+            cell = ws.cell(row_i, 8, value=f"=SUM(H{first_data}:H{last_data})")
+        else:
+            cell = ws.cell(row_i, 8, 0)
         cell.font = Font(bold=True)
         cell.fill = self.GREEN_FILL
         cell.number_format = money
@@ -723,9 +744,8 @@ class ExportService:
             cell.number_format = money
             cell.font = Font(size=12)
             r += 1
-        gran = sum(a for _, a in rows)
         ws.cell(r, 1, "Total Nómina").font = Font(bold=True, size=13)
-        cell = ws.cell(r, 2, gran)
+        cell = ws.cell(r, 2, f"=SUM(B4:B{r-1})")
         cell.font = Font(bold=True, size=13)
         cell.fill = self.GREEN_FILL
         cell.number_format = money
