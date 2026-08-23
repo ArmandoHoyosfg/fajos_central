@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.16.2] — 2026-08-23
+
+### start.bat + integración
+- `start.bat` arranca el launcher con `.venv` (pythonw) o fallback `py`/`python`
+- Acceso directo e Inicio de Windows apuntan a `start.bat` + `logo.ico`
+- README: tabla de arranque integrado
+
 ## [3.16.1] — 2026-08-23
 
 ### Icono de acceso directo

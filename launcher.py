@@ -785,30 +785,33 @@ class LauncherApp(tk.Tk):
     def _create_startup_shortcut(self) -> None:
         startup = self._startup_lnk_path()
         startup.parent.mkdir(parents=True, exist_ok=True)
-        venv_w = ROOT / ".venv" / "Scripts" / "pythonw.exe"
-        venv_c = ROOT / ".venv" / "Scripts" / "python.exe"
-        if venv_w.exists():
-            target = str(venv_w)
-            args = '"' + str(ROOT / "launcher.py") + '"'
-        elif venv_c.exists():
-            target = str(venv_c)
-            args = '"' + str(ROOT / "launcher.py") + '"'
-        else:
-            target = sys.executable
-            args = '"' + str(ROOT / "launcher.py") + '"'
 
         def esc(s: str) -> str:
             return s.replace("'", "''")
 
+        start_bat = ROOT / "start.bat"
         ico = ROOT / "app" / "web" / "static" / "logo.ico"
         parts = [
             "$W = New-Object -ComObject WScript.Shell",
             "$S = $W.CreateShortcut('%s')" % esc(str(startup)),
-            "$S.TargetPath = '%s'" % esc(target),
-            "$S.Arguments = '%s'" % esc(args),
-            "$S.WorkingDirectory = '%s'" % esc(str(ROOT)),
-            "$S.Description = 'Fajos Central'",
         ]
+        if start_bat.exists():
+            parts.append("$S.TargetPath = '%s'" % esc(str(start_bat)))
+            parts.append("$S.Arguments = ''")
+        else:
+            venv_w = ROOT / ".venv" / "Scripts" / "pythonw.exe"
+            venv_c = ROOT / ".venv" / "Scripts" / "python.exe"
+            if venv_w.exists():
+                target = str(venv_w)
+            elif venv_c.exists():
+                target = str(venv_c)
+            else:
+                target = sys.executable
+            args = '"' + str(ROOT / "launcher.py") + '"'
+            parts.append("$S.TargetPath = '%s'" % esc(target))
+            parts.append("$S.Arguments = '%s'" % esc(args))
+        parts.append("$S.WorkingDirectory = '%s'" % esc(str(ROOT)))
+        parts.append("$S.Description = 'Fajos Central'")
         if ico.exists():
             parts.append("$S.IconLocation = '%s,0'" % esc(str(ico)))
         parts.append("$S.Save()")

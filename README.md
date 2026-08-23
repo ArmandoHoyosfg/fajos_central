@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 3.16.1  
+**Versión:** 3.16.2  
 **Entorno:** Windows + PowerShell 7 + MariaDB/HeidiSQL  
 
 Sistema de nóminas del **Taller de Fajos Central** (áreas **Plata**, **Pita** y **Taller**).
@@ -32,7 +32,8 @@ pwsh -File .\scripts\create_desktop_shortcut.ps1
 # Verificar entorno
 pwsh -File .\scripts\verify_env.ps1
 
-# Abrir centro de control
+# Abrir centro de control (cualquiera)
+.\start.bat
 python .\launcher.py
 ```
 
@@ -118,10 +119,16 @@ fajos_central/
 
 ---
 
-## Pendiente / próximo
+## Arranque integrado
 
-- `start.bat` — doble clic sin PowerShell  
-- ~~Icono `.ico`~~ → `app/web/static/logo.ico` (regenerar acceso directo)
+| Forma | Cómo |
+|--------|------|
+| **Doble clic** | `start.bat` (usa `.venv` + `launcher.py`) |
+| **Acceso Escritorio** | `scripts\create_desktop_shortcut.ps1` → apunta a `start.bat` + `logo.ico` |
+| **Launcher** | Acceso directo / Iniciar con Windows / Verificar / Backup |
+| **PowerShell** | `pwsh -File .\start.ps1` o `python .\launcher.py` |
+
+Icono: `app\web\static\logo.ico` (multi-tamaño).
 
 ---
 
