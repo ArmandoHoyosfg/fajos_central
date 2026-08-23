@@ -19,7 +19,7 @@ New-Item -ItemType Directory -Path $DestParent | Out-Null
 Write-Host "=== Empaque portable Fajos Central v$Ver ===" -ForegroundColor Cyan
 Write-Host "Destino: $DestParent"
 
-$ExcludeDirs = @(".venv", ".git", "__pycache__", ".pytest_cache", "exports", "logs", "node_modules", ".mypy_cache")
+$ExcludeDirs = @(".venv", ".git", "__pycache__", ".pytest_cache", "exports", "backups", "logs", "node_modules", ".mypy_cache")
 
 function Should-Skip([string]$rel) {
     foreach ($d in $ExcludeDirs) {

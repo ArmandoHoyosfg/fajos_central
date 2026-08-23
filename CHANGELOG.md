@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.16.0] — 2026-08-23
+
+### Launcher moderno + backup + inicio Windows
+- UI del launcher simplificada (servidor, BD, sistema)
+- **Backup al cerrar** y **Backup ahora** → carpeta `backups/`
+- Opción **Iniciar con Windows** (carpeta Startup)
+- README completo: portable, scripts, backup, pendientes (start.bat + ico)
+
 ## [3.15.0] — 2026-08-23
 
 ### Portable + acceso directo Windows

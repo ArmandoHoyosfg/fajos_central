@@ -227,131 +227,122 @@ class LauncherApp(tk.Tk):
         _center(self, w, h)
         self._update_status()
 
+
     def _apply_style(self) -> None:
         style = ttk.Style(self)
         try:
             style.theme_use("clam")
         except Exception:
             pass
-        bg, fg, accent = "#1e1e2e", "#cdd6f4", "#c9a227"
+        bg, surface, text, muted, accent = "#11111b", "#1e1e2e", "#cdd6f4", "#a6adc8", "#cba6f7"
+        self.configure(bg=bg)
+        style.configure(".", background=bg, foreground=text, font=("Segoe UI", 10))
         style.configure("TFrame", background=bg)
-        style.configure("TLabel", background=bg, foreground=fg, font=("Segoe UI", 9))
-        style.configure("Title.TLabel", font=("Segoe UI", 12, "bold"), foreground=accent)
-        style.configure("Status.TLabel", font=("Segoe UI", 9, "bold"))
-        style.configure("TButton", font=("Segoe UI", 9), padding=(6, 4))
-        style.configure("TLabelframe", background=bg, foreground=fg)
-        style.configure(
-            "TLabelframe.Label",
-            background=bg,
-            foreground=accent,
-            font=("Segoe UI", 8, "bold"),
-        )
-        style.configure("TEntry", fieldbackground="#313244", foreground=fg)
+        style.configure("TLabel", background=bg, foreground=text)
+        style.configure("TLabelframe", background=bg, foreground=muted)
+        style.configure("TLabelframe.Label", background=bg, foreground=muted, font=("Segoe UI", 9, "bold"))
+        style.configure("TButton", font=("Segoe UI", 9), padding=(10, 6))
+        style.map("TButton", background=[("active", "#313244")])
+        style.configure("Accent.TButton", font=("Segoe UI", 11, "bold"), padding=(14, 10))
+        style.configure("Title.TLabel", font=("Segoe UI", 14, "bold"), foreground=accent)
+        style.configure("Muted.TLabel", foreground=muted, font=("Segoe UI", 9))
+        style.configure("Status.TLabel", font=("Segoe UI", 10, "bold"))
 
     def _build_ui(self) -> None:
-        main = ttk.Frame(self, padding=(10, 8))
+        main = ttk.Frame(self, padding=(16, 12))
         main.pack(fill=tk.BOTH, expand=True)
 
-        # --- Cabecera ---
+        # Cabecera
         head = ttk.Frame(main)
-        head.pack(fill=tk.X, pady=(0, 4))
+        head.pack(fill=tk.X, pady=(0, 8))
         if LOGO_PATH.exists():
             try:
-                img = tk.PhotoImage(file=str(LOGO_PATH))
-                w = img.width()
-                if w > 40:
-                    img = img.subsample(max(1, w // 40), max(1, w // 40))
-                self._logo_img = img
-                tk.Label(head, image=self._logo_img, bg="#1e1e2e").pack(side=tk.LEFT, padx=(0, 8))
+                from PIL import Image, ImageTk
+                img = Image.open(LOGO_PATH).resize((40, 40))
+                self._logo_img = ImageTk.PhotoImage(img)
+                ttk.Label(head, image=self._logo_img).pack(side=tk.LEFT, padx=(0, 10))
             except Exception:
                 pass
         titles = ttk.Frame(head)
-        titles.pack(side=tk.LEFT, fill=tk.X)
-        ttk.Label(titles, text="Fajos Piteados Central", style="Title.TLabel").pack(anchor=tk.W)
-        ttk.Label(titles, text=f"Centro de control  ·  v{APP_VERSION}", foreground="#a6adc8").pack(anchor=tk.W)
-        self.lbl_lan = ttk.Label(titles, text="", foreground="#89b4fa")
-        self.lbl_lan.pack(anchor=tk.W, pady=(4, 0))
-        self._refresh_lan_label()
+        titles.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(titles, text="Fajos Central", style="Title.TLabel").pack(anchor=tk.W)
+        ttk.Label(
+            titles,
+            text=f"Nóminas · v{APP_VERSION}",
+            style="Muted.TLabel",
+        ).pack(anchor=tk.W)
+        self.lbl_lan = ttk.Label(titles, text="", style="Muted.TLabel")
+        self.lbl_lan.pack(anchor=tk.W)
 
-        st = ttk.Frame(main)
-        st.pack(fill=tk.X, pady=(0, 2))
-        ttk.Label(st, text="Servidor:").pack(side=tk.LEFT)
-        self.lbl_status = ttk.Label(
-            st, text="● Detenido", style="Status.TLabel", foreground="#f38ba8"
-        )
-        self.lbl_status.pack(side=tk.LEFT, padx=(6, 0))
-        self.lbl_url = ttk.Label(main, text=f"URL: {_base_url()}", foreground="#a6adc8")
-        self.lbl_url.pack(anchor=tk.W, pady=(0, 4))
+        # Estado + acción principal
+        status_box = ttk.LabelFrame(main, text=" Servidor web ", padding=10)
+        status_box.pack(fill=tk.X, pady=4)
+        row = ttk.Frame(status_box)
+        row.pack(fill=tk.X)
+        ttk.Label(row, text="Estado:").pack(side=tk.LEFT)
+        self.lbl_status = ttk.Label(row, text="● Detenido", style="Status.TLabel", foreground="#f38ba8")
+        self.lbl_status.pack(side=tk.LEFT, padx=8)
+        self.lbl_url = ttk.Label(status_box, text=f"URL: {_base_url()}", style="Muted.TLabel")
+        self.lbl_url.pack(anchor=tk.W, pady=(6, 8))
 
-        # --- BD: 2 botones en fila ---
-        db = ttk.LabelFrame(main, text=" Base de datos ", padding=4)
-        db.pack(fill=tk.X, pady=2)
-        db_row = ttk.Frame(db)
-        db_row.pack(fill=tk.X)
-        ttk.Button(db_row, text="⚙  Configurar", command=self._config_db).pack(
-            side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 3)
-        )
-        ttk.Button(db_row, text="🔌  Probar", command=self._test_db).pack(
-            side=tk.LEFT, expand=True, fill=tk.X, padx=(3, 0)
-        )
-        self.lbl_db = ttk.Label(db, text="", font=("Segoe UI", 8), foreground="#a6adc8")
-        self.lbl_db.pack(anchor=tk.W, pady=(2, 0))
-        self._refresh_db_label()
+        actions = ttk.Frame(status_box)
+        actions.pack(fill=tk.X)
+        self.btn_start = ttk.Button(actions, text="▶  Iniciar", style="Accent.TButton", command=self._start_server)
+        self.btn_start.pack(side=tk.LEFT, padx=(0, 6))
+        self.btn_stop = ttk.Button(actions, text="■  Detener", command=self._stop_server, state=tk.DISABLED)
+        self.btn_stop.pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(actions, text="🌐 Abrir", command=self._open_browser).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(actions, text="📋 URL", command=self._copy_lan_url).pack(side=tk.LEFT)
 
-        # --- Web: 2x2 ---
-        web = ttk.LabelFrame(main, text=" Aplicación web ", padding=4)
-        web.pack(fill=tk.X, pady=2)
-        g = ttk.Frame(web)
-        g.pack(fill=tk.X)
-        self.btn_start = ttk.Button(g, text="▶  Iniciar", command=self._start_server)
-        self.btn_stop = ttk.Button(g, text="■  Detener", command=self._stop_server, state=tk.DISABLED)
-        self.btn_copy_url = ttk.Button(g, text="📋 Copiar URL red", command=self._copy_lan_url)
-        self.btn_start.grid(row=0, column=0, sticky="ew", padx=(0, 3), pady=2)
-        self.btn_stop.grid(row=0, column=1, sticky="ew", padx=(3, 3), pady=2)
-        self.btn_copy_url.grid(row=0, column=2, sticky="ew", padx=(0, 0), pady=2)
-        ttk.Button(g, text="🌐  Navegador", command=self._open_browser).grid(
-            row=1, column=0, sticky="ew", padx=(0, 3), pady=2
-        )
-        ttk.Button(g, text="📖  API /docs", command=self._open_api_docs).grid(
-            row=1, column=1, sticky="ew", padx=(3, 0), pady=2
-        )
-        g.columnconfigure(0, weight=1)
-        g.columnconfigure(1, weight=1)
-        g.columnconfigure(2, weight=1)
+        # Base de datos
+        db = ttk.LabelFrame(main, text=" Base de datos ", padding=10)
+        db.pack(fill=tk.X, pady=4)
+        self.lbl_db = ttk.Label(db, text="", style="Muted.TLabel")
+        self.lbl_db.pack(anchor=tk.W)
+        db_btns = ttk.Frame(db)
+        db_btns.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(db_btns, text="⚙ Configurar", command=self._config_db).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(db_btns, text="🔌 Probar", command=self._test_db).pack(side=tk.LEFT)
 
-        # --- Escritorio + Datos: 2 columnas ---
-        mid = ttk.Frame(main)
-        mid.pack(fill=tk.X, pady=2)
-        desk = ttk.LabelFrame(mid, text=" Escritorio ", padding=4)
-        desk.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 3))
-        ttk.Button(desk, text="🖥  Abrir app", command=self._run_desktop).pack(fill=tk.X)
+        # Sistema (compacto)
+        sysf = ttk.LabelFrame(main, text=" Sistema ", padding=10)
+        sysf.pack(fill=tk.X, pady=4)
+        self.var_backup = tk.BooleanVar(value=True)
+        self.var_startup = tk.BooleanVar(value=self._startup_enabled())
+        ttk.Checkbutton(
+            sysf,
+            text="Backup al cerrar (Excel Master + config)",
+            variable=self.var_backup,
+        ).pack(anchor=tk.W)
+        ttk.Checkbutton(
+            sysf,
+            text="Iniciar con Windows",
+            variable=self.var_startup,
+            command=self._toggle_startup,
+        ).pack(anchor=tk.W, pady=(4, 0))
 
-        data = ttk.LabelFrame(mid, text=" Datos / Excel ", padding=4)
-        data.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(3, 0))
-        ttk.Button(data, text="📊  Excel nóminas", command=self._open_excel).pack(fill=tk.X, pady=1)
-        ttk.Button(
-            data, text="🔍  Import simular", command=lambda: self._run_import(False)
-        ).pack(fill=tk.X, pady=1)
-        ttk.Button(
-            data, text="⬇  Import aplicar", command=lambda: self._run_import(True)
-        ).pack(fill=tk.X, pady=1)
-
-        # --- Utilidades: una sola fila ---
-        util = ttk.LabelFrame(main, text=" Utilidades ", padding=4)
-        util.pack(fill=tk.X, pady=2)
-        urow = ttk.Frame(util)
-        urow.pack(fill=tk.X)
+        sys_btns = ttk.Frame(sysf)
+        sys_btns.pack(fill=tk.X, pady=(10, 0))
         for txt, cmd in (
-            ("📁 Carpeta", self._open_folder),
             ("📌 Acceso directo", self._create_desktop_shortcut),
             ("✅ Verificar", self._verify_env),
-            ("📘 Guía", self._open_uso),
-            ("🗄 SQL", self._open_schema),
-            ("Salir", self._on_close),
+            ("💾 Backup ahora", self._backup_now),
+            ("📁 Carpeta", self._open_folder),
         ):
-            ttk.Button(urow, text=txt, command=cmd).pack(
-                side=tk.LEFT, expand=True, fill=tk.X, padx=2
-            )
+            ttk.Button(sys_btns, text=txt, command=cmd).pack(side=tk.LEFT, padx=(0, 4))
+
+        # Más (colapsado en una fila secundaria)
+        more = ttk.Frame(main)
+        more.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(more, text="📊 Excel", command=self._open_excel).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(more, text="Importar…", command=lambda: self._run_import(False)).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(more, text="🗄 SQL", command=self._open_schema).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(more, text="API", command=self._open_api_docs).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(more, text="Salir", command=self._on_close).pack(side=tk.RIGHT)
+
+        self._refresh_db_label()
+        self._refresh_lan_label()
+        self._update_status()
 
     def _refresh_db_label(self) -> None:
         d = _read_db_ini()
@@ -762,6 +753,91 @@ class LauncherApp(tk.Tk):
 
 
 
+
+    def _startup_lnk_path(self) -> Path:
+        startup = Path(os.environ.get("APPDATA", "")) / r"Microsoft\Windows\Start Menu\Programs\Startup"
+        return startup / "Fajos Central.lnk"
+
+    def _startup_enabled(self) -> bool:
+        try:
+            return self._startup_lnk_path().exists()
+        except Exception:
+            return False
+
+    def _toggle_startup(self) -> None:
+        if sys.platform != "win32":
+            messagebox.showinfo("Inicio", "Solo disponible en Windows.")
+            self.var_startup.set(False)
+            return
+        try:
+            if self.var_startup.get():
+                self._create_startup_shortcut()
+                messagebox.showinfo("Inicio", "Se agregó Fajos Central al inicio de Windows.")
+            else:
+                p = self._startup_lnk_path()
+                if p.exists():
+                    p.unlink()
+                messagebox.showinfo("Inicio", "Se quitó del inicio de Windows.")
+        except Exception as e:
+            self.var_startup.set(self._startup_enabled())
+            messagebox.showerror("Inicio", str(e))
+
+    def _create_startup_shortcut(self) -> None:
+        startup = self._startup_lnk_path()
+        startup.parent.mkdir(parents=True, exist_ok=True)
+        venv_w = ROOT / ".venv" / "Scripts" / "pythonw.exe"
+        venv_c = ROOT / ".venv" / "Scripts" / "python.exe"
+        if venv_w.exists():
+            target = str(venv_w)
+            args = '"' + str(ROOT / "launcher.py") + '"'
+        elif venv_c.exists():
+            target = str(venv_c)
+            args = '"' + str(ROOT / "launcher.py") + '"'
+        else:
+            target = sys.executable
+            args = '"' + str(ROOT / "launcher.py") + '"'
+
+        def esc(s: str) -> str:
+            return s.replace("'", "''")
+
+        ps = (
+            "$W = New-Object -ComObject WScript.Shell; "
+            "$S = $W.CreateShortcut('%s'); "
+            "$S.TargetPath = '%s'; "
+            "$S.Arguments = '%s'; "
+            "$S.WorkingDirectory = '%s'; "
+            "$S.Description = 'Fajos Central'; "
+            "$S.Save()"
+        ) % (esc(str(startup)), esc(target), esc(args), esc(str(ROOT)))
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+
+    def _run_backup(self, silent: bool = False) -> dict:
+        try:
+            from app.services.backup_service import BackupService
+            cfg = _read_db_ini()
+            result = BackupService().backup_cierre(incluir_master=True, db_cfg=cfg)
+            if not silent:
+                files = ", ".join(result.get("files") or []) or "(ninguno)"
+                err = result.get("errors") or []
+                msg = "Carpeta:\n%s\n\nArchivos: %s" % (result.get("folder"), files)
+                if err:
+                    msg += "\n\nAvisos:\n" + "\n".join(str(x) for x in err[:5])
+                messagebox.showinfo("Backup", msg)
+            return result
+        except Exception as e:
+            if not silent:
+                messagebox.showerror("Backup", str(e))
+            return {"ok": False, "errors": [str(e)]}
+
+    def _backup_now(self) -> None:
+        self._run_backup(silent=False)
+
     def _create_desktop_shortcut(self) -> None:
         """Crea acceso directo en el Escritorio (Windows)."""
         if sys.platform != "win32":
@@ -867,6 +943,12 @@ class LauncherApp(tk.Tk):
             if not messagebox.askyesno("Salir", "¿Detener servidor y salir?"):
                 return
             self._stop_server()
+        # Backup al cerrar (opcional)
+        try:
+            if getattr(self, "var_backup", None) and self.var_backup.get():
+                self._run_backup(silent=True)
+        except Exception:
+            pass
         self.destroy()
 
 
