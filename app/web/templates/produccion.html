@@ -417,12 +417,8 @@ function closeModal(id) {
   const el = document.getElementById(id);
   if (el) el.hidden = true;
 }
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop:not([hidden])').forEach(m => { m.hidden = true; });
-});
-document.querySelectorAll('.modal-backdrop').forEach(bg => {
-  bg.addEventListener('click', (e) => { if (e.target === bg) bg.hidden = true; });
-});
+/* Escape → modal_util.js */
+/* cierre de backdrop → modal_util.js */
 
 async function loadTrabajosSemana() {
   if (!SEMANA_ID) return;

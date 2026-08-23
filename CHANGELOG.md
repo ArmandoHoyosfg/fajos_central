@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.13.3] — 2026-08-22
+
+### Captura manual + fix popup
+- Captura manual incluye columna **$/Gr**
+- Los modales ya no se cierran al seleccionar texto en un campo
+
 ## [3.13.2] — 2026-08-22
 
 ### Nómina en blanco para captura manual

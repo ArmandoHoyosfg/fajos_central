@@ -766,7 +766,7 @@ class ExportService:
         """
         Nómina en blanco para captura manual (papel).
         - Estilo similar a formal, sin $/Gr ni Efectivo.
-        - Solo columnas de gramos + Total Gr (fórmula SUM).
+        - Columnas de gramos + $/Gr + Total Gr (fórmula SUM). Sin efectivo.
         - Una fila de identidad por trabajo de la semana + una fila en blanco
           extra por cada trabajador (nombre+ubic) para anotar otro folio.
         - Incluye líneas aunque aún no tengan gramos.
@@ -815,11 +815,11 @@ class ExportService:
         ws.title = "Nomina-Captura"
 
         # --- Encabezado (similar formal, sin precios) ---
-        ws.merge_cells("A1:L1")
+        ws.merge_cells("A1:N1")
         ws["A1"] = "TALLER DE FAJOS CENTRAL"
         ws["A1"].font = Font(name="Calibri", bold=True, size=16, color="1F4E79")
 
-        ws.merge_cells("A2:L2")
+        ws.merge_cells("A2:N2")
         ws["A2"] = "NÓMINA EN BLANCO — CAPTURA MANUAL (PLATA)"
         ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="2E75B6")
 
@@ -836,7 +836,7 @@ class ExportService:
                 name="Calibri", size=9, bold=(col % 2 == 1)
             )
 
-        ws.merge_cells("A4:L4")
+        ws.merge_cells("A4:N4")
         ws["A4"] = (
             "Anotar gramos por día a mano. Hay una fila extra en blanco por cada trabajador "
             "para otro folio. Solo se totalizan gramos (sin precios)."
@@ -844,7 +844,7 @@ class ExportService:
         ws["A4"].font = Font(name="Calibri", size=8, italic=True, color="666666")
 
         headers = [
-            "Nombre", "Ubic", "Folio", "Modelo", "Material",
+            "Nombre", "Ubic", "Folio", "Modelo", "Material", "$/Gr",
             "Sáb", "Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Total Gr",
         ]
         for col, h in enumerate(headers, 1):
@@ -854,7 +854,7 @@ class ExportService:
             cell.border = self.THIN
             cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
-        # Columnas: A–E identidad, F–L días, M Total Gr
+        # Columnas: A–E identidad, F $/Gr, G–M días, N Total Gr
         row_i = 6
         first_data = 6
 
@@ -862,29 +862,39 @@ class ExportService:
             nonlocal row_i
             mat = str(r.get("material") or "").upper()
             fill = self.MAT_FILLS.get(mat, self.MAT_DEFAULT if mat else None)
+            tarifa = r.get("tarifa_gr")
+            try:
+                tarifa_f = float(tarifa) if tarifa is not None else None
+                if tarifa_f == 0:
+                    tarifa_f = None
+            except (TypeError, ValueError):
+                tarifa_f = None
             vals = [
                 r.get("nombre") or "",
                 r.get("ubic"),
                 r.get("folio") or "",
                 r.get("modelo") or "",
                 r.get("material") or "",
+                tarifa_f if tarifa_f is not None else 12,
             ]
             for col, v in enumerate(vals, 1):
                 cell = ws.cell(row=row_i, column=col, value=v if v is not None else "")
                 cell.border = self.THIN
                 if fill is not None:
                     cell.fill = fill
-            # Días en blanco para captura
-            for col in range(6, 13):
+                if col == 6:
+                    cell.number_format = "0.0"
+            # Días en blanco para captura (G–M = cols 7–13)
+            for col in range(7, 14):
                 cell = ws.cell(row=row_i, column=col, value="")
                 cell.border = self.THIN
                 if fill is not None:
                     cell.fill = fill
-            # Total Gr = suma de días (fórmula)
+            # Total Gr = suma de días G–M (fórmula)
             cell = ws.cell(
                 row=row_i,
-                column=13,
-                value=f'=IF(SUM(F{row_i}:L{row_i})=0,"",SUM(F{row_i}:L{row_i}))',
+                column=14,
+                value=f'=IF(SUM(G{row_i}:M{row_i})=0,"",SUM(G{row_i}:M{row_i}))',
             )
             cell.border = self.THIN
             cell.number_format = "0.0"
@@ -893,23 +903,25 @@ class ExportService:
             row_i += 1
             return row_i - 1
 
-        def _write_blank_worker_row(nombre: str, ubic) -> None:
+        def _write_blank_worker_row(nombre: str, ubic, tarifa_default=12) -> None:
             nonlocal row_i
-            # Fila en blanco del mismo trabajador (otro folio)
-            for col, v in enumerate([nombre, ubic, "", "", ""], 1):
+            # Fila en blanco del mismo trabajador (otro folio) — conserva espacio para $/Gr
+            for col, v in enumerate([nombre, ubic, "", "", "", tarifa_default], 1):
                 cell = ws.cell(row=row_i, column=col, value=v if v is not None else "")
                 cell.border = self.THIN
-            for col in range(6, 13):
+                if col == 6:
+                    cell.number_format = "0.0"
+            for col in range(7, 14):
                 ws.cell(row=row_i, column=col, value="").border = self.THIN
             cell = ws.cell(
                 row=row_i,
-                column=13,
-                value=f'=IF(SUM(F{row_i}:L{row_i})=0,"",SUM(F{row_i}:L{row_i}))',
+                column=14,
+                value=f'=IF(SUM(G{row_i}:M{row_i})=0,"",SUM(G{row_i}:M{row_i}))',
             )
             cell.border = self.THIN
             cell.number_format = "0.0"
             hint = PatternFill("solid", fgColor="FFF8E7")
-            for col in range(1, 14):
+            for col in range(1, 15):
                 ws.cell(row=row_i, column=col).fill = hint
             row_i += 1
 
@@ -922,14 +934,19 @@ class ExportService:
                 for item in items:
                     _write_identity_row(item)
                 # Una fila en blanco por trabajador
-                _write_blank_worker_row(display_nombre, ubic)
+                tar0 = items[0].get("tarifa_gr")
+                try:
+                    tar0 = float(tar0) if tar0 is not None else 12
+                except (TypeError, ValueError):
+                    tar0 = 12
+                _write_blank_worker_row(display_nombre, ubic, tar0)
 
         last = row_i - 1
         if last >= first_data:
             tot = last + 1
             ws.cell(row=tot, column=5, value="TOTALES").font = Font(bold=True)
             from openpyxl.utils import get_column_letter as _gcl
-            for col in range(6, 14):
+            for col in range(7, 15):  # días G–M + Total Gr
                 letter = _gcl(col)
                 cell = ws.cell(
                     row=tot,
@@ -951,13 +968,13 @@ class ExportService:
             column=1,
             value=(
                 f"Generado por Fajos Central el {generado}. "
-                "Solo gramos — sin precios. Filas crema = espacio extra por trabajador."
+                "Gramos + $/Gr de referencia. Filas crema = espacio extra por trabajador."
             ),
         ).font = Font(size=8, italic=True, color="666666")
 
         widths = {
-            "A": 20, "B": 7, "C": 11, "D": 14, "E": 10,
-            "F": 6, "G": 6, "H": 6, "I": 6, "J": 6, "K": 6, "L": 6, "M": 10,
+            "A": 20, "B": 7, "C": 11, "D": 14, "E": 10, "F": 7,
+            "G": 6, "H": 6, "I": 6, "J": 6, "K": 6, "L": 6, "M": 6, "N": 10,
         }
         for col, w in widths.items():
             ws.column_dimensions[col].width = w
