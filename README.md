@@ -74,6 +74,28 @@ Abre la URL que muestra el launcher (IP local + puerto).
 
 ---
 
+
+---
+
+## Portable y acceso directo (Windows)
+
+### En tu PC
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\setup_windows.ps1
+pwsh -File .\scripts\create_desktop_shortcut.ps1
+pwsh -File .\scriptserify_env.ps1
+```
+
+En el **launcher**: Utilidades → **Acceso directo** y **Verificar**.
+
+### Carpeta portable (copiar a otra PC)
+
+```powershell
+pwsh -File .\scripts\make_portable.ps1
+```
+
+
 ## Uso diario
 
 1. **Inicio** — revisa el panel *Qué revisar hoy*.

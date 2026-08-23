@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.15.0] — 2026-08-23
+
+### Portable + acceso directo Windows
+- scripts/create_desktop_shortcut.ps1
+- scripts/make_portable.ps1
+- scripts/verify_env.ps1
+- Launcher: Acceso directo y Verificar
+
 ## [3.14.1] — 2026-08-23
 
 ### Semanas en tarjetas (acciones visibles)

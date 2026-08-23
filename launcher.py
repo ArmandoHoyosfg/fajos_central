@@ -343,6 +343,8 @@ class LauncherApp(tk.Tk):
         urow.pack(fill=tk.X)
         for txt, cmd in (
             ("📁 Carpeta", self._open_folder),
+            ("📌 Acceso directo", self._create_desktop_shortcut),
+            ("✅ Verificar", self._verify_env),
             ("📘 Guía", self._open_uso),
             ("🗄 SQL", self._open_schema),
             ("Salir", self._on_close),
@@ -757,6 +759,66 @@ class LauncherApp(tk.Tk):
         if apply:
             txt.insert(tk.END, "(Solicitaste aplicar: primero verás la simulación.)\n\n")
         threading.Thread(target=worker_preview, daemon=True).start()
+
+
+
+    def _create_desktop_shortcut(self) -> None:
+        """Crea acceso directo en el Escritorio (Windows)."""
+        if sys.platform != "win32":
+            messagebox.showinfo(
+                "Acceso directo",
+                "Pensado para Windows. En otros sistemas crea un acceso a launcher.py.",
+            )
+            return
+        ps1 = ROOT / "scripts" / "create_desktop_shortcut.ps1"
+        try:
+            if not ps1.exists():
+                messagebox.showerror("Acceso directo", f"No existe:\n{ps1}")
+                return
+            r = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(ps1),
+                ],
+                cwd=str(ROOT),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            out = ((r.stdout or "") + (r.stderr or "")).strip()
+            if r.returncode == 0:
+                messagebox.showinfo(
+                    "Acceso directo",
+                    "Se creo Fajos Central en el Escritorio.\n\n" + (out or "OK"),
+                )
+            else:
+                messagebox.showerror("Acceso directo", out or f"Codigo {r.returncode}")
+        except Exception as e:
+            messagebox.showerror("Acceso directo", str(e))
+
+    def _verify_env(self) -> None:
+        """Checklist minimo del entorno."""
+        lines = [
+            ("venv", (ROOT / ".venv" / "Scripts" / "python.exe").exists()),
+            ("config.ini", (ROOT / "config.ini").exists()),
+            ("app/main.py", (ROOT / "app" / "main.py").exists()),
+            ("schema SQL", (ROOT / "db" / "schema").is_dir()),
+        ]
+        miss = [n for n, ok in lines if not ok]
+        msg = "\n".join(("%s  %s" % ("OK" if ok else "FALTA", n)) for n, ok in lines)
+        if miss:
+            msg += "\n\nPendiente: " + ", ".join(miss)
+            if "venv" in miss:
+                msg += "\n-> Ejecuta setup_windows.ps1"
+            if "config.ini" in miss:
+                msg += "\n-> Copia config.ini.example como config.ini"
+            messagebox.showwarning("Verificar entorno", msg)
+        else:
+            messagebox.showinfo("Verificar entorno", msg + "\n\nEntorno basico listo.")
 
     def _open_path(self, path: Path) -> None:
         path = Path(path)
