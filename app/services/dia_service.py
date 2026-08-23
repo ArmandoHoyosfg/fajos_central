@@ -158,10 +158,6 @@ class DiaService:
 
 
 def siguiente_rango_semana(fecha_fin: date) -> tuple[str, date, date]:
-    """Semana sáb–vie siguiente a la que termina en fecha_fin."""
-    sab = fecha_fin + timedelta(days=1)
-    # ajustar a sábado si no lo es
-    while sab.weekday() != 5:
-        sab += timedelta(days=1)
-    vie = sab + timedelta(days=6)
-    return f"{sab.day:02d}-{vie.day:02d}", sab, vie
+    """Compat: delega en calendar_util (normaliza sáb–vie)."""
+    from app.core.calendar_util import siguiente_rango_semana as _sr
+    return _sr(fecha_fin)

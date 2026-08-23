@@ -195,6 +195,22 @@ class SemanasRepo(BaseRepo):
             if cur.rowcount == 0:
                 raise NotFoundError(f"Semana id={semana_id} no existe.", details={"semana_id": semana_id})
 
+    def actualizar(self, semana_id: int, data: dict) -> None:
+        fields = []
+        vals = []
+        for key in ("codigo", "fecha_inicio", "fecha_fin", "anio", "notas"):
+            if key in data and data[key] is not None:
+                fields.append(f"{key}=%s")
+                vals.append(data[key])
+        if not fields:
+            return
+        vals.append(semana_id)
+        with self.db.cursor() as cur:
+            cur.execute(
+                f"UPDATE semanas SET {', '.join(fields)} WHERE id=%s",
+                tuple(vals),
+            )
+
     def reabrir(self, semana_id: int) -> None:
         with self.db.cursor() as cur:
             cur.execute(

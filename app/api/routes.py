@@ -221,6 +221,60 @@ async def page_trabajos(
 
 
 
+
+@router.patch("/api/semanas/{semana_id}")
+async def api_patch_semana(
+    semana_id: int,
+    codigo: str | None = Form(None),
+    fecha_inicio: str | None = Form(None),
+    fecha_fin: str | None = Form(None),
+    notas: str | None = Form(None),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    """Corrige código o fechas de una semana (p. ej. tras un duplicado mal calculado)."""
+    from app.core.calendar_util import parse_db_date, rango_sab_vie, codigo_desde_rango
+    from app.core.exceptions import NotFoundError, ValidationAppError
+
+    sem = sem_repo.obtener(semana_id)
+    if not sem:
+        raise NotFoundError("Semana no encontrada")
+    data = {}
+    if codigo is not None and str(codigo).strip():
+        data["codigo"] = str(codigo).strip()
+    if fecha_inicio is not None:
+        data["fecha_inicio"] = str(fecha_inicio).strip()[:10]
+    if fecha_fin is not None:
+        data["fecha_fin"] = str(fecha_fin).strip()[:10]
+    if notas is not None:
+        data["notas"] = notas
+    # Si mandan solo una fecha, normalizar a sáb–vie
+    if data.get("fecha_inicio") and not data.get("fecha_fin"):
+        fi = parse_db_date(data["fecha_inicio"])
+        if fi:
+            sab, vie = rango_sab_vie(fi)
+            data["fecha_inicio"] = sab.isoformat()
+            data["fecha_fin"] = vie.isoformat()
+            data.setdefault("codigo", codigo_desde_rango(sab, vie))
+    if data.get("fecha_inicio") and data.get("fecha_fin"):
+        fi = parse_db_date(data["fecha_inicio"])
+        ff = parse_db_date(data["fecha_fin"])
+        if not fi or not ff:
+            raise ValidationAppError("Fechas inválidas")
+        if fi > ff:
+            fi, ff = ff, fi
+            data["fecha_inicio"], data["fecha_fin"] = fi.isoformat(), ff.isoformat()
+        # advertir si no es sáb–vie exacto: auto-ajustar al rango de fi
+        sab, vie = rango_sab_vie(fi)
+        if fi != sab or ff != vie:
+            data["fecha_inicio"] = sab.isoformat()
+            data["fecha_fin"] = vie.isoformat()
+            data["codigo"] = codigo_desde_rango(sab, vie)
+    if not data:
+        raise ValidationAppError("Nada que actualizar")
+    sem_repo.actualizar(semana_id, data)
+    return {"ok": True, "semana": sem_repo.obtener(semana_id)}
+
+
 @router.post("/api/semanas/actual")
 async def api_crear_semana_actual(
     repo: SemanasRepo = Depends(get_semanas_repo),
@@ -316,8 +370,14 @@ async def api_duplicar(
             from app.core.exceptions import ValidationAppError
             raise ValidationAppError("Semana origen sin fecha_fin")
         codigo, sab, vie = siguiente_rango_semana(ff)
+        from app.core.calendar_util import encontrar_semana_por_rango
         existentes = sem_repo.listar()
-        dest = next((s for s in existentes if s.get("codigo") == codigo), None)
+        dest = encontrar_semana_por_rango(existentes, sab, vie)
+        if not dest:
+            dest = next(
+                (s for s in existentes if s.get("codigo") == codigo and int(s.get("anio") or 0) in (0, sab.year, vie.year)),
+                None,
+            )
         if dest:
             destino_id = dest["id"]
         else:

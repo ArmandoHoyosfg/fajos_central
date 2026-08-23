@@ -72,12 +72,65 @@ def marcar_semanas(semanas: list[dict], ref: date | None = None) -> list[dict]:
     return out
 
 
-def sugerir_codigo_semana(ref: date | None = None) -> tuple[str, date, date]:
+def rango_sab_vie(ref: date | None = None) -> tuple[date, date]:
+    """Devuelve (sábado, viernes) de la semana de nómina que contiene *ref*."""
     ref = ref or today()
     days_since_sat = (ref.weekday() - 5) % 7
     sab = ref - timedelta(days=days_since_sat)
     vie = sab + timedelta(days=6)
-    return f"{sab.day:02d}-{vie.day:02d}", sab, vie
+    return sab, vie
+
+
+def codigo_desde_rango(sab: date, vie: date | None = None) -> str:
+    """
+    Código legible DD-DD. Si cruza de mes: DD/MM-DD/MM para evitar ambigüedad
+    (p.ej. 29-04 de ago-sep vs ene-abr).
+    """
+    vie = vie or (sab + timedelta(days=6))
+    if sab.month == vie.month and sab.year == vie.year:
+        return f"{sab.day:02d}-{vie.day:02d}"
+    return f"{sab.day:02d}/{sab.month:02d}-{vie.day:02d}/{vie.month:02d}"
+
+
+def sugerir_codigo_semana(ref: date | None = None) -> tuple[str, date, date]:
+    """Semana sáb–vie que contiene la fecha de referencia."""
+    sab, vie = rango_sab_vie(ref)
+    return codigo_desde_rango(sab, vie), sab, vie
+
+
+def siguiente_rango_semana(fecha_ref: date) -> tuple[str, date, date]:
+    """
+    Siguiente semana sáb–vie estricta.
+
+    *fecha_ref* puede ser fecha_fin (idealmente viernes) o cualquier día de la
+    semana origen: se normaliza al viernes de esa semana y se avanza +1 día
+    (sábado siguiente). Así se evita el bug de saltar una semana cuando
+    fecha_fin caía en sábado/domingo.
+    """
+    _sab_o, vie_o = rango_sab_vie(fecha_ref)
+    sab = vie_o + timedelta(days=1)  # siempre el sábado siguiente
+    # seguridad
+    if sab.weekday() != 5:
+        sab, _ = rango_sab_vie(sab)
+    vie = sab + timedelta(days=6)
+    return codigo_desde_rango(sab, vie), sab, vie
+
+
+def encontrar_semana_por_rango(
+    semanas: list[dict],
+    sab: date,
+    vie: date,
+) -> dict | None:
+    """Busca semana por fechas (no solo por código, que puede repetirse)."""
+    for s in semanas:
+        fi = parse_db_date(s.get("fecha_inicio"))
+        ff = parse_db_date(s.get("fecha_fin"))
+        if fi == sab and ff == vie:
+            return s
+        # tolerancia: misma semana si ref cae dentro
+        if fi and ff and fi <= sab <= ff and fi <= vie <= ff:
+            return s
+    return None
 
 
 def etiqueta_semana(s: dict, ref: date | None = None) -> str:

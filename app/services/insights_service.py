@@ -480,8 +480,19 @@ class InsightsService:
             from app.core.exceptions import ValidationAppError
             raise ValidationAppError("Semana origen sin fecha_fin")
         codigo, sab, vie = siguiente_rango_semana(ff)
+        from app.core.calendar_util import encontrar_semana_por_rango
         existentes = self.semanas.listar()
-        dest = next((s for s in existentes if s.get("codigo") == codigo), None)
+        dest = encontrar_semana_por_rango(existentes, sab, vie)
+        if not dest:
+            # fallback por código exacto en el mismo año
+            dest = next(
+                (
+                    s for s in existentes
+                    if s.get("codigo") == codigo
+                    and int(s.get("anio") or 0) in (0, sab.year, vie.year)
+                ),
+                None,
+            )
         if dest:
             return int(dest["id"])
         return int(self.semanas.crear({
