@@ -211,6 +211,50 @@ class SemanasRepo(BaseRepo):
                 tuple(vals),
             )
 
+
+    def conteo_uso(self, semana_id: int) -> dict:
+        """Cuántas líneas hay en cada área (para impedir borrar semanas con datos)."""
+        out = {"plt": 0, "pit": 0, "tll": 0, "total": 0}
+        with self.db.cursor() as cur:
+            for key, table in (
+                ("plt", "produccion_plata"),
+                ("pit", "produccion_pita"),
+                ("tll", "nomina_taller"),
+            ):
+                try:
+                    cur.execute(
+                        f"SELECT COUNT(*) AS n FROM {table} WHERE semana_id=%s",
+                        (semana_id,),
+                    )
+                    out[key] = int((cur.fetchone() or {}).get("n") or 0)
+                except Exception:
+                    out[key] = 0
+        out["total"] = out["plt"] + out["pit"] + out["tll"]
+        return out
+
+    def eliminar(self, semana_id: int, *, force: bool = False) -> dict:
+        """
+        Elimina la semana. Por defecto solo si no tiene líneas.
+        force=True borra también líneas (peligroso).
+        """
+        from app.core.exceptions import ValidationAppError
+        uso = self.conteo_uso(semana_id)
+        if uso["total"] > 0 and not force:
+            raise ValidationAppError(
+                "La semana tiene datos (Plata/Pita/Taller). "
+                "No se puede eliminar. Corrige fechas o usa force solo si estás seguro.",
+                details=uso,
+            )
+        with self.db.cursor() as cur:
+            if force and uso["total"] > 0:
+                for table in ("produccion_plata", "produccion_pita", "nomina_taller", "resumen_nominas"):
+                    try:
+                        cur.execute(f"DELETE FROM {table} WHERE semana_id=%s", (semana_id,))
+                    except Exception:
+                        pass
+            cur.execute("DELETE FROM semanas WHERE id=%s", (semana_id,))
+        return {"ok": True, "eliminada": semana_id, "uso_previo": uso}
+
     def reabrir(self, semana_id: int) -> None:
         with self.db.cursor() as cur:
             cur.execute(

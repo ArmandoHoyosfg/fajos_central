@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Semanas — Fajos Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Gestión de semanas</h1>
+    <p class="muted">Hoy: <strong>{{ hoy }}</strong> · Semana de nómina = <strong>sábado → viernes</strong></p>
+  </div>
+  <div class="toolbar">
+    <a class="btn btn-secondary" href="/produccion">← Plata</a>
+    <button type="button" class="btn" onclick="crearActual()">★ Crear / ir a semana actual</button>
+  </div>
+</div>
+
+<div class="help-panel">
+  <strong>Cómo corregir un duplicado mal fechado</strong>
+  <ol style="margin:0.4rem 0 0 1.2rem;padding:0;">
+    <li>Si la semana con datos tiene malas fechas, usa <em>Alinear a actual</em> o <em>Editar</em>.</li>
+    <li>Si creaste otra semana vacía de más, <em>Eliminar</em> (solo si no tiene líneas).</li>
+    <li>El sistema no borra semanas con captura a menos que confirmes forzar (no recomendado).</li>
+  </ol>
+  <p class="muted" style="margin-top:0.5rem;">Semana actual sugerida: <code>{{ sugerida.label }}</code></p>
+</div>
+
+<div class="table-wrap table-compact">
+<table>
+  <thead>
+    <tr>
+      <th>Código</th>
+      <th>Inicio</th>
+      <th>Fin</th>
+      <th>Estado</th>
+      <th>Plata</th>
+      <th>Pita</th>
+      <th>Taller</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for s in semanas %}
+    <tr class="{% if s.es_actual %}row-actual{% endif %}" data-id="{{ s.id }}">
+      <td>
+        <strong>{{ s.codigo }}</strong>
+        {% if s.es_actual %}<span class="badge-actual">ACTUAL</span>{% endif %}
+        {% if s.cerrada %}<span class="muted">· cerrada</span>{% endif %}
+      </td>
+      <td>{{ s.fecha_inicio }}</td>
+      <td>{{ s.fecha_fin }}</td>
+      <td>{% if s.es_actual %}Contiene hoy{% else %}—{% endif %}</td>
+      <td>{{ s.uso.plt }}</td>
+      <td>{{ s.uso.pit }}</td>
+      <td>{{ s.uso.tll }}</td>
+      <td class="col-actions-wide">
+        <button type="button" class="btn btn-secondary btn-sm" onclick='editarSemana({{ s|tojson }})'>Editar</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="alinear({{ s.id }})" title="Poner fechas de la semana sáb–vie de hoy">Alinear a actual</button>
+        <a class="btn btn-secondary btn-sm" href="/produccion?semana_id={{ s.id }}">Abrir</a>
+        {% if s.uso.total == 0 %}
+        <button type="button" class="btn btn-secondary btn-sm" onclick="eliminarSem({{ s.id }}, false)">Eliminar</button>
+        {% else %}
+        <button type="button" class="btn btn-secondary btn-sm" disabled title="Tiene {{ s.uso.total }} línea(s)">Con datos</button>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">No hay semanas. Crea la actual.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="modal-backdrop" id="modal-sem" hidden>
+  <div class="modal" role="dialog">
+    <h2>Editar semana</h2>
+    <p class="muted faint">Si las fechas no son sáb–vie, el sistema las ajusta automáticamente.</p>
+    <form id="form-sem" onsubmit="return guardarSem(event)">
+      <input type="hidden" name="id" id="sem-id">
+      <label>Código</label>
+      <input name="codigo" id="sem-codigo" required placeholder="22-28">
+      <label>Fecha inicio (sábado)</label>
+      <input name="fecha_inicio" id="sem-fi" type="date" required>
+      <label>Fecha fin (viernes)</label>
+      <input name="fecha_fin" id="sem-ff" type="date" required>
+      <label>Notas</label>
+      <input name="notas" id="sem-notas" placeholder="Opcional">
+      <div class="modal-actions">
+        <button type="submit" class="btn">Guardar</button>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-sem').hidden=true">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/modal_util.js?v=3134"></script>
+<script>
+function editarSemana(s) {
+  document.getElementById('sem-id').value = s.id;
+  document.getElementById('sem-codigo').value = s.codigo || '';
+  document.getElementById('sem-fi').value = (s.fecha_inicio || '').toString().slice(0,10);
+  document.getElementById('sem-ff').value = (s.fecha_fin || '').toString().slice(0,10);
+  document.getElementById('sem-notas').value = s.notas || '';
+  document.getElementById('modal-sem').hidden = false;
+  if (window.FajosModal) FajosModal.bindAll();
+}
+async function guardarSem(e) {
+  e.preventDefault();
+  const id = document.getElementById('sem-id').value;
+  const fd = new FormData(e.target);
+  const res = await fetch('/api/semanas/' + id, { method: 'PATCH', body: fd });
+  let data = {};
+  try { data = await res.json(); } catch (err) {}
+  if (!res.ok) {
+    alert(data.detail || data.message || data.user_message || 'No se pudo guardar');
+    return false;
+  }
+  location.reload();
+  return false;
+}
+async function alinear(id) {
+  if (!confirm('¿Poner esta semana como la sáb–vie actual (la que contiene hoy)?\\n\\nSe conservan todos los trabajos y gramos. Solo cambian código y fechas.')) return;
+  const res = await fetch('/api/semanas/' + id + '/alinear-actual', { method: 'POST' });
+  let data = {};
+  try { data = await res.json(); } catch (err) {}
+  if (!res.ok) {
+    alert(data.detail || data.message || data.user_message || 'No se pudo alinear');
+    return;
+  }
+  alert(data.mensaje || 'Alineada');
+  location.href = '/produccion?semana_id=' + id;
+}
+async function eliminarSem(id, force) {
+  const msg = force
+    ? '¿FORZAR borrado con todos los datos? No se puede deshacer.'
+    : '¿Eliminar esta semana vacía?';
+  if (!confirm(msg)) return;
+  const res = await fetch('/api/semanas/' + id + (force ? '?force=1' : ''), { method: 'DELETE' });
+  let data = {};
+  try { data = await res.json(); } catch (err) {}
+  if (!res.ok) {
+    alert(data.detail || data.message || data.user_message || 'No se pudo eliminar');
+    return;
+  }
+  location.reload();
+}
+async function crearActual() {
+  const res = await fetch('/api/semanas/actual', { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  if (data.semana && data.semana.id) location.href = '/produccion?semana_id=' + data.semana.id;
+  else location.reload();
+}
+</script>
+<style>
+.row-actual td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+.col-actions-wide { white-space: normal; min-width: 14rem; }
+.col-actions-wide .btn { margin: 0.15rem; }
+</style>
+{% endblock %}

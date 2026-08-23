@@ -275,6 +275,103 @@ async def api_patch_semana(
     return {"ok": True, "semana": sem_repo.obtener(semana_id)}
 
 
+
+@router.get("/semanas", response_class=HTMLResponse)
+async def page_semanas(
+    request: Request,
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    """Gestión de semanas: editar fechas/código, eliminar vacías, alinear a actual."""
+    from app.core.calendar_util import (
+        marcar_semanas,
+        sugerir_codigo_semana,
+        today,
+        format_fecha_corta,
+        rango_sab_vie,
+    )
+    semanas = marcar_semanas(sem_repo.listar())
+    for s in semanas:
+        s["uso"] = sem_repo.conteo_uso(s["id"])
+        # serializable para el modal JS
+        for k in ("fecha_inicio", "fecha_fin", "creado_en", "cerrado_en"):
+            if s.get(k) is not None:
+                s[k] = str(s[k])[:19]
+    cod, sab, vie = sugerir_codigo_semana(today())
+    return templates.TemplateResponse(
+        request,
+        "semanas.html",
+        _ctx(
+            request,
+            semanas=semanas,
+            sugerida={
+                "codigo": cod,
+                "fecha_inicio": sab.isoformat(),
+                "fecha_fin": vie.isoformat(),
+                "label": f"{cod} ({sab.isoformat()} → {vie.isoformat()})",
+            },
+            hoy=format_fecha_corta(today()),
+        ),
+    )
+
+
+@router.get("/api/semanas")
+async def api_list_semanas(sem_repo: SemanasRepo = Depends(get_semanas_repo)):
+    from app.core.calendar_util import marcar_semanas
+    semanas = marcar_semanas(sem_repo.listar())
+    for s in semanas:
+        s["uso"] = sem_repo.conteo_uso(s["id"])
+    return semanas
+
+
+@router.delete("/api/semanas/{semana_id}")
+async def api_delete_semana(
+    semana_id: int,
+    force: int = Query(0),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    return sem_repo.eliminar(semana_id, force=bool(force))
+
+
+@router.post("/api/semanas/{semana_id}/alinear-actual")
+async def api_alinear_semana_actual(
+    semana_id: int,
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    """
+    Pone esta semana como la sáb–vie que contiene hoy.
+    Si otra semana ya ocupa ese rango, error con detalle.
+    Conserva todas las líneas de producción.
+    """
+    from app.core.calendar_util import (
+        sugerir_codigo_semana,
+        encontrar_semana_por_rango,
+        today,
+    )
+    from app.core.exceptions import ValidationAppError, NotFoundError
+
+    sem = sem_repo.obtener(semana_id)
+    if not sem:
+        raise NotFoundError("Semana no encontrada")
+    codigo, sab, vie = sugerir_codigo_semana(today())
+    otras = [s for s in sem_repo.listar() if int(s["id"]) != int(semana_id)]
+    choque = encontrar_semana_por_rango(otras, sab, vie)
+    if choque:
+        raise ValidationAppError(
+            f"Ya existe la semana {choque.get('codigo')} "
+            f"({choque.get('fecha_inicio')} → {choque.get('fecha_fin')}) "
+            f"para ese rango. Elimínala si está vacía o edítala antes.",
+            details={"conflicto_id": choque.get("id"), "conflicto_codigo": choque.get("codigo")},
+        )
+    sem_repo.actualizar(semana_id, {
+        "codigo": codigo,
+        "fecha_inicio": sab.isoformat(),
+        "fecha_fin": vie.isoformat(),
+        "anio": sab.year,
+        "notas": (str(sem.get("notas") or "") + " | Alineada a semana actual").strip(" |"),
+    })
+    return {"ok": True, "semana": sem_repo.obtener(semana_id), "mensaje": f"Ahora es {codigo} ({sab} → {vie})"}
+
+
 @router.post("/api/semanas/actual")
 async def api_crear_semana_actual(
     repo: SemanasRepo = Depends(get_semanas_repo),
