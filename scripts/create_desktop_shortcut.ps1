@@ -44,7 +44,7 @@ $Sc.WorkingDirectory = $Root
 $Sc.WindowStyle = 1
 $Sc.Description = "Fajos Piteados Central - Launcher"
 $Ico = Join-Path $Root "app\web\static\logo.ico"
-if (Test-Path $Ico) { $Sc.IconLocation = $Ico }
+if (Test-Path $Ico) { $Sc.IconLocation = "$Ico,0" }
 $Sc.Save()
 
 Write-Host "Acceso directo creado: $ShortcutPath" -ForegroundColor Green
