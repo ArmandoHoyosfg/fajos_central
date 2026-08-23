@@ -800,15 +800,19 @@ class LauncherApp(tk.Tk):
         def esc(s: str) -> str:
             return s.replace("'", "''")
 
-        ps = (
-            "$W = New-Object -ComObject WScript.Shell; "
-            "$S = $W.CreateShortcut('%s'); "
-            "$S.TargetPath = '%s'; "
-            "$S.Arguments = '%s'; "
-            "$S.WorkingDirectory = '%s'; "
-            "$S.Description = 'Fajos Central'; "
-            "$S.Save()"
-        ) % (esc(str(startup)), esc(target), esc(args), esc(str(ROOT)))
+        ico = ROOT / "app" / "web" / "static" / "logo.ico"
+        parts = [
+            "$W = New-Object -ComObject WScript.Shell",
+            "$S = $W.CreateShortcut('%s')" % esc(str(startup)),
+            "$S.TargetPath = '%s'" % esc(target),
+            "$S.Arguments = '%s'" % esc(args),
+            "$S.WorkingDirectory = '%s'" % esc(str(ROOT)),
+            "$S.Description = 'Fajos Central'",
+        ]
+        if ico.exists():
+            parts.append("$S.IconLocation = '%s,0'" % esc(str(ico)))
+        parts.append("$S.Save()")
+        ps = "; ".join(parts)
         subprocess.run(
             ["powershell", "-NoProfile", "-Command", ps],
             check=True,

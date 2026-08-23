@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 3.16.0  
+**Versión:** 3.16.1  
 **Entorno:** Windows + PowerShell 7 + MariaDB/HeidiSQL  
 
 Sistema de nóminas del **Taller de Fajos Central** (áreas **Plata**, **Pita** y **Taller**).
@@ -121,7 +121,7 @@ fajos_central/
 ## Pendiente / próximo
 
 - `start.bat` — doble clic sin PowerShell  
-- Icono `.ico` para el acceso directo (hoy puede usar el de Python)
+- ~~Icono `.ico`~~ → `app/web/static/logo.ico` (regenerar acceso directo)
 
 ---
 

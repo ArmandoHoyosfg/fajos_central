@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.16.1] — 2026-08-23
+
+### Icono de acceso directo
+- `app/web/static/logo.ico` multi-tamaño (16–256) a partir del logo del taller
+- Accesos de Escritorio e Inicio de Windows usan el icono
+
 ## [3.16.0] — 2026-08-23
 
 ### Launcher moderno + backup + inicio Windows
