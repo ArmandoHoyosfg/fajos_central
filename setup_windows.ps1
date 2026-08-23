@@ -3,6 +3,11 @@
 .SYNOPSIS
   Instalación / reparación del entorno en Windows (PowerShell 7)
 
+.NOTES
+  Si sale 'not digitally signed', ejecuta:
+    pwsh -ExecutionPolicy Bypass -File .\setup_windows.ps1
+  O doble clic en setup_windows.cmd
+
 .DESCRIPTION
   - Detecta un Python usable (py launcher preferido)
   - Recrea .venv si apunta a un intérprete inexistente (ej. Python314 borrado)

@@ -447,46 +447,100 @@ class LauncherApp(tk.Tk):
                 "Revisa usuario/contraseña y que MariaDB esté activo.",
             )
 
+
     def _is_running(self) -> bool:
+        """Proceso hijo vivo (no implica que el puerto responda)."""
         return self._server_proc is not None and self._server_proc.poll() is None
+
+    def _server_healthy(self) -> bool:
+        """Verde solo si el proceso vive y el puerto acepta conexiones."""
+        if not self._is_running():
+            return False
+        return self._port_open()
+
+    def _kill_port_occupants(self, port: int) -> None:
+        """Libera el puerto de instancias previas (Windows/Linux)."""
+        try:
+            if sys.platform == "win32":
+                # netstat -ano | findstr :PORT
+                r = subprocess.run(
+                    ["netstat", "-ano"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                pids = set()
+                for line in (r.stdout or "").splitlines():
+                    if f":{port}" not in line:
+                        continue
+                    if "LISTENING" not in line.upper() and "ESCUCHA" not in line.upper():
+                        # también conexiones en algunos locales
+                        if "LISTEN" not in line.upper():
+                            continue
+                    parts = line.split()
+                    if not parts:
+                        continue
+                    pid = parts[-1]
+                    if pid.isdigit() and int(pid) > 0:
+                        pids.add(pid)
+                for pid in pids:
+                    subprocess.run(
+                        ["taskkill", "/PID", pid, "/T", "/F"],
+                        capture_output=True,
+                        check=False,
+                    )
+            else:
+                subprocess.run(
+                    ["fuser", "-k", f"{port}/tcp"],
+                    capture_output=True,
+                    check=False,
+                )
+        except Exception:
+            pass
 
     def _refresh_lan_label(self) -> None:
         try:
-            cfg = _read_db_ini()
-            port = int(cfg.get("app_port") or 8000)
-            https = bool(cfg.get("force_https"))
-            scheme = "https" if https else "http"
+            port = _port()
+            scheme = "https" if _ssl_files() else "http"
             ip = _local_ip()
             url = f"{scheme}://{ip}:{port}"
-            self.lbl_lan.configure(
-                text=f"Red local (otros equipos):  {url}"
-            )
+            local = f"{scheme}://127.0.0.1:{port}"
+            self.lbl_lan.configure(text=f"Red local (otros equipos):  {url}")
             self._lan_url = url
-            if hasattr(self, 'lbl_url'):
+            self._local_url = local
+            if hasattr(self, "lbl_url"):
                 try:
-                    self.lbl_url.configure(text=f'URL: {url}')
+                    self.lbl_url.configure(text=f"URL: {local}")
                 except Exception:
                     pass
         except Exception:
             self.lbl_lan.configure(text="Red local: —")
             self._lan_url = ""
+            self._local_url = ""
 
     def _copy_lan_url(self) -> None:
-        url = getattr(self, "_lan_url", "") or ""
+        url = getattr(self, "_lan_url", "") or getattr(self, "_local_url", "") or ""
         if not url:
+            messagebox.showinfo("URL", "No hay URL disponible. Inicia el servidor primero.")
             return
         try:
             self.clipboard_clear()
             self.clipboard_append(url)
             self.update()
-            self._log(f"URL copiada: {url}")
+            messagebox.showinfo("URL", f"Copiada:\n{url}")
         except Exception as e:
-            self._log(f"No se pudo copiar: {e}")
+            messagebox.showerror("URL", str(e))
 
     def _start_server(self) -> None:
-        if self._is_running():
-            messagebox.showinfo("Servidor", "Ya está en ejecución.")
+        if self._server_healthy():
+            messagebox.showinfo("Servidor", "Ya está en ejecución y respondiendo.")
             return
+        # Limpiar proceso zombie o puerto ocupado
+        if self._is_running():
+            self._stop_server()
+        else:
+            self._server_proc = None
+
         try:
             import fastapi  # noqa: F401
             import uvicorn  # noqa: F401
@@ -500,9 +554,14 @@ class LauncherApp(tk.Tk):
             )
             return
 
+        port = _port()
+        self.lbl_status.configure(text="● Liberando puerto…", foreground="#f9e2af")
+        self.update_idletasks()
+        self._kill_port_occupants(port)
+        time.sleep(0.4)
+
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
-        # Pasar BD desde config.ini al proceso del servidor
         d = _read_db_ini()
         env["FAJOS_DB_HOST"] = str(d["host"])
         env["FAJOS_DB_PORT"] = str(d["port"])
@@ -512,77 +571,119 @@ class LauncherApp(tk.Tk):
         env["FAJOS_APP_HOST"] = str(d["app_host"])
         env["FAJOS_APP_PORT"] = str(d["app_port"])
 
+        # Sin --reload desde el launcher: más estable en Windows
         cmd = [
-            sys.executable, "-m", "uvicorn", "app.main:app",
-            "--host", _host_bind(),
-            "--port", str(_port()),
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "app.main:app",
+            "--host",
+            _host_bind(),
+            "--port",
+            str(port),
         ]
         ssl = _ssl_files()
         if ssl:
             cmd.extend(["--ssl-certfile", ssl[0], "--ssl-keyfile", ssl[1]])
             env["FAJOS_FORCE_HTTPS"] = "true"
-        elif d.get("debug", True):
-            cmd.append("--reload")
 
         try:
             log_path = ROOT / "logs" / "server_launcher.log"
             log_path.parent.mkdir(parents=True, exist_ok=True)
             log_f = open(log_path, "a", encoding="utf-8")
             log_f.write(f"\n--- start {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            log_f.write("cmd: " + " ".join(cmd) + "\n")
             log_f.flush()
             creationflags = 0
             if sys.platform == "win32":
                 creationflags = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore
             self._server_proc = subprocess.Popen(
-                cmd, cwd=str(ROOT), env=env,
-                stdout=log_f, stderr=subprocess.STDOUT,
+                cmd,
+                cwd=str(ROOT),
+                env=env,
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
                 creationflags=creationflags,
             )
             self._server_log = log_f
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo iniciar:\n{e}")
             self._server_proc = None
+            self._update_status()
             return
 
-        self.lbl_url.configure(text=f"URL: {_base_url()}")
-        self._update_status()
-        threading.Thread(target=self._wait_and_maybe_open, daemon=True).start()
+        self.lbl_status.configure(text="● Arrancando…", foreground="#f9e2af")
+        self.btn_start.configure(state=tk.DISABLED)
+        self.btn_stop.configure(state=tk.NORMAL)
+        self._refresh_lan_label()
+        threading.Thread(target=self._wait_until_ready, daemon=True).start()
 
-    def _wait_and_maybe_open(self) -> None:
-        for _ in range(40):
-            if not self._is_running():
-                return
+    def _wait_until_ready(self) -> None:
+        """Espera salud real; si falla, limpia y avisa."""
+        ok = False
+        for _ in range(60):  # ~15 s
+            if self._server_proc is not None and self._server_proc.poll() is not None:
+                break
             if self._port_open():
-                self.after(0, self._open_browser)
-                return
+                ok = True
+                break
             time.sleep(0.25)
+
+        def finish() -> None:
+            if ok:
+                self._update_status()
+                self._open_browser()
+            else:
+                # proceso muerto o puerto sin respuesta
+                log_tail = self._read_log_tail()
+                self._stop_server()
+                msg = (
+                    "El servidor no respondió a tiempo en el puerto "
+                    f"{_port()}.\n\nRevisa logs/server_launcher.log"
+                )
+                if log_tail:
+                    msg += "\n\nÚltimas líneas:\n" + log_tail[-800:]
+                messagebox.showerror("Servidor", msg)
+                self._update_status()
+
+        self.after(0, finish)
+
+    def _read_log_tail(self, lines: int = 25) -> str:
+        try:
+            p = ROOT / "logs" / "server_launcher.log"
+            if not p.exists():
+                return ""
+            data = p.read_text(encoding="utf-8", errors="replace").splitlines()
+            return "\n".join(data[-lines:])
+        except Exception:
+            return ""
 
     def _port_open(self) -> bool:
         import socket
+
         try:
-            with socket.create_connection(("127.0.0.1", _port()), timeout=0.35):
+            with socket.create_connection(("127.0.0.1", _port()), timeout=0.4):
                 return True
         except OSError:
             return False
 
     def _stop_server(self) -> None:
-        if not self._is_running() or self._server_proc is None:
-            self._server_proc = None
-            self._update_status()
-            return
         proc = self._server_proc
+        port = _port()
         try:
-            if sys.platform == "win32":
-                subprocess.run(
-                    ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-                    capture_output=True, check=False,
-                )
-            else:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
+            if proc is not None and proc.poll() is None:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                        capture_output=True,
+                        check=False,
+                    )
+                else:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
         except Exception as e:
             messagebox.showwarning("Aviso", str(e))
         finally:
@@ -593,13 +694,28 @@ class LauncherApp(tk.Tk):
                     pass
                 self._server_log = None
             self._server_proc = None
+            # Por si quedó huérfano en el puerto
+            self._kill_port_occupants(port)
             self._update_status()
 
     def _open_browser(self) -> None:
-        webbrowser.open(_base_url())
+        # Preferir 127.0.0.1 (misma máquina); no "localhost" ambiguo
+        url = getattr(self, "_local_url", None) or _base_url()
+        if not self._port_open():
+            messagebox.showwarning(
+                "Navegador",
+                "El servidor no está respondiendo aún.\n"
+                f"Prueba manualmente: {url}",
+            )
+            return
+        webbrowser.open(url)
 
     def _open_api_docs(self) -> None:
-        webbrowser.open(_base_url() + "/docs")
+        url = (getattr(self, "_local_url", None) or _base_url()) + "/docs"
+        if not self._port_open():
+            messagebox.showwarning("API", "Inicia el servidor primero.")
+            return
+        webbrowser.open(url)
 
     def _run_desktop(self) -> None:
         desktop_main = ROOT / "desktop_legacy" / "main.py"
@@ -930,10 +1046,20 @@ class LauncherApp(tk.Tk):
         self._open_path(ROOT / "db" / "schema")
 
     def _update_status(self) -> None:
-        if self._is_running():
+        healthy = False
+        try:
+            healthy = self._server_healthy()
+        except Exception:
+            healthy = False
+
+        if healthy:
             self.lbl_status.configure(text="● En ejecución", foreground="#a6e3a1")
             self.btn_start.configure(state=tk.DISABLED)
+            self.btn_stop.configure(state=tk.NORMAL)
             self._refresh_lan_label()
+        elif self._is_running():
+            self.lbl_status.configure(text="● Arrancando…", foreground="#f9e2af")
+            self.btn_start.configure(state=tk.DISABLED)
             self.btn_stop.configure(state=tk.NORMAL)
         else:
             self.lbl_status.configure(text="● Detenido", foreground="#f38ba8")
@@ -942,7 +1068,10 @@ class LauncherApp(tk.Tk):
             if self._server_proc is not None and self._server_proc.poll() is not None:
                 self._server_proc = None
         if self._poll_job:
-            self.after_cancel(self._poll_job)
+            try:
+                self.after_cancel(self._poll_job)
+            except Exception:
+                pass
         self._poll_job = self.after(1500, self._update_status)
 
     def _on_close(self) -> None:

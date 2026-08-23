@@ -23,6 +23,8 @@ cd .\Documents\Proyectos Desarrollo\fajos_central\
 
 # Primera vez
 pwsh -ExecutionPolicy Bypass -File .\setup_windows.ps1
+# Si sale 'not digitally signed', ese Bypass es obligatorio.
+# Alternativa: doble clic en setup_windows.cmd
 copy config.ini.example config.ini
 # Edita usuario/clave de MariaDB en config.ini o en el launcher
 

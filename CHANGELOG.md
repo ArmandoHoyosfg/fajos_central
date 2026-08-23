@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.16.3] — 2026-08-23
+
+### Launcher: estado real del servidor
+- Verde solo si el **puerto responde** (no basta el proceso)
+- Al iniciar: libera el puerto de instancias previas
+- Sin `--reload` (más estable en Windows)
+- Si no arranca: muestra cola del log y limpia
+- Navegador abre `127.0.0.1` (no localhost ambiguo)
+
 ## [3.16.2] — 2026-08-23
 
 ### start.bat + integración
