@@ -134,6 +134,8 @@ Icono: `app\web\static\logo.ico` (multi-tamaño).
 
 ---
 
+Más detalle: [`docs/INTEGRIDAD_Y_PARIDAD.md`](docs/INTEGRIDAD_Y_PARIDAD.md) (escritorio vs web, HTTPS pendiente).
+
 ## Requisitos
 
 - Python 3.10+  

@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.16.4] — 2026-08-23
+
+### Integridad y paridad escritorio/web
+- Doc `docs/INTEGRIDAD_Y_PARIDAD.md`
+- GUI escritorio: **Abrir web** y diálogo de paridad (qué falta vs web)
+- HTTPS/móvil: documentado como pendiente (vista reducida, no sitio completo)
+
 ## [3.16.3] — 2026-08-23
 
 ### Launcher: estado real del servidor

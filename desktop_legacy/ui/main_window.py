@@ -1,3 +1,4 @@
+import webbrowser
 """
 Ventana principal — Fajos Piteados Central (escritorio).
 Navegación alineada con la web: Inicio, Solo hoy, Plata, Pita, Taller, Folios, Trabajadores.
@@ -82,6 +83,13 @@ class MainWindow(QMainWindow):
             m_theme.addAction(act)
 
         m_help = menubar.addMenu("A&yuda")
+        act_web = QAction("Abrir interfaz web…", self)
+        act_web.triggered.connect(self._open_web)
+        m_help.addAction(act_web)
+        act_parity = QAction("Qué hace la app vs la web…", self)
+        act_parity.triggered.connect(self._show_parity)
+        m_help.addAction(act_parity)
+        m_help.addSeparator()
         act_about = QAction("Acerca de", self)
         act_about.triggered.connect(self._about)
         m_help.addAction(act_about)
@@ -99,6 +107,10 @@ class MainWindow(QMainWindow):
         act_refresh = QAction("Actualizar", self)
         act_refresh.triggered.connect(self._refresh_all)
         tb.addAction(act_refresh)
+        act_web = QAction("Abrir web", self)
+        act_web.setToolTip("Abre la interfaz web completa (requiere servidor del launcher)")
+        act_web.triggered.connect(self._open_web)
+        tb.addAction(act_web)
         tb.addSeparator()
 
         self.lbl_fecha = QLabel()
@@ -255,6 +267,44 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
         self.status.showMessage("Datos actualizados", 2500)
+
+
+    def _open_web(self) -> None:
+        """Abre la UI web (funciones completas: Semanas, rarezas, etc.)."""
+        port = 8000
+        try:
+            import configparser
+            from config import PROJECT_ROOT, CONFIG_INI
+            cp = configparser.ConfigParser()
+            if CONFIG_INI.exists():
+                cp.read(CONFIG_INI, encoding="utf-8")
+                if cp.has_section("server"):
+                    port = int(cp["server"].get("port", port))
+        except Exception:
+            pass
+        url = f"http://127.0.0.1:{port}"
+        try:
+            webbrowser.open(url)
+            self.status.showMessage(f"Abriendo {url} — el servidor debe estar iniciado en el launcher", 5000)
+        except Exception as e:
+            QMessageBox.warning(self, "Web", str(e))
+
+    def _show_parity(self) -> None:
+        QMessageBox.information(
+            self,
+            "App de escritorio vs web",
+            "Esta app (PySide6) es práctica para captura local y catálogos.\n\n"
+            "En ESCRITORIO puedes:\n"
+            "• Solo hoy, Plata (gramos), Pita/Taller básicos\n"
+            "• Trabajadores, Folios, cerrar/reabrir semana, exports\n\n"
+            "Solo en la WEB (launcher → Iniciar → Abrir web):\n"
+            "• Gestión de Semanas (alinear, eliminar, editar fechas)\n"
+            "• Rarezas / deshacer gramo / captura guiada\n"
+            "• Captura manual formal, checklist export, insights completos\n"
+            "• Acceso desde otros equipos de la red\n\n"
+            "HTTPS y vista móvil reducida: pendientes (no implementados aún).\n"
+            "Usa Ayuda → Abrir interfaz web cuando necesites lo completo.",
+        )
 
     def _about(self) -> None:
         QMessageBox.about(
