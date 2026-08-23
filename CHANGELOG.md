@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.14.1] — 2026-08-23
+
+### Semanas en tarjetas (acciones visibles)
+- Rediseño: ya no usa tabla compacta (ocultaba botones)
+- Acciones: Editar, Alinear a actual, Abrir Plata/Pita/Taller, Eliminar, Cerrar/Reabrir
+- Avisos según si es actual, tiene datos o está vacía
+
 ## [3.14.0] — 2026-08-23
 
 ### Gestión de semanas
