@@ -150,7 +150,7 @@ async function saveUmbral(e) {
 </div>
 
 
-{% if tendencias and tendencias.comparacion %}
+{% if tendencias and tendencias.comparacion and tendencias.comparacion.actual is mapping %}
 <section class="trends-panel">
   <div class="insights-head">
     <h2>Tendencias</h2>

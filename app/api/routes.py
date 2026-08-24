@@ -44,49 +44,10 @@ templates.env.policies["json.dumps_function"] = lambda obj, **kw: __import__(
 
 router = APIRouter()
 
-def _plain_row(row) -> dict:
-    """Convierte fila MySQL/Decimal a dict JSON-friendly para plantillas."""
-    if row is None:
-        return {}
-    if not isinstance(row, dict):
-        try:
-            row = dict(row)
-        except Exception:
-            return {"value": str(row)}
-    out = {}
-    for k, v in row.items():
-        if v is None or isinstance(v, (str, int, float, bool)):
-            out[k] = v
-        else:
-            # Decimal, date, datetime, bytes
-            try:
-                from decimal import Decimal
-                from datetime import date, datetime
-                if isinstance(v, Decimal):
-                    out[k] = float(v)
-                elif isinstance(v, (date, datetime)):
-                    out[k] = v.isoformat()
-                else:
-                    out[k] = str(v)
-            except Exception:
-                out[k] = str(v)
-    return out
-
+from app.web.context import build_template_context, to_template_value
 
 def _ctx(request: Request, **kwargs):
-    """Contexto de plantilla unificado (fecha, versión, db_ok + kwargs)."""
-    extra = {}
-    for k, v in kwargs.items():
-        if isinstance(v, dict):
-            extra[k] = _plain_row(v)
-        elif isinstance(v, list):
-            extra[k] = [_plain_row(x) if isinstance(x, dict) else x for x in v]
-        else:
-            extra[k] = v
-    data = common_template_context(extra if extra else None)
-    data["request"] = request
-    return data
-
+    return build_template_context(request, **kwargs)
 
 
 # ---------- Web pages ----------
@@ -128,7 +89,12 @@ async def page_trabajadores(
     q: str | None = None,
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
-    trabajadores = repo.listar(solo_activos=False, busqueda=q)
+    try:
+        trabajadores = repo.listar(solo_activos=False, busqueda=q)
+    except Exception as e:
+        from app.core.logging_config import get_logger
+        get_logger(__name__).exception("page_trabajadores")
+        trabajadores = []
     return templates.TemplateResponse(
         request,
         "trabajadores.html",
@@ -853,7 +819,7 @@ async def page_qr_lote(
     for t in rows:
         tid = int(t["id"])
         code = t.get("codigo_qr") or f"FC{tid:06d}"
-        items.append({**_plain_row(t), "codigo_label": code})
+        items.append({**to_template_value(t), "codigo_label": code})
     return templates.TemplateResponse(
         "trabajadores_qr_lote.html",
         _ctx(request, items=items),
@@ -867,7 +833,7 @@ async def page_trabajador_qr(
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
     t = repo.obtener(trabajador_id)
-    plain = _plain_row(t)
+    plain = to_template_value(t)
     code = plain.get("codigo_qr") or f"FC{int(trabajador_id):06d}"
     plain["codigo_label"] = code
     return templates.TemplateResponse(
@@ -884,15 +850,15 @@ async def page_movil_trabajador(
     trabajos_repo: TrabajosRepo = Depends(get_trabajos_repo),
 ):
     """Vista mínima para escaneo QR (futuro móvil)."""
-    t = _plain_row(repo.obtener(trabajador_id))
+    t = to_template_value(repo.obtener(trabajador_id))
     try:
         des = trabajos_repo.desempeno_trabajador(trabajador_id)
         # plain nested
         if isinstance(des, dict):
             des = {
                 **des,
-                "trabajos": [_plain_row(x) for x in (des.get("trabajos") or [])],
-                "lineas_recientes": [_plain_row(x) for x in (des.get("lineas_recientes") or [])],
+                "trabajos": [to_template_value(x) for x in (des.get("trabajos") or [])],
+                "lineas_recientes": [to_template_value(x) for x in (des.get("lineas_recientes") or [])],
             }
     except Exception:
         des = {"folios_abiertos": 0, "folios_terminados": 0, "gramos_registrados": 0, "trabajos": []}

@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.3] — 2026-08-24
+
+### Estabilidad del dashboard y contexto de plantillas
+- Causa: `_plain_row` convertía dicts anidados a `str` → error `str has no attribute 'actual'`
+- Nuevo módulo `app/web/context.py` con normalización **recursiva** (Decimal/date, sin aplanar mal)
+- Guard en plantilla de tendencias; listado trabajadores tolerante a fallos SQL
+
 ## [3.17.2] — 2026-08-24
 
 ### QR y sueldo taller usables
