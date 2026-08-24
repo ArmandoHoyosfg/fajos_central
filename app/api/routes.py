@@ -44,9 +44,46 @@ templates.env.policies["json.dumps_function"] = lambda obj, **kw: __import__(
 
 router = APIRouter()
 
+def _plain_row(row) -> dict:
+    """Convierte fila MySQL/Decimal a dict JSON-friendly para plantillas."""
+    if row is None:
+        return {}
+    if not isinstance(row, dict):
+        try:
+            row = dict(row)
+        except Exception:
+            return {"value": str(row)}
+    out = {}
+    for k, v in row.items():
+        if v is None or isinstance(v, (str, int, float, bool)):
+            out[k] = v
+        else:
+            # Decimal, date, datetime, bytes
+            try:
+                from decimal import Decimal
+                from datetime import date, datetime
+                if isinstance(v, Decimal):
+                    out[k] = float(v)
+                elif isinstance(v, (date, datetime)):
+                    out[k] = v.isoformat()
+                else:
+                    out[k] = str(v)
+            except Exception:
+                out[k] = str(v)
+    return out
+
+
 def _ctx(request: Request, **kwargs):
     """Contexto de plantilla unificado (fecha, versión, db_ok + kwargs)."""
-    data = common_template_context(kwargs)
+    extra = {}
+    for k, v in kwargs.items():
+        if isinstance(v, dict):
+            extra[k] = _plain_row(v)
+        elif isinstance(v, list):
+            extra[k] = [_plain_row(x) if isinstance(x, dict) else x for x in v]
+        else:
+            extra[k] = v
+    data = common_template_context(extra if extra else None)
     data["request"] = request
     return data
 
@@ -768,25 +805,59 @@ async def api_trabajador_qr_png(
     request: Request,
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
-    """QR PNG para ficha / impresión. Payload: URL móvil futura /m/t/{id}."""
+    """QR PNG. Payload: URL móvil /m/t/{id}."""
     from fastapi.responses import Response
     import io
-    t = repo.obtener(trabajador_id)
-    code = t.get("codigo_qr") or f"FC{trabajador_id:06d}"
-    # URL relativa al host actual (LAN)
+    try:
+        t = repo.obtener(trabajador_id)
+        code = (t.get("codigo_qr") if isinstance(t, dict) else None) or f"FC{trabajador_id:06d}"
+    except Exception:
+        code = f"FC{trabajador_id:06d}"
     base = str(request.base_url).rstrip("/")
     payload = f"{base}/m/t/{trabajador_id}"
     try:
         import qrcode
-        img = qrcode.make(payload)
+        from qrcode.image.pil import PilImage
+        qr = qrcode.QRCode(version=None, box_size=6, border=2)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
         buf = io.BytesIO()
         img.save(buf, format="PNG")
-        return Response(content=buf.getvalue(), media_type="image/png",
-                        headers={"Cache-Control": "no-cache"})
-    except ImportError:
-        # SVG fallback mínimo (no es QR real; mensaje)
-        svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"><text x="10" y="40" font-size="12">Instale qrcode: {code}</text></svg>'
-        return Response(content=svg.encode(), media_type="image/svg+xml")
+        return Response(
+            content=buf.getvalue(),
+            media_type="image/png",
+            headers={"Cache-Control": "no-cache", "Content-Disposition": f'inline; filename="{code}.png"'},
+        )
+    except Exception as e:
+        # SVG con el código legible si falta qrcode o Pillow
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120">'
+            f'<rect width="100%" height="100%" fill="#fff"/>'
+            f'<text x="20" y="50" font-size="14" fill="#000">QR: {code}</text>'
+            f'<text x="20" y="75" font-size="10" fill="#666">{payload[:40]}</text>'
+            f'<text x="20" y="95" font-size="9" fill="#c00">pip install qrcode[pil] ({type(e).__name__})</text>'
+            f"</svg>"
+        )
+        return Response(content=svg.encode("utf-8"), media_type="image/svg+xml")
+
+
+@router.get("/trabajadores/qr-lote", response_class=HTMLResponse)
+async def page_qr_lote(
+    request: Request,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    """Imprime QR de todos los trabajadores activos."""
+    rows = repo.listar(solo_activos=True)
+    items = []
+    for t in rows:
+        tid = int(t["id"])
+        code = t.get("codigo_qr") or f"FC{tid:06d}"
+        items.append({**_plain_row(t), "codigo_label": code})
+    return templates.TemplateResponse(
+        "trabajadores_qr_lote.html",
+        _ctx(request, items=items),
+    )
 
 
 @router.get("/trabajadores/{trabajador_id}/qr", response_class=HTMLResponse)
@@ -796,9 +867,12 @@ async def page_trabajador_qr(
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
     t = repo.obtener(trabajador_id)
+    plain = _plain_row(t)
+    code = plain.get("codigo_qr") or f"FC{int(trabajador_id):06d}"
+    plain["codigo_label"] = code
     return templates.TemplateResponse(
         "trabajador_qr.html",
-        _ctx(request, trabajador=t),
+        _ctx(request, trabajador=plain, codigo_label=code),
     )
 
 
@@ -810,11 +884,18 @@ async def page_movil_trabajador(
     trabajos_repo: TrabajosRepo = Depends(get_trabajos_repo),
 ):
     """Vista mínima para escaneo QR (futuro móvil)."""
-    t = repo.obtener(trabajador_id)
+    t = _plain_row(repo.obtener(trabajador_id))
     try:
         des = trabajos_repo.desempeno_trabajador(trabajador_id)
+        # plain nested
+        if isinstance(des, dict):
+            des = {
+                **des,
+                "trabajos": [_plain_row(x) for x in (des.get("trabajos") or [])],
+                "lineas_recientes": [_plain_row(x) for x in (des.get("lineas_recientes") or [])],
+            }
     except Exception:
-        des = {}
+        des = {"folios_abiertos": 0, "folios_terminados": 0, "gramos_registrados": 0, "trabajos": []}
     return templates.TemplateResponse(
         "movil_trabajador.html",
         _ctx(request, trabajador=t, desempeno=des),

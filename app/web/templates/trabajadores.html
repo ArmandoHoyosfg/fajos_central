@@ -12,7 +12,10 @@
     <h1>Trabajadores</h1>
     <p class="muted">Alta, edición, cambios y bajas. Los inactivos no aparecen en captura nueva.</p>
   </div>
-  <button type="button" class="btn" onclick="openEditId(null)">＋ Nuevo</button>
+  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+    <button type="button" class="btn" onclick="openEditId(null)">＋ Nuevo</button>
+    <a class="btn btn-secondary" href="/trabajadores/qr-lote">QR de todos</a>
+  </div>
 </div>
 
 <div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
@@ -50,13 +53,21 @@
       <td>{{ t.ubic }}</td>
       <td>{{ t.tipo or 'PLT' }}</td>
       <td>{{ t.puesto or '—' }}</td>
-      <td>
+      <td class="col-sueldo-edit">
         {% if (t.tipo or '')|upper in ['TLL','TALLER'] or 'TLL' in (t.tipo or '')|upper %}
-          {% if (t.sueldo_modo or 'variable') == 'fijo' %}
-          <span class="badge-fijo" title="Sueldo base: {{ t.sueldo_base or '—' }}">Fijo{% if t.sueldo_base %} ${{ t.sueldo_base }}{% endif %}</span>
-          {% else %}
-          <span class="badge-var">Variable</span>
-          {% endif %}
+        <div style="display:flex;flex-direction:column;gap:0.25rem;min-width:7rem;">
+          <select class="sueldo-modo-sel" data-id="{{ t.id }}" title="Tipo de sueldo taller"
+                  onchange="guardarSueldoModo({{ t.id }}, this)">
+            <option value="variable" {% if (t.sueldo_modo or 'variable') != 'fijo' %}selected{% endif %}>Variable</option>
+            <option value="fijo" {% if (t.sueldo_modo or 'variable') == 'fijo' %}selected{% endif %}>Fijo</option>
+          </select>
+          <input type="number" class="sueldo-base-inp" data-id="{{ t.id }}" step="0.1" min="0"
+                 placeholder="Base $" title="Sueldo base semanal (fijo)"
+                 value="{{ t.sueldo_base if t.sueldo_base is not none else '' }}"
+                 {% if (t.sueldo_modo or 'variable') != 'fijo' %}disabled{% endif %}
+                 onchange="guardarSueldoBase({{ t.id }}, this)"
+                 style="width:100%;max-width:6.5rem;">
+        </div>
         {% else %}
           <span class="muted">—</span>
         {% endif %}
@@ -153,9 +164,20 @@
     </form>
   </div>
 </div>
+
+<div class="modal-backdrop" id="modal-desempeno" hidden>
+  <div class="modal" role="dialog" style="max-width:420px;">
+    <h2>Desempeño / folios</h2>
+    <div id="desempeno-body" class="muted">Cargando…</div>
+    <div class="actions" style="margin-top:1rem;">
+      <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-desempeno').hidden=true">Cerrar</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+
 <script>
 function showToast(msg, err) {
   if (window.FajosLive) return FajosLive.showToast(msg, err);
@@ -238,6 +260,66 @@ async function activar(id) {
   const res = await fetch('/api/trabajadores/' + id + '/activar', { method: 'POST', body: new FormData() });
   if (res.ok) { showToast('Reactivado'); setTimeout(() => location.reload(), 350); }
   else showToast('No se pudo reactivar', true);
+}
+
+
+async function verDesempeno(id) {
+  try {
+    const res = await fetch('/api/trabajadores/' + id + '/desempeno');
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(d.user_message || d.message || d.detail || ('HTTP ' + res.status), true);
+      return;
+    }
+    const box = document.getElementById('desempeno-body');
+    if (!box) {
+      alert('Abiertos: ' + (d.folios_abiertos||0) + ' · Terminados: ' + (d.folios_terminados||0));
+      return;
+    }
+    let html = '<p><strong>Abiertos:</strong> ' + (d.folios_abiertos||0)
+      + ' · <strong>Terminados:</strong> ' + (d.folios_terminados||0)
+      + ' · <strong>Gramos:</strong> ' + (d.gramos_registrados||0) + '</p>';
+    html += '<ul style="margin:0.5rem 0;padding-left:1.2rem;max-height:240px;overflow:auto;">';
+    (d.trabajos||[]).forEach(w => {
+      html += '<li>' + (w.folio || '(sin folio)') + ' · ' + (w.modelo || '')
+        + ' · ' + (w.material || '')
+        + (w.activo ? ' <span style="color:#a6e3a1">activo</span>' : ' <span class="muted">terminado</span>')
+        + '</li>';
+    });
+    if (!(d.trabajos||[]).length) html += '<li class="muted">Sin folios registrados</li>';
+    html += '</ul>';
+    box.innerHTML = html;
+    document.getElementById('modal-desempeno').hidden = false;
+  } catch (e) {
+    showToast('Error de red al cargar desempeño', true);
+    console.error(e);
+  }
+}
+async function guardarSueldoModo(id, sel) {
+  const modo = sel.value;
+  const body = new FormData();
+  body.set('sueldo_modo', modo);
+  const res = await fetch('/api/trabajadores/' + id, { method: 'PATCH', body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showToast(data.user_message || data.message || 'No se guardó el tipo de sueldo', true);
+    return;
+  }
+  const inp = document.querySelector('.sueldo-base-inp[data-id="' + id + '"]');
+  if (inp) inp.disabled = (modo !== 'fijo');
+  showToast(modo === 'fijo' ? 'Marcado como sueldo fijo' : 'Marcado como variable');
+}
+async function guardarSueldoBase(id, inp) {
+  const body = new FormData();
+  body.set('sueldo_base', inp.value === '' ? '' : inp.value);
+  body.set('sueldo_modo', 'fijo');
+  const res = await fetch('/api/trabajadores/' + id, { method: 'PATCH', body });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    showToast(data.user_message || data.message || 'No se guardó el sueldo base', true);
+    return;
+  }
+  showToast('Sueldo base actualizado');
 }
 
 function filterRows() {

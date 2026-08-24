@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.2] — 2026-08-24
+
+### QR y sueldo taller usables
+- Corregido error de plantilla al abrir QR (`_ctx` + filas planas)
+- QR individual + **QR de todos** (`/trabajadores/qr-lote`)
+- Desempeño en modal (ya no solo alert)
+- Selector Fijo/Variable y sueldo base en la tabla (TLL)
+
 ## [3.17.1] — 2026-08-24
 
 ### Hotfix UI / robustez 3.17

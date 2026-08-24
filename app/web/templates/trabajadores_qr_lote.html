@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}QR lote — Fajos Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Códigos QR — todos los activos</h1>
+    <p class="muted">{{ items|length }} trabajadores · listos para imprimir</p>
+  </div>
+  <div class="toolbar">
+    <a class="btn btn-secondary" href="/trabajadores">← Trabajadores</a>
+    <button type="button" class="btn" onclick="window.print()">Imprimir todos</button>
+  </div>
+</div>
+<div class="qr-grid">
+{% for t in items %}
+  <div class="qr-card">
+    <img src="/api/trabajadores/{{ t.id }}/qr.png" alt="QR {{ t.nombre_mostrar }}" width="140" height="140">
+    <div class="qr-meta">
+      <strong>{{ t.nombre_mostrar }}</strong>
+      <span class="muted">Ubic {{ t.ubic }} · {{ t.codigo_label }}</span>
+      <span class="muted">{{ t.tipo or '' }}</span>
+    </div>
+  </div>
+{% else %}
+  <p class="muted">No hay trabajadores activos.</p>
+{% endfor %}
+</div>
+<style>
+.qr-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1rem; }
+.qr-card { background:var(--surface,#1e1e2e); border:1px solid var(--border,#333); border-radius:12px; padding:1rem; text-align:center; }
+.qr-card img { background:#fff; padding:6px; border-radius:8px; }
+.qr-meta { margin-top:0.5rem; display:flex; flex-direction:column; gap:0.15rem; font-size:0.85rem; }
+@media print {
+  .topbar, .toolbar, .page-head .btn, .btn { display:none !important; }
+  .qr-card { break-inside: avoid; border:1px solid #999; }
+}
+</style>
+{% endblock %}
