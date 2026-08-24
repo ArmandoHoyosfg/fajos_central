@@ -646,7 +646,13 @@ class InsightsService:
         return {"created": created, "skipped": skipped}
 
     def _duplicar_taller(self, origen_id: int, destino_id: int) -> dict:
+        """
+        Copia filas de taller.
+        fijo → sueldo desde sueldo_base o valor anterior; extras=0
+        variable → sueldo 0 (en blanco para capturar)
+        """
         created = skipped = 0
+        fijos = variables = 0
         try:
             lineas = self.taller.listar_por_semana(origen_id)
         except Exception as e:
@@ -655,18 +661,37 @@ class InsightsService:
             (str(r.get("nombre") or "").lower(), int(r.get("ubic") or 0))
             for r in self.taller.listar_por_semana(destino_id)
         }
+        from app.db.repository import TrabajadoresRepo
+        tr_repo = TrabajadoresRepo(self.taller.db)
         for r in lineas:
             key = (str(r.get("nombre") or "").lower(), int(r.get("ubic") or 0))
             if key in existentes:
                 skipped += 1
                 continue
+            tid = r.get("trabajador_id")
+            modo = str(r.get("sueldo_modo") or "variable").lower()
+            base = r.get("sueldo_base")
+            if tid:
+                try:
+                    t = tr_repo.obtener(int(tid))
+                    modo = str(t.get("sueldo_modo") or modo).lower()
+                    if t.get("sueldo_base") is not None:
+                        base = t.get("sueldo_base")
+                except Exception:
+                    pass
+            if modo == "fijo":
+                sueldo = _safe_float(base) if base not in (None, "") else _safe_float(r.get("sueldo"))
+                fijos += 1
+            else:
+                sueldo = 0.0
+                variables += 1
             try:
                 self.taller.insertar(destino_id, {
-                    "trabajador_id": r.get("trabajador_id"),
+                    "trabajador_id": tid,
                     "nombre": r.get("nombre"),
                     "ubic": r.get("ubic"),
                     "puesto": r.get("puesto"),
-                    "sueldo": _safe_float(r.get("sueldo")),
+                    "sueldo": sueldo,
                     "extras": 0,
                     "firmado": 0,
                     "notas": r.get("notas"),
@@ -676,9 +701,12 @@ class InsightsService:
             except Exception as e:
                 logger.warning("dup taller: %s", e)
                 skipped += 1
-        return {"created": created, "skipped": skipped}
-
-    # ---------------------------------------------------------- 3) Rarezas + checklist
+        return {
+            "created": created,
+            "skipped": skipped,
+            "fijos_copiados": fijos,
+            "variables_en_blanco": variables,
+        }
 
     def tendencias(self, limit_semanas: int = 8) -> dict[str, Any]:
         """

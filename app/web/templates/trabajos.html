@@ -62,9 +62,10 @@
           <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
             <button type="button" onclick='openEditTrabajo({{ r.trabajo_id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar…</button>
             {% if r.trabajo_activo %}
+            <button type="button" onclick="terminarTrabajo({{ r.trabajo_id }}, '{{ r.folio or '' }}'); FajosRowMenu.closeAll()">¿Terminó el folio?</button>
             <button type="button" class="danger" onclick="toggleTrabajo({{ r.trabajo_id }}, false); FajosRowMenu.closeAll()">Desactivar</button>
             {% else %}
-            <button type="button" onclick="toggleTrabajo({{ r.trabajo_id }}, true); FajosRowMenu.closeAll()">Reactivar</button>
+            <button type="button" onclick="reabrirTrabajo({{ r.trabajo_id }}); FajosRowMenu.closeAll()">Reabrir folio</button>
             {% endif %}
           </div>
         </div>
@@ -119,6 +120,31 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script>
+async function terminarTrabajo(id, folio) {
+  if (!confirm('¿El trabajador ya terminó el trabajo del folio ' + (folio || id) + '?\n\nSí = dejar de sugerirlo al duplicar semana.')) return;
+  const fd = new FormData();
+  fd.set('terminar', '1');
+  const res = await fetch('/api/trabajos/' + id + '/terminar', { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    if (window.FajosLive) FajosLive.showToast('Folio marcado terminado');
+    else alert('Folio terminado');
+    location.reload();
+  } else {
+    alert(data.message || data.user_message || 'No se pudo terminar');
+  }
+}
+async function reabrirTrabajo(id) {
+  if (!confirm('¿Reabrir este folio?')) return;
+  const fd = new FormData();
+  fd.set('terminar', '0');
+  const res = await fetch('/api/trabajos/' + id + '/terminar', { method: 'POST', body: fd });
+  if (res.ok) location.reload();
+  else alert('No se pudo reabrir');
+}
+</script>
+
 <script src="/static/row_menu.js?v=3113"></script>
 <script src="/static/row_edit.js?v=3112"></script>
 <script>

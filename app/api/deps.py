@@ -83,3 +83,8 @@ def get_produccion_pita_repo() -> ProduccionPitaRepo:
 def get_insights_service():
     from app.services.insights_service import InsightsService
     return InsightsService()
+
+
+def get_trabajos_repo():
+    from app.db.repository import TrabajosRepo
+    return TrabajosRepo()

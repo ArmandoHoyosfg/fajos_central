@@ -89,7 +89,7 @@
           ondblclick='openEditTll({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}</td>
       <td>{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="puesto" value="{{ r.puesto or '' }}" readonly title="Doble clic para editar"></td>
-      <td class="editable-hint"><input class="cell-edit money" data-field="sueldo" type="number" step="0.1" value="{{ r.sueldo if r.sueldo is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="sueldo" type="number" step="0.1" value="{{ r.sueldo if r.sueldo is not none else '' }}" data-modo="{{ r.sueldo_modo or 'variable' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint"><input class="cell-edit money" data-field="extras" type="number" step="0.1" value="{{ r.extras if r.extras is not none else '' }}" readonly title="Doble clic para editar"></td>
       <td class="cell-total"><strong>${{ '%.2f'|format((r.total or 0)|float) }}</strong></td>
       <td>

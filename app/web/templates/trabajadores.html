@@ -35,6 +35,7 @@
       <th>Ubic</th>
       <th>Tipo</th>
       <th>Puesto</th>
+      <th>Sueldo</th>
       <th>Estado</th>
       <th>Incorp.</th>
       <th>Acciones</th>
@@ -50,6 +51,17 @@
       <td>{{ t.tipo or 'PLT' }}</td>
       <td>{{ t.puesto or '—' }}</td>
       <td>
+        {% if (t.tipo or '')|upper in ['TLL','TALLER'] or 'TLL' in (t.tipo or '')|upper %}
+          {% if (t.sueldo_modo or 'variable') == 'fijo' %}
+          <span class="badge-fijo" title="Sueldo base: {{ t.sueldo_base or '—' }}">Fijo{% if t.sueldo_base %} ${{ t.sueldo_base }}{% endif %}</span>
+          {% else %}
+          <span class="badge-var">Variable</span>
+          {% endif %}
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td>
         {% if t.activo %}
         <span style="color:#a6e3a1;font-weight:600">Activo</span>
         {% else %}
@@ -58,6 +70,8 @@
       </td>
       <td>{{ t.fecha_incorporacion or '—' }}</td>
       <td style="white-space:nowrap">
+        <a class="btn btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.8rem" href="/trabajadores/{{ t.id }}/qr" title="Código QR">QR</a>
+        <button type="button" class="btn btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.8rem" onclick="verDesempeno({{ t.id }})" title="Desempeño">📈</button>
         <button type="button" class="btn btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.8rem"
                 onclick="openEditId({{ t.id }})">Editar</button>
         {% if t.activo %}
@@ -155,6 +169,8 @@ function fillForm(t) {
   document.getElementById('trab-ubic').value = t ? (t.ubic || '') : '';
   document.getElementById('trab-tipo').value = t ? (t.tipo || 'PLT') : 'PLT';
   document.getElementById('trab-puesto').value = t ? (t.puesto || '') : '';
+  document.getElementById('trab-sueldo-modo').value = t ? (t.sueldo_modo || 'variable') : 'variable';
+  document.getElementById('trab-sueldo-base').value = t && t.sueldo_base != null ? t.sueldo_base : '';
   document.getElementById('trab-fecha').value = t && t.fecha_incorporacion ? String(t.fecha_incorporacion).slice(0,10) : '';
   document.getElementById('trab-notas').value = t ? (t.notas || '') : '';
   document.getElementById('trab-activo').value = t && !t.activo ? '0' : '1';
@@ -178,7 +194,7 @@ async function saveTrab(e) {
   const fd = new FormData(form);
   const id = fd.get('id');
   const body = new FormData();
-  ['nombre_mostrar','nombre_completo','ubic','tipo','puesto','fecha_incorporacion','notas','activo'].forEach(k => {
+  ['nombre_mostrar','nombre_completo','ubic','tipo','puesto','sueldo_modo','sueldo_base','fecha_incorporacion','notas','activo'].forEach(k => {
     const v = fd.get(k);
     if (v !== null && v !== undefined) body.set(k, v);
   });

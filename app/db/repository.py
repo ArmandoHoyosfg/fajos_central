@@ -28,7 +28,7 @@ class TrabajadoresRepo(BaseRepo):
     ) -> list[dict]:
         sql = """
             SELECT id, nombre_mostrar, nombre_completo, ubic, tipo, puesto,
-                   activo, fecha_incorporacion, notas
+                   sueldo_modo, sueldo_base, activo, fecha_incorporacion, notas, codigo_qr
             FROM trabajadores
             WHERE 1=1
         """
@@ -70,8 +70,9 @@ class TrabajadoresRepo(BaseRepo):
             )
         sql = """
             INSERT INTO trabajadores
-                (nombre_mostrar, nombre_completo, ubic, tipo, puesto, activo, fecha_incorporacion, notas)
-            VALUES (%s, %s, %s, %s, %s, 1, %s, %s)
+                (nombre_mostrar, nombre_completo, ubic, tipo, puesto, sueldo_modo, sueldo_base,
+                 activo, fecha_incorporacion, notas, codigo_qr)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s)
         """
         try:
             with self.db.cursor() as cur:
@@ -83,12 +84,28 @@ class TrabajadoresRepo(BaseRepo):
                         data["ubic"],
                         data.get("tipo") or "PLT",
                         data.get("puesto"),
+                        (str(data.get("sueldo_modo") or "variable").lower()
+                         if str(data.get("sueldo_modo") or "variable").lower() in ("fijo", "variable")
+                         else "variable"),
+                        (float(data["sueldo_base"])
+                         if data.get("sueldo_base") not in (None, "")
+                         else None),
                         data.get("fecha_incorporacion"),
                         data.get("notas"),
+                        data.get("codigo_qr"),
                     ),
                 )
                 new_id = cur.lastrowid
             logger.info("Trabajador creado id=%s nombre=%s", new_id, data["nombre_mostrar"])
+            try:
+                with self.db.cursor() as cur2:
+                    cur2.execute(
+                        "UPDATE trabajadores SET codigo_qr = CONCAT('FC', LPAD(id, 6, '0')) "
+                        "WHERE id = %s AND (codigo_qr IS NULL OR codigo_qr = '')",
+                        (new_id,),
+                    )
+            except Exception:
+                pass
             return new_id
         except DatabaseError:
             raise
@@ -106,9 +123,12 @@ class TrabajadoresRepo(BaseRepo):
             "ubic": "ubic",
             "tipo": "tipo",
             "puesto": "puesto",
+            "sueldo_modo": "sueldo_modo",
+            "sueldo_base": "sueldo_base",
             "fecha_incorporacion": "fecha_incorporacion",
             "notas": "notas",
             "activo": "activo",
+            "codigo_qr": "codigo_qr",
         }
         for key, col in mapping.items():
             if key in data and data[key] is not None:
@@ -723,15 +743,76 @@ class TrabajosRepo(BaseRepo):
 
     def set_activo(self, trabajo_id: int, activo: bool) -> None:
         with self.db.cursor() as cur:
-            cur.execute(
-                "UPDATE trabajos SET activo = %s WHERE id = %s",
-                (1 if activo else 0, trabajo_id),
-            )
-            if cur.rowcount == 0:
-                raise NotFoundError(
-                    f"Trabajo id={trabajo_id} no existe.",
-                    details={"trabajo_id": trabajo_id},
+            if activo:
+                cur.execute(
+                    "UPDATE trabajos SET activo = 1, terminado_en = NULL WHERE id = %s",
+                    (trabajo_id,),
                 )
+            else:
+                cur.execute(
+                    "UPDATE trabajos SET activo = 0, "
+                    "terminado_en = COALESCE(terminado_en, CURRENT_TIMESTAMP) WHERE id = %s",
+                    (trabajo_id,),
+                )
+
+    def marcar_terminado(self, trabajo_id: int, terminado: bool = True) -> dict:
+        """Marca folio terminado (activo=0) o lo reabre."""
+        self.set_activo(trabajo_id, activo=not terminado)
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT t.*, tr.nombre_mostrar, tr.ubic
+                FROM trabajos t
+                JOIN trabajadores tr ON tr.id = t.trabajador_id
+                WHERE t.id = %s
+                """,
+                (trabajo_id,),
+            )
+            row = cur.fetchone()
+        return row or {"id": trabajo_id}
+
+    def desempeno_trabajador(self, trabajador_id: int) -> dict:
+        """Resumen de folios y gramos por trabajador."""
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT t.id, t.folio, t.modelo, t.material, t.activo, t.terminado_en,
+                       t.tarifa_gr, t.creado_en
+                FROM trabajos t
+                WHERE t.trabajador_id = %s
+                ORDER BY t.activo DESC, t.creado_en DESC
+                """,
+                (trabajador_id,),
+            )
+            trabajos = list(cur.fetchall() or [])
+            cur.execute(
+                """
+                SELECT p.trabajo_id, p.folio, p.modelo, p.material, p.semana_id,
+                       s.codigo AS semana_codigo,
+                       COALESCE(p.gm_sab,0)+COALESCE(p.gm_dom,0)+COALESCE(p.gm_lun,0)
+                       +COALESCE(p.gm_mar,0)+COALESCE(p.gm_mie,0)+COALESCE(p.gm_jue,0)
+                       +COALESCE(p.gm_vie,0) AS total_g
+                FROM produccion_plata p
+                LEFT JOIN semanas s ON s.id = p.semana_id
+                WHERE p.trabajador_id = %s
+                ORDER BY p.semana_id DESC, p.id DESC
+                LIMIT 80
+                """,
+                (trabajador_id,),
+            )
+            lineas = list(cur.fetchall() or [])
+        abiertos = sum(1 for t in trabajos if t.get("activo"))
+        cerrados = sum(1 for t in trabajos if not t.get("activo"))
+        total_g = sum(float(x.get("total_g") or 0) for x in lineas)
+        return {
+            "trabajador_id": trabajador_id,
+            "trabajos": trabajos,
+            "lineas_recientes": lineas,
+            "folios_abiertos": abiertos,
+            "folios_terminados": cerrados,
+            "gramos_registrados": total_g,
+        }
+
 
     def actualizar_meta(self, trabajo_id: int, data: dict) -> None:
         fields, params = [], []
@@ -898,11 +979,15 @@ class NominaTallerRepo(BaseRepo):
         with self.db.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, semana_id, trabajador_id, nombre, ubic, puesto,
-                       sueldo, extras, total, firmado, notas
-                FROM nomina_taller
-                WHERE semana_id = %s
-                ORDER BY ubic, nombre
+                                SELECT n.id, n.semana_id, n.trabajador_id, n.nombre, n.ubic, n.puesto,
+                       n.sueldo, n.extras, n.total, n.firmado, n.notas,
+                       COALESCE(tr.sueldo_modo, 'variable') AS sueldo_modo,
+                       tr.sueldo_base
+                FROM nomina_taller n
+                LEFT JOIN trabajadores tr ON tr.id = n.trabajador_id
+                WHERE n.semana_id = %s
+                ORDER BY n.ubic, n.nombre
+
                 """,
                 (semana_id,),
             )

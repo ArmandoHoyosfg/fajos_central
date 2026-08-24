@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.0] — 2026-08-24
+
+### Taller fijo/variable, folios y QR
+- `sueldo_modo` / `sueldo_base` en trabajadores (migración `003_taller_fijo_folio_qr.sql`)
+- Duplicar semana Taller: fijos copian sueldo; variables en blanco
+- Folio terminado (`terminado_en`) + menú «¿Terminó el folio?»
+- Desempeño por trabajador (API + botón en lista)
+- QR por trabajador (`/trabajadores/{id}/qr`) y vista móvil `/m/t/{id}`
+
 ## [3.16.4] — 2026-08-23
 
 ### Integridad y paridad escritorio/web

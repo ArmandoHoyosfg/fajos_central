@@ -21,9 +21,10 @@ from app.api.deps import (
     get_nomina_taller_repo,
     get_semanas_repo,
     get_trabajadores_repo,
+    get_trabajos_repo,
 )
 from app.core.exceptions import AppError
-from app.db.repository import ProduccionRepo, ProduccionPitaRepo, NominaTallerRepo, SemanasRepo, TrabajadoresRepo
+from app.db.repository import ProduccionRepo, ProduccionPitaRepo, NominaTallerRepo, SemanasRepo, TrabajadoresRepo, TrabajosRepo
 from app.services.dashboard_service import DashboardService
 from app.services.export_service import ExportService, linea_tiene_gramos
 
@@ -647,18 +648,31 @@ async def api_crear_trabajador(
     ubic: int = Form(...),
     tipo: str = Form("PLT"),
     puesto: str | None = Form(None),
+    sueldo_modo: str | None = Form("variable"),
+    sueldo_base: str | None = Form(None),
     fecha_incorporacion: str | None = Form(None),
     nombre_completo: str | None = Form(None),
     notas: str | None = Form(None),
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
     from app.core.normalize import canonical_name
+    modo = (sueldo_modo or "variable").strip().lower()
+    if modo not in ("fijo", "variable"):
+        modo = "variable"
+    base = None
+    if sueldo_base is not None and str(sueldo_base).strip() != "":
+        try:
+            base = float(sueldo_base)
+        except ValueError:
+            base = None
     new_id = repo.agregar({
         "nombre_mostrar": canonical_name(nombre_mostrar),
         "nombre_completo": (nombre_completo or nombre_mostrar).strip(),
         "ubic": ubic,
         "tipo": tipo,
         "puesto": puesto,
+        "sueldo_modo": modo,
+        "sueldo_base": base,
         "fecha_incorporacion": fecha_incorporacion or None,
         "notas": notas,
     })
@@ -683,6 +697,8 @@ async def api_update_trabajador(
     ubic: int | None = Form(None),
     tipo: str | None = Form(None),
     puesto: str | None = Form(None),
+    sueldo_modo: str | None = Form(None),
+    sueldo_base: str | None = Form(None),
     fecha_incorporacion: str | None = Form(None),
     notas: str | None = Form(None),
     activo: int | None = Form(None),
@@ -700,6 +716,14 @@ async def api_update_trabajador(
         data["tipo"] = tipo
     if puesto is not None:
         data["puesto"] = puesto or None
+    if sueldo_modo is not None:
+        m = sueldo_modo.strip().lower()
+        data["sueldo_modo"] = m if m in ("fijo", "variable") else "variable"
+    if sueldo_base is not None:
+        try:
+            data["sueldo_base"] = float(sueldo_base) if str(sueldo_base).strip() != "" else None
+        except ValueError:
+            data["sueldo_base"] = None
     if fecha_incorporacion is not None:
         data["fecha_incorporacion"] = fecha_incorporacion or None
     if notas is not None:
@@ -725,6 +749,88 @@ async def api_activar_trabajador(
 ):
     repo.activar(trabajador_id)
     return {"ok": True, "id": trabajador_id, "activo": 1}
+
+
+
+@router.get("/api/trabajadores/{trabajador_id}/desempeno")
+async def api_desempeno_trabajador(
+    trabajador_id: int,
+    trab_repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+    trabajos_repo: TrabajosRepo = Depends(get_trabajos_repo),
+):
+    trab_repo.obtener(trabajador_id)
+    return trabajos_repo.desempeno_trabajador(trabajador_id)
+
+
+@router.get("/api/trabajadores/{trabajador_id}/qr.png")
+async def api_trabajador_qr_png(
+    trabajador_id: int,
+    request: Request,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    """QR PNG para ficha / impresión. Payload: URL móvil futura /m/t/{id}."""
+    from fastapi.responses import Response
+    import io
+    t = repo.obtener(trabajador_id)
+    code = t.get("codigo_qr") or f"FC{trabajador_id:06d}"
+    # URL relativa al host actual (LAN)
+    base = str(request.base_url).rstrip("/")
+    payload = f"{base}/m/t/{trabajador_id}"
+    try:
+        import qrcode
+        img = qrcode.make(payload)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return Response(content=buf.getvalue(), media_type="image/png",
+                        headers={"Cache-Control": "no-cache"})
+    except ImportError:
+        # SVG fallback mínimo (no es QR real; mensaje)
+        svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"><text x="10" y="40" font-size="12">Instale qrcode: {code}</text></svg>'
+        return Response(content=svg.encode(), media_type="image/svg+xml")
+
+
+@router.get("/trabajadores/{trabajador_id}/qr", response_class=HTMLResponse)
+async def page_trabajador_qr(
+    request: Request,
+    trabajador_id: int,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    t = repo.obtener(trabajador_id)
+    return templates.TemplateResponse(
+        "trabajador_qr.html",
+        _ctx(request, trabajador=t),
+    )
+
+
+@router.get("/m/t/{trabajador_id}", response_class=HTMLResponse)
+async def page_movil_trabajador(
+    request: Request,
+    trabajador_id: int,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+    trabajos_repo: TrabajosRepo = Depends(get_trabajos_repo),
+):
+    """Vista mínima para escaneo QR (futuro móvil)."""
+    t = repo.obtener(trabajador_id)
+    try:
+        des = trabajos_repo.desempeno_trabajador(trabajador_id)
+    except Exception:
+        des = {}
+    return templates.TemplateResponse(
+        "movil_trabajador.html",
+        _ctx(request, trabajador=t, desempeno=des),
+    )
+
+
+@router.post("/api/trabajos/{trabajo_id}/terminar")
+async def api_terminar_trabajo(
+    trabajo_id: int,
+    terminar: int = Form(1),
+    repo: TrabajosRepo = Depends(get_trabajos_repo),
+):
+    """Pregunta de negocio: ¿ya terminó el folio? terminar=1 sí, 0 reabrir."""
+    row = repo.marcar_terminado(trabajo_id, terminado=bool(int(terminar)))
+    return {"ok": True, "trabajo": row, "terminado": bool(int(terminar))}
+
 
 
 @router.get("/api/semanas")

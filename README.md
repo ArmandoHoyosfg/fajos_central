@@ -141,3 +141,12 @@ Más detalle: [`docs/INTEGRIDAD_Y_PARIDAD.md`](docs/INTEGRIDAD_Y_PARIDAD.md) (es
 - Python 3.10+  
 - MariaDB (`fajos_central`)  
 - `pip install -r requirements.txt` (vía `setup_windows.ps1`)
+
+
+## Migración 3.17 (HeidiSQL)
+
+```
+db/schema/003_taller_fijo_folio_qr.sql
+```
+
+Marca sueldo fijo/variable en Trabajadores (área Taller). Luego: `pip install qrcode[pil]`.
