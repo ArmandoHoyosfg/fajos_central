@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.4] — 2026-08-24
+
+### QR aislado (sin Jinja)
+- Módulo `app/web/qr_pages.py`: HTMLResponse puro para QR individual, lote y móvil
+- Evita TypeError de TemplateResponse al abrir `/trabajadores/{id}/qr`
+
 ## [3.17.3] — 2026-08-24
 
 ### Estabilidad del dashboard y contexto de plantillas

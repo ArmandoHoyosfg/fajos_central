@@ -808,22 +808,18 @@ async def api_trabajador_qr_png(
         return Response(content=svg.encode("utf-8"), media_type="image/svg+xml")
 
 
+
 @router.get("/trabajadores/qr-lote", response_class=HTMLResponse)
 async def page_qr_lote(
     request: Request,
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
-    """Imprime QR de todos los trabajadores activos."""
-    rows = repo.listar(solo_activos=True)
-    items = []
-    for t in rows:
-        tid = int(t["id"])
-        code = t.get("codigo_qr") or f"FC{tid:06d}"
-        items.append({**to_template_value(t), "codigo_label": code})
-    return templates.TemplateResponse(
-        "trabajadores_qr_lote.html",
-        _ctx(request, items=items),
-    )
+    from app.web.qr_pages import response_qr_lote
+    try:
+        rows = repo.listar(solo_activos=True)
+    except Exception:
+        rows = []
+    return response_qr_lote(rows)
 
 
 @router.get("/trabajadores/{trabajador_id}/qr", response_class=HTMLResponse)
@@ -832,14 +828,13 @@ async def page_trabajador_qr(
     trabajador_id: int,
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
-    t = repo.obtener(trabajador_id)
-    plain = to_template_value(t)
-    code = plain.get("codigo_qr") or f"FC{int(trabajador_id):06d}"
-    plain["codigo_label"] = code
-    return templates.TemplateResponse(
-        "trabajador_qr.html",
-        _ctx(request, trabajador=plain, codigo_label=code),
-    )
+    from app.web.qr_pages import response_trabajador_qr
+    t = None
+    try:
+        t = repo.obtener(trabajador_id)
+    except Exception:
+        pass
+    return response_trabajador_qr(trabajador_id, t if isinstance(t, dict) else None)
 
 
 @router.get("/m/t/{trabajador_id}", response_class=HTMLResponse)
@@ -849,22 +844,19 @@ async def page_movil_trabajador(
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
     trabajos_repo: TrabajosRepo = Depends(get_trabajos_repo),
 ):
-    """Vista mínima para escaneo QR (futuro móvil)."""
-    t = to_template_value(repo.obtener(trabajador_id))
+    from app.web.qr_pages import response_movil_trabajador
+    t = None
+    des = None
+    try:
+        t = repo.obtener(trabajador_id)
+    except Exception:
+        pass
     try:
         des = trabajos_repo.desempeno_trabajador(trabajador_id)
-        # plain nested
-        if isinstance(des, dict):
-            des = {
-                **des,
-                "trabajos": [to_template_value(x) for x in (des.get("trabajos") or [])],
-                "lineas_recientes": [to_template_value(x) for x in (des.get("lineas_recientes") or [])],
-            }
     except Exception:
-        des = {"folios_abiertos": 0, "folios_terminados": 0, "gramos_registrados": 0, "trabajos": []}
-    return templates.TemplateResponse(
-        "movil_trabajador.html",
-        _ctx(request, trabajador=t, desempeno=des),
+        des = {}
+    return response_movil_trabajador(
+        trabajador_id, t if isinstance(t, dict) else None, des
     )
 
 
