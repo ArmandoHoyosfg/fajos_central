@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.1] — 2026-08-24
+
+### Hotfix UI / robustez 3.17
+- Formulario trabajadores: campos sueldo_modo / sueldo_base (faltaban en HTML)
+- Fallbacks SQL si no se ha corrido migración 003
+- Badges fijo/var en Taller; colspan y estilos
+- set_activo / desempeño tolerantes a falta de `terminado_en`
+
 ## [3.17.0] — 2026-08-24
 
 ### Taller fijo/variable, folios y QR

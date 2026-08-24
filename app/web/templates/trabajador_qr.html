@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>Código QR</h1>
-    <p class="muted">{{ trabajador.nombre_mostrar }} · Ubic {{ trabajador.ubic }} · {{ trabajador.codigo_qr or ('FC%06d'|format(trabajador.id)) }}</p>
+    <p class="muted">{{ trabajador.nombre_mostrar }} · Ubic {{ trabajador.ubic }} · {{ trabajador.codigo_qr or ('FC%06d'|format(trabajador.id|int)) }}</p>
   </div>
   <div class="toolbar">
     <a class="btn btn-secondary" href="/trabajadores">← Trabajadores</a>

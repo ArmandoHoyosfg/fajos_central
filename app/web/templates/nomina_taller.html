@@ -86,7 +86,7 @@
         </div>
       </td>
       <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
-          ondblclick='openEditTll({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}</td>
+          ondblclick='openEditTll({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}{% if (r.sueldo_modo or 'variable') == 'fijo' %} <span class="badge-fijo">Fijo</span>{% else %} <span class="badge-var">Var</span>{% endif %}</td>
       <td>{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="puesto" value="{{ r.puesto or '' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint"><input class="cell-edit money" data-field="sueldo" type="number" step="0.1" value="{{ r.sueldo if r.sueldo is not none else '' }}" data-modo="{{ r.sueldo_modo or 'variable' }}" readonly title="Doble clic para editar"></td>
@@ -128,6 +128,13 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<style>
+.badge-fijo{background:#2e7d32;color:#fff;padding:0.1rem 0.35rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem}
+.badge-var{background:#5c6bc0;color:#fff;padding:0.1rem 0.35rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem}
+input.cell-edit.money[data-modo="variable"][value="0"],
+input.cell-edit.money[data-modo="variable"][value="0.0"] { outline: 1px dashed #f9e2af; }
+</style>
+
 <script src="/static/semana_ops.js?v=3122"></script>
 <script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "tll";</script>
 

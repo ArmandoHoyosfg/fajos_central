@@ -10,7 +10,7 @@
 <div class="card" style="padding:1rem;">
   <p><strong>Folios abiertos:</strong> {{ desempeno.folios_abiertos or 0 }}</p>
   <p><strong>Terminados:</strong> {{ desempeno.folios_terminados or 0 }}</p>
-  <p><strong>Gramos (hist.):</strong> {{ '%.1f'|format(desempeno.gramos_registrados or 0) }}</p>
+  <p><strong>Gramos (hist.):</strong> {% set g = desempeno.gramos_registrados if desempeno else 0 %}{{ '%.1f'|format(g|float) }}</p>
 </div>
 {% if desempeno.trabajos %}
 <div class="table-wrap" style="margin-top:1rem;">

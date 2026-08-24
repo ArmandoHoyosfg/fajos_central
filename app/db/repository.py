@@ -32,19 +32,40 @@ class TrabajadoresRepo(BaseRepo):
             FROM trabajadores
             WHERE 1=1
         """
+        sql_legacy = """
+            SELECT id, nombre_mostrar, nombre_completo, ubic, tipo, puesto,
+                   activo, fecha_incorporacion, notas
+            FROM trabajadores
+            WHERE 1=1
+        """
         params: list[Any] = []
         if solo_activos:
             sql += " AND activo = 1"
+            sql_legacy += " AND activo = 1"
         if solo_plt:
             sql += " AND (tipo IN ('PLT','PLT/PIT','Mixto'))"
+            sql_legacy += " AND (tipo IN ('PLT','PLT/PIT','Mixto'))"
         if busqueda:
-            sql += " AND (nombre_mostrar LIKE %s OR nombre_completo LIKE %s OR CAST(ubic AS CHAR) LIKE %s)"
+            like_clause = " AND (nombre_mostrar LIKE %s OR nombre_completo LIKE %s OR CAST(ubic AS CHAR) LIKE %s)"
+            sql += like_clause
+            sql_legacy += like_clause
             like = f"%{busqueda}%"
             params.extend([like, like, like])
         sql += " ORDER BY nombre_mostrar, ubic"
+        sql_legacy += " ORDER BY nombre_mostrar, ubic"
         with self.db.cursor() as cur:
-            cur.execute(sql, params)
-            return list(cur.fetchall())
+            try:
+                cur.execute(sql, params)
+                rows = list(cur.fetchall())
+            except Exception as e:
+                logger.warning("listar trabajadores: columnas 3.17 ausentes (%s); usa SQL legado", e)
+                cur.execute(sql_legacy, params)
+                rows = list(cur.fetchall())
+                for r in rows:
+                    r.setdefault("sueldo_modo", "variable")
+                    r.setdefault("sueldo_base", None)
+                    r.setdefault("codigo_qr", None)
+            return rows
 
     def obtener(self, trabajador_id: int) -> dict:
         with self.db.cursor() as cur:
@@ -743,16 +764,23 @@ class TrabajosRepo(BaseRepo):
 
     def set_activo(self, trabajo_id: int, activo: bool) -> None:
         with self.db.cursor() as cur:
-            if activo:
+            try:
+                if activo:
+                    cur.execute(
+                        "UPDATE trabajos SET activo = 1, terminado_en = NULL WHERE id = %s",
+                        (trabajo_id,),
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE trabajos SET activo = 0, "
+                        "terminado_en = COALESCE(terminado_en, CURRENT_TIMESTAMP) WHERE id = %s",
+                        (trabajo_id,),
+                    )
+            except Exception:
+                # Sin columna terminado_en (pre-migración 003)
                 cur.execute(
-                    "UPDATE trabajos SET activo = 1, terminado_en = NULL WHERE id = %s",
-                    (trabajo_id,),
-                )
-            else:
-                cur.execute(
-                    "UPDATE trabajos SET activo = 0, "
-                    "terminado_en = COALESCE(terminado_en, CURRENT_TIMESTAMP) WHERE id = %s",
-                    (trabajo_id,),
+                    "UPDATE trabajos SET activo = %s WHERE id = %s",
+                    (1 if activo else 0, trabajo_id),
                 )
 
     def marcar_terminado(self, trabajo_id: int, terminado: bool = True) -> dict:
@@ -774,33 +802,50 @@ class TrabajosRepo(BaseRepo):
     def desempeno_trabajador(self, trabajador_id: int) -> dict:
         """Resumen de folios y gramos por trabajador."""
         with self.db.cursor() as cur:
-            cur.execute(
-                """
-                SELECT t.id, t.folio, t.modelo, t.material, t.activo, t.terminado_en,
-                       t.tarifa_gr, t.creado_en
-                FROM trabajos t
-                WHERE t.trabajador_id = %s
-                ORDER BY t.activo DESC, t.creado_en DESC
-                """,
-                (trabajador_id,),
-            )
+            try:
+                cur.execute(
+                    """
+                    SELECT t.id, t.folio, t.modelo, t.material, t.activo, t.terminado_en,
+                           t.tarifa_gr, t.creado_en
+                    FROM trabajos t
+                    WHERE t.trabajador_id = %s
+                    ORDER BY t.activo DESC, t.creado_en DESC
+                    """,
+                    (trabajador_id,),
+                )
+            except Exception:
+                cur.execute(
+                    """
+                    SELECT t.id, t.folio, t.modelo, t.material, t.activo,
+                           t.tarifa_gr, t.creado_en
+                    FROM trabajos t
+                    WHERE t.trabajador_id = %s
+                    ORDER BY t.activo DESC, t.creado_en DESC
+                    """,
+                    (trabajador_id,),
+                )
             trabajos = list(cur.fetchall() or [])
-            cur.execute(
-                """
-                SELECT p.trabajo_id, p.folio, p.modelo, p.material, p.semana_id,
-                       s.codigo AS semana_codigo,
-                       COALESCE(p.gm_sab,0)+COALESCE(p.gm_dom,0)+COALESCE(p.gm_lun,0)
-                       +COALESCE(p.gm_mar,0)+COALESCE(p.gm_mie,0)+COALESCE(p.gm_jue,0)
-                       +COALESCE(p.gm_vie,0) AS total_g
-                FROM produccion_plata p
-                LEFT JOIN semanas s ON s.id = p.semana_id
-                WHERE p.trabajador_id = %s
-                ORDER BY p.semana_id DESC, p.id DESC
-                LIMIT 80
-                """,
-                (trabajador_id,),
-            )
-            lineas = list(cur.fetchall() or [])
+            for t in trabajos:
+                t.setdefault("terminado_en", None)
+            try:
+                cur.execute(
+                    """
+                    SELECT p.trabajo_id, p.folio, p.modelo, p.material, p.semana_id,
+                           s.codigo AS semana_codigo,
+                           COALESCE(p.gm_sab,0)+COALESCE(p.gm_dom,0)+COALESCE(p.gm_lun,0)
+                           +COALESCE(p.gm_mar,0)+COALESCE(p.gm_mie,0)+COALESCE(p.gm_jue,0)
+                           +COALESCE(p.gm_vie,0) AS total_g
+                    FROM produccion_plata p
+                    LEFT JOIN semanas s ON s.id = p.semana_id
+                    WHERE p.trabajador_id = %s
+                    ORDER BY p.semana_id DESC, p.id DESC
+                    LIMIT 80
+                    """,
+                    (trabajador_id,),
+                )
+                lineas = list(cur.fetchall() or [])
+            except Exception:
+                lineas = []
         abiertos = sum(1 for t in trabajos if t.get("activo"))
         cerrados = sum(1 for t in trabajos if not t.get("activo"))
         total_g = sum(float(x.get("total_g") or 0) for x in lineas)
@@ -977,21 +1022,37 @@ class NominaTallerRepo(BaseRepo):
 
     def listar_por_semana(self, semana_id: int) -> list[dict]:
         with self.db.cursor() as cur:
-            cur.execute(
-                """
-                                SELECT n.id, n.semana_id, n.trabajador_id, n.nombre, n.ubic, n.puesto,
-                       n.sueldo, n.extras, n.total, n.firmado, n.notas,
-                       COALESCE(tr.sueldo_modo, 'variable') AS sueldo_modo,
-                       tr.sueldo_base
-                FROM nomina_taller n
-                LEFT JOIN trabajadores tr ON tr.id = n.trabajador_id
-                WHERE n.semana_id = %s
-                ORDER BY n.ubic, n.nombre
+            try:
+                cur.execute(
+                    """
+                    SELECT n.id, n.semana_id, n.trabajador_id, n.nombre, n.ubic, n.puesto,
+                           n.sueldo, n.extras, n.total, n.firmado, n.notas,
+                           COALESCE(tr.sueldo_modo, 'variable') AS sueldo_modo,
+                           tr.sueldo_base
+                    FROM nomina_taller n
+                    LEFT JOIN trabajadores tr ON tr.id = n.trabajador_id
+                    WHERE n.semana_id = %s
+                    ORDER BY n.ubic, n.nombre
+                    """,
+                    (semana_id,),
+                )
+            except Exception:
+                cur.execute(
+                    """
+                    SELECT id, semana_id, trabajador_id, nombre, ubic, puesto,
+                           sueldo, extras, total, firmado, notas
+                    FROM nomina_taller
+                    WHERE semana_id = %s
+                    ORDER BY ubic, nombre
+                    """,
+                    (semana_id,),
+                )
+            rows = list(cur.fetchall() or [])
+            for r in rows:
+                r.setdefault("sueldo_modo", "variable")
+                r.setdefault("sueldo_base", None)
+            return rows
 
-                """,
-                (semana_id,),
-            )
-            return list(cur.fetchall() or [])
 
     def totales(self, semana_id: int) -> dict:
         with self.db.cursor() as cur:
