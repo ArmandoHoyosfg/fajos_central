@@ -733,7 +733,15 @@ async def api_update_trabajador(
         data["notas"] = notas or None
     if activo is not None:
         data["activo"] = 1 if int(activo) else 0
-    return repo.actualizar(trabajador_id, data)
+    row = repo.actualizar(trabajador_id, data)
+    # Asegura sync aunque actualizar ya lo hizo (idempotente)
+    try:
+        sync = repo.sincronizar_denormalizados(trabajador_id)
+    except Exception:
+        sync = {}
+    if isinstance(row, dict):
+        row = {**row, "sync": sync, "ok": True}
+    return row
 
 
 @router.post("/api/trabajadores/{trabajador_id}/baja")
@@ -753,6 +761,26 @@ async def api_activar_trabajador(
     repo.activar(trabajador_id)
     return {"ok": True, "id": trabajador_id, "activo": 1}
 
+
+
+
+@router.post("/api/trabajadores/{trabajador_id}/sincronizar")
+async def api_sync_trabajador(
+    trabajador_id: int,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    """Propaga nombre/ubic del catálogo a Plata, Pita y Taller."""
+    sync = repo.sincronizar_denormalizados(trabajador_id)
+    return {"ok": True, "id": trabajador_id, "sync": sync}
+
+
+@router.post("/api/trabajadores/sincronizar-todo")
+async def api_sync_todos_trabajadores(
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    """Repara denormalizados de todos los trabajadores (una vez tras migrar datos)."""
+    total = repo.sincronizar_todos_denormalizados()
+    return {"ok": True, **total}
 
 
 @router.get("/api/trabajadores/{trabajador_id}/desempeno")

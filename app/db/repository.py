@@ -135,7 +135,8 @@ class TrabajadoresRepo(BaseRepo):
 
 
     def actualizar(self, trabajador_id: int, data: dict) -> dict:
-        self.obtener(trabajador_id)
+        """Actualiza catálogo y propaga nombre/ubic/puesto a nóminas denormalizadas."""
+        antes = self.obtener(trabajador_id)
         fields = []
         params: list[Any] = []
         mapping = {
@@ -152,12 +153,17 @@ class TrabajadoresRepo(BaseRepo):
             "codigo_qr": "codigo_qr",
         }
         for key, col in mapping.items():
-            if key in data and data[key] is not None:
-                fields.append(f"{col} = %s")
-                params.append(data[key])
+            if key not in data:
+                continue
+            # permitir None en sueldo_base / notas / puesto / fecha
+            if data[key] is None and key not in (
+                "sueldo_base", "notas", "puesto", "fecha_incorporacion", "nombre_completo"
+            ):
+                continue
+            fields.append(f"{col} = %s")
+            params.append(data[key])
         if not fields:
             return self.obtener(trabajador_id)
-        # nombre_completo default if only nombre_mostrar
         if "nombre_mostrar" in data and "nombre_completo" not in data:
             fields.append("nombre_completo = %s")
             params.append(data["nombre_mostrar"])
@@ -166,7 +172,119 @@ class TrabajadoresRepo(BaseRepo):
         with self.db.cursor() as cur:
             cur.execute(sql, params)
         logger.info("Trabajador actualizado id=%s", trabajador_id)
+        # Propagar a Plata / Pita / Taller (copias denormalizadas)
+        try:
+            sync = self.sincronizar_denormalizados(
+                trabajador_id,
+                nombre_ant=antes.get("nombre_mostrar"),
+                ubic_ant=antes.get("ubic"),
+            )
+            logger.info("Sync denormalizado id=%s %s", trabajador_id, sync)
+        except Exception:
+            logger.exception("No se pudo sincronizar denormalizados id=%s", trabajador_id)
         return self.obtener(trabajador_id)
+
+    def sincronizar_denormalizados(
+        self,
+        trabajador_id: int,
+        *,
+        nombre_ant: str | None = None,
+        ubic_ant: int | None = None,
+    ) -> dict:
+        """
+        Copia nombre_mostrar, ubic (y puesto en taller) del catálogo hacia:
+        produccion_plata, produccion_pita, nomina_taller.
+
+        1) Por trabajador_id (preferido)
+        2) Filas huérfanas con el nombre+ubic anteriores (si se pasan)
+        """
+        t = self.obtener(trabajador_id)
+        nombre = t.get("nombre_mostrar")
+        ubic = t.get("ubic")
+        puesto = t.get("puesto")
+        counts = {"plata": 0, "pita": 0, "taller": 0, "orphans": 0}
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE produccion_plata
+                   SET nombre = %s, ubic = %s
+                 WHERE trabajador_id = %s
+                """,
+                (nombre, ubic, trabajador_id),
+            )
+            counts["plata"] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+
+            cur.execute(
+                """
+                UPDATE produccion_pita
+                   SET nombre = %s, ubic = %s
+                 WHERE trabajador_id = %s
+                """,
+                (nombre, ubic, trabajador_id),
+            )
+            counts["pita"] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+
+            cur.execute(
+                """
+                UPDATE nomina_taller
+                   SET nombre = %s, ubic = %s, puesto = COALESCE(%s, puesto)
+                 WHERE trabajador_id = %s
+                """,
+                (nombre, ubic, puesto, trabajador_id),
+            )
+            counts["taller"] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+
+            # Huérfanas: mismo nombre+ubic viejos, sin trabajador_id o con NULL
+            if nombre_ant is not None and ubic_ant is not None:
+                for table in ("produccion_plata", "produccion_pita", "nomina_taller"):
+                    if table == "nomina_taller":
+                        cur.execute(
+                            f"""
+                            UPDATE {table}
+                               SET nombre = %s, ubic = %s, trabajador_id = %s,
+                                   puesto = COALESCE(%s, puesto)
+                             WHERE (trabajador_id IS NULL OR trabajador_id = 0)
+                               AND nombre = %s AND ubic = %s
+                            """,
+                            (nombre, ubic, trabajador_id, puesto, nombre_ant, ubic_ant),
+                        )
+                    else:
+                        cur.execute(
+                            f"""
+                            UPDATE {table}
+                               SET nombre = %s, ubic = %s, trabajador_id = %s
+                             WHERE (trabajador_id IS NULL OR trabajador_id = 0)
+                               AND nombre = %s AND ubic = %s
+                            """,
+                            (nombre, ubic, trabajador_id, nombre_ant, ubic_ant),
+                        )
+                    n = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+                    counts["orphans"] += n
+                    # También filas con trabajador_id ya correcto ya actualizadas;
+                    # filas con OTRO id no se tocan.
+
+                # Filas que aún tienen el ubic/nombre viejos pero YA tienen este trabajador_id
+                # (por si el UPDATE por id falló parcialmente) — redundante pero seguro
+                pass
+
+        return counts
+
+    def sincronizar_todos_denormalizados(self) -> dict:
+        """Repara todas las líneas ligadas a un trabajador_id válido."""
+        total = {"plata": 0, "pita": 0, "taller": 0, "trabajadores": 0}
+        with self.db.cursor() as cur:
+            cur.execute("SELECT id FROM trabajadores")
+            ids = [int(r["id"]) for r in (cur.fetchall() or [])]
+        for tid in ids:
+            try:
+                c = self.sincronizar_denormalizados(tid)
+                total["plata"] += c.get("plata", 0)
+                total["pita"] += c.get("pita", 0)
+                total["taller"] += c.get("taller", 0)
+                total["trabajadores"] += 1
+            except Exception:
+                logger.exception("sync all id=%s", tid)
+        return total
 
     def activar(self, trabajador_id: int) -> None:
         self.obtener(trabajador_id)

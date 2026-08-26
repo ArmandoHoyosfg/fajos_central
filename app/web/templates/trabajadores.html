@@ -15,6 +15,7 @@
   <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
     <button type="button" class="btn" onclick="openEditId(null)">＋ Nuevo</button>
     <a class="btn btn-secondary" href="/trabajadores/qr-lote">QR de todos</a>
+    <button type="button" class="btn btn-secondary" onclick="syncTodos()" title="Propaga nombre y ubicación del catálogo a Plata, Pita y Taller">Sincronizar nóminas</button>
   </div>
 </div>
 
@@ -241,7 +242,11 @@ async function saveTrab(e) {
   }
   const data = await res.json().catch(() => ({}));
   if (res.ok) {
-    showToast(id ? 'Trabajador actualizado' : 'Trabajador creado');
+    const sync = data.sync || {};
+    const n = (sync.plata||0)+(sync.pita||0)+(sync.taller||0);
+    showToast(id
+      ? ('Trabajador actualizado' + (n ? ' · nóminas alineadas (' + n + ')' : ''))
+      : 'Trabajador creado');
     closeModal('modal-trab');
     setTimeout(() => location.reload(), 350);
   } else {
@@ -322,6 +327,15 @@ async function guardarSueldoBase(id, inp) {
   showToast('Sueldo base actualizado');
 }
 
+async function syncTodos() {
+  if (!confirm('¿Propagar nombre y ubicación de TODOS los trabajadores a las nóminas (Plata, Pita, Taller)?\n\nNo borra gramos ni montos; solo alinea nombre/ubic.')) return;
+  try {
+    const res = await fetch('/api/trabajadores/sincronizar-todo', { method: 'POST', body: new FormData() });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(d.user_message || d.message || 'Error al sincronizar', true); return; }
+    showToast('Sincronizado: Plata ' + (d.plata||0) + ', Pita ' + (d.pita||0) + ', Taller ' + (d.taller||0));
+  } catch (e) { showToast('Error de red', true); }
+}
 function filterRows() {
   const solo = document.getElementById('flt-activos').checked;
   const q = (document.getElementById('flt-local').value || '').toLowerCase();

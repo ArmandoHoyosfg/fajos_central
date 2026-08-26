@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.5] — 2026-08-26
+
+### Sincronización catálogo → nóminas
+- Al editar un trabajador, se propagan `nombre` y `ubic` a `produccion_plata`, `produccion_pita` y `nomina_taller`
+- Taller también actualiza `puesto`
+- API: `POST /api/trabajadores/{id}/sincronizar` y `POST /api/trabajadores/sincronizar-todo`
+- Botón **Sincronizar nóminas** en Trabajadores (repara datos ya guardados)
+
 ## [3.17.4] — 2026-08-24
 
 ### QR aislado (sin Jinja)
