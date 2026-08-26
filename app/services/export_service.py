@@ -466,6 +466,91 @@ class ExportService:
         ("firma", "Firma"),
     ]
 
+
+    def export_trabajadores(
+        self,
+        rows: list[dict],
+        *,
+        filename_stem: str = "trabajadores",
+        solo_activos: bool | None = None,
+    ) -> tuple[bytes, str, str]:
+        """Catálogo de trabajadores a Excel."""
+        try:
+            data = self._xlsx_trabajadores(rows, solo_activos=solo_activos)
+            return (
+                data,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                f"{filename_stem}.xlsx",
+            )
+        except Exception as e:
+            logger.exception("Error exportando trabajadores")
+            raise ExportError("Fallo al exportar trabajadores.", cause=e) from e
+
+    def _xlsx_trabajadores(self, rows: list[dict], *, solo_activos: bool | None = None) -> bytes:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Trabajadores"
+        headers = [
+            ("id", "ID"),
+            ("nombre_mostrar", "Nombre"),
+            ("nombre_completo", "Nombre completo"),
+            ("ubic", "Ubic"),
+            ("tipo", "Tipo"),
+            ("puesto", "Puesto"),
+            ("sueldo_modo", "Sueldo modo"),
+            ("sueldo_base", "Sueldo base"),
+            ("activo", "Activo"),
+            ("fecha_incorporacion", "Incorporación"),
+            ("codigo_qr", "Código QR"),
+            ("notas", "Notas"),
+        ]
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+        title = "Catálogo de trabajadores — Fajos Piteados Central"
+        if solo_activos is True:
+            title += " (solo activos)"
+        elif solo_activos is False:
+            title += " (todos)"
+        ws.cell(1, 1, title)
+        ws.cell(1, 1).font = Font(name="Calibri", bold=True, size=12, color="1F4E79")
+        for col, (_, label) in enumerate(headers, 1):
+            cell = ws.cell(2, col, label)
+            cell.fill = self.HEADER_FILL
+            cell.font = self.HEADER_FONT
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            cell.border = self.THIN
+        for i, r in enumerate(rows):
+            row_i = 3 + i
+            vals = [
+                r.get("id"),
+                r.get("nombre_mostrar"),
+                r.get("nombre_completo"),
+                r.get("ubic"),
+                r.get("tipo"),
+                r.get("puesto"),
+                r.get("sueldo_modo") or "",
+                r.get("sueldo_base") if r.get("sueldo_base") is not None else "",
+                "Sí" if r.get("activo") else "No",
+                r.get("fecha_incorporacion") or "",
+                r.get("codigo_qr") or "",
+                r.get("notas") or "",
+            ]
+            for col, v in enumerate(vals, 1):
+                cell = ws.cell(row_i, col, v)
+                cell.border = self.THIN
+                if i % 2:
+                    cell.fill = self.ALT_FILL
+                if col in (1, 4):
+                    cell.alignment = Alignment(horizontal="center")
+        widths = [6, 22, 28, 8, 10, 14, 12, 12, 8, 14, 12, 24]
+        for i, w in enumerate(widths, 1):
+            from openpyxl.utils import get_column_letter
+            ws.column_dimensions[get_column_letter(i)].width = w
+        ws.auto_filter.ref = f"A2:{get_column_letter(len(headers))}{2 + max(len(rows), 1)}"
+        ws.freeze_panes = "A3"
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
     def export_nomina_taller(
         self,
         lineas: list[dict],

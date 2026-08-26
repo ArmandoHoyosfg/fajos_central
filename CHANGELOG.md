@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.9] — 2026-08-26
+
+### Export Excel de trabajadores
+- `GET /api/export/trabajadores` (todos) y `?activos=1` (solo activos)
+- Botones **Excel** / **Excel activos** en la página Trabajadores
+
 ## [3.17.8] — 2026-08-26
 
 ### Dev: huérfanos, semana, migraciones, folios dup + orden tablas

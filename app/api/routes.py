@@ -1231,6 +1231,37 @@ async def api_export_captura_manual(
     )
 
 
+
+@router.get("/api/export/trabajadores")
+async def api_export_trabajadores(
+    activos: int | None = Query(None, description="1=solo activos, 0=solo bajas, omitir=todos"),
+    q: str | None = Query(None),
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+    export_svc: ExportService = Depends(get_export_service),
+):
+    """Excel del catálogo de trabajadores."""
+    solo_activos = True if activos == 1 else (False if activos == 0 else False)
+    # listar: solo_activos True filtra activos; False lista todos
+    if activos is None:
+        rows = repo.listar(solo_activos=False, busqueda=q)
+        flag = None
+        stem = "trabajadores_todos"
+    elif activos == 1:
+        rows = repo.listar(solo_activos=True, busqueda=q)
+        flag = True
+        stem = "trabajadores_activos"
+    else:
+        rows = [r for r in repo.listar(solo_activos=False, busqueda=q) if not r.get("activo")]
+        flag = False
+        stem = "trabajadores_bajas"
+    data, media, fname = export_svc.export_trabajadores(rows, filename_stem=stem, solo_activos=flag)
+    return Response(
+        content=data,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/api/export/produccion/{semana_id}")
 async def api_export(
     semana_id: int,
