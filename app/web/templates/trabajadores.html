@@ -26,22 +26,23 @@
   </form>
   <label class="muted"><input type="checkbox" id="flt-activos" checked onchange="filterRows()"> Solo activos</label>
   <input type="search" id="flt-local" placeholder="Filtro rápido…" style="min-width:160px;" oninput="filterRows()">
+  <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.8rem" data-sort-reset="table.sortable">Reset orden</button>
 </div>
 <div id="toast" class="toast-web" hidden></div>
 
 <div class="table-wrap no-sticky-col">
-<table>
+<table class="sortable" data-sortable="1">
   <thead>
     <tr>
-      <th>ID</th>
-      <th>Nombre</th>
-      <th>Nombre completo</th>
-      <th>Ubic</th>
-      <th>Tipo</th>
-      <th>Puesto</th>
+      <th data-sort-col="0">ID</th>
+      <th data-sort-col="1">Nombre</th>
+      <th data-sort-col="2">Nombre completo</th>
+      <th data-sort-col="3">Ubic</th>
+      <th data-sort-col="4">Tipo</th>
+      <th data-sort-col="5">Puesto</th>
       <th>Sueldo</th>
-      <th>Estado</th>
-      <th>Incorp.</th>
+      <th data-sort-col="7">Estado</th>
+      <th data-sort-col="8">Incorp.</th>
       <th>Acciones</th>
     </tr>
   </thead>
@@ -178,6 +179,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/table_sort.js?v=3178"></script>
+<button type="button" class="btn btn-secondary" style="display:none" data-sort-reset="table.sortable"></button>
 
 <script>
 function showToast(msg, err) {

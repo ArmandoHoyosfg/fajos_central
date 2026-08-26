@@ -1,4 +1,4 @@
-"""Página Dev: diagnóstico operativo (estilo panel interno, no menú de usuario)."""
+"""Página Dev: diagnóstico operativo."""
 from __future__ import annotations
 
 from fastapi.responses import HTMLResponse
@@ -22,42 +22,119 @@ def render_debug_page(
     sample_vela: list[dict],
     meta: dict | None = None,
     counts: dict | None = None,
+    orphans: list[dict] | None = None,
+    migrations: list[dict] | None = None,
+    folios_dup: list[dict] | None = None,
+    semana_actual: dict | None = None,
     sync_result: dict | None = None,
+    action_result: dict | None = None,
     error: str | None = None,
 ) -> HTMLResponse:
     meta = meta or {}
     counts = counts or {}
+    orphans = orphans or []
+    migrations = migrations or []
+    folios_dup = folios_dup or []
+    semana_actual = semana_actual or {}
     n_mm = len(mismatches)
+    n_or = len(orphans)
+    n_fd = len(folios_dup)
+    mig_bad = [m for m in migrations if m.get("status") != "ok"]
 
-    col_rows = "".join(
-        f"<tr><td>{_esc(c.get('TABLE_NAME'))}</td>"
-        f"<td>{_esc(c.get('COLUMN_NAME'))}</td>"
-        f"<td><code>{_esc(c.get('COLUMN_TYPE') or c.get('DATA_TYPE'))}</code></td>"
-        f"<td>{_esc(c.get('IS_NULLABLE'))}</td>"
-        f"<td>{_esc(c.get('COLUMN_KEY'))}</td></tr>"
-        for c in columns
+    def rows_mm() -> str:
+        if not mismatches:
+            return '<tr><td colspan="5" class="muted">Sin desajustes. OK.</td></tr>'
+        return "".join(
+            f"<tr><td>{_esc(m.get('area'))}</td><td>{_esc(m.get('prod_id'))}</td>"
+            f"<td>{_esc(m.get('trabajador_id'))}</td>"
+            f"<td>{_esc(m.get('nombre_fila'))} / {_esc(m.get('ubic_fila'))}</td>"
+            f"<td>{_esc(m.get('cat_nombre'))} / {_esc(m.get('cat_ubic'))}</td></tr>"
+            for m in mismatches
+        )
+
+    def rows_or() -> str:
+        if not orphans:
+            return '<tr><td colspan="5" class="muted">Sin huérfanos. OK.</td></tr>'
+        return "".join(
+            f"<tr><td>{_esc(m.get('area'))}</td><td>{_esc(m.get('prod_id'))}</td>"
+            f"<td>{_esc(m.get('nombre'))}</td><td>{_esc(m.get('ubic'))}</td>"
+            f"<td>{_esc(m.get('trabajador_id'))}</td></tr>"
+            for m in orphans
+        )
+
+    def rows_fd() -> str:
+        if not folios_dup:
+            return '<tr><td colspan="4" class="muted">No hay folios compartidos entre trabajadores distintos.</td></tr>'
+        return "".join(
+            f"<tr class='row-warn'><td><code>{_esc(m.get('folio'))}</code></td>"
+            f"<td>{_esc(m.get('semana_codigo') or m.get('semana_id'))}</td>"
+            f"<td>{_esc(m.get('n_trabajadores'))}</td>"
+            f"<td>{_esc(m.get('quienes'))}</td></tr>"
+            for m in folios_dup
+        )
+
+    def rows_mig() -> str:
+        if not migrations:
+            return '<tr><td colspan="4" class="muted">Sin comprobación</td></tr>'
+        return "".join(
+            f"<tr><td>{_esc(m.get('table'))}</td><td><code>{_esc(m.get('column'))}</code></td>"
+            f"<td>{_esc(m.get('script'))}</td>"
+            f"<td style='color:{'#a6e3a1' if m.get('status')=='ok' else '#f38ba8'}'>"
+            f"{_esc(m.get('status'))}</td></tr>"
+            for m in migrations
+        )
+
+    def rows_col() -> str:
+        return "".join(
+            f"<tr><td>{_esc(c.get('TABLE_NAME'))}</td><td>{_esc(c.get('COLUMN_NAME'))}</td>"
+            f"<td><code>{_esc(c.get('COLUMN_TYPE') or c.get('DATA_TYPE'))}</code></td>"
+            f"<td>{_esc(c.get('IS_NULLABLE'))}</td><td>{_esc(c.get('COLUMN_KEY'))}</td></tr>"
+            for c in columns
+        ) or '<tr><td colspan="5" class="muted">—</td></tr>'
+
+    def rows_vela() -> str:
+        return "".join(
+            f"<tr><td>{_esc(m.get('src'))}</td><td>{_esc(m.get('id'))}</td>"
+            f"<td>{_esc(m.get('nombre'))}</td><td>{_esc(m.get('ubic'))}</td>"
+            f"<td>{_esc(m.get('trabajador_id'))}</td><td>{_esc(m.get('extra'))}</td></tr>"
+            for m in sample_vela
+        ) or '<tr><td colspan="6" class="muted">—</td></tr>'
+
+    sa = semana_actual
+    existe = bool(sa.get("existe"))
+    if existe:
+        estado_bd = (
+            f"Sí · id={_esc(sa.get('semana_id'))}"
+            + (" · CERRADA" if sa.get("cerrada") else " · abierta")
+        )
+        form_crear = ""
+    else:
+        estado_bd = '<span style="color:#f9e2af">No existe aún</span>'
+        form_crear = (
+            '<form method="post" action="/dev/crear-semana-actual" style="margin-top:0.5rem">'
+            '<button type="submit" class="btn">Crear semana actual</button></form>'
+        )
+
+    semana_html = f"""
+    <div class="card" style="margin:0.5rem 0 1rem">
+      <p><strong>Hoy:</strong> {_esc(sa.get('hoy'))}</p>
+      <p><strong>Rango calculado (sáb–vie):</strong>
+         {_esc(sa.get('fecha_inicio'))} → {_esc(sa.get('fecha_fin'))}
+         · código <code>{_esc(sa.get('codigo'))}</code></p>
+      <p><strong>En BD:</strong> {estado_bd}</p>
+      {form_crear}
+    </div>
+    """
+
+    payload = action_result or sync_result
+    action_html = (
+        f"<div class='card'><strong>Última acción</strong>"
+        f"<pre style='margin:0.5rem 0 0'>{_esc(payload)}</pre></div>"
+        if payload
+        else ""
     )
-    mm_rows = "".join(
-        f"<tr><td>{_esc(m.get('area'))}</td>"
-        f"<td>{_esc(m.get('prod_id'))}</td>"
-        f"<td>{_esc(m.get('trabajador_id'))}</td>"
-        f"<td>{_esc(m.get('nombre_fila'))} / {_esc(m.get('ubic_fila'))}</td>"
-        f"<td>{_esc(m.get('cat_nombre'))} / {_esc(m.get('cat_ubic'))}</td></tr>"
-        for m in mismatches
-    ) or '<tr><td colspan="5" class="muted">Sin desajustes por trabajador_id. OK.</td></tr>'
-
-    vela_rows = "".join(
-        f"<tr><td>{_esc(m.get('src'))}</td><td>{_esc(m.get('id'))}</td>"
-        f"<td>{_esc(m.get('nombre'))}</td><td>{_esc(m.get('ubic'))}</td>"
-        f"<td>{_esc(m.get('trabajador_id'))}</td><td>{_esc(m.get('extra'))}</td></tr>"
-        for m in sample_vela
-    ) or '<tr><td colspan="6" class="muted">Sin coincidencias «Vela»</td></tr>'
-
-    sync_html = f"<div class='card'><strong>Última sincronización</strong><pre style='margin:0.5rem 0 0'>{_esc(sync_result)}</pre></div>" if sync_result else ""
     err_html = f'<p class="flash err">{_esc(error)}</p>' if error else ""
-
     status_color = "#a6e3a1" if db_ok else "#f38ba8"
-    mm_color = "#a6e3a1" if n_mm == 0 else "#f9e2af"
 
     html = f"""<!DOCTYPE html>
 <html lang="es" data-theme="oscuro">
@@ -67,14 +144,15 @@ def render_debug_page(
   <title>Dev — Fajos Central</title>
   <link rel="stylesheet" href="/static/app.css">
   <style>
-    .dev-kpis {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:0.75rem; margin:1rem 0; }}
+    .dev-kpis {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:0.75rem; margin:1rem 0; }}
     .dev-kpis .card {{ padding:0.85rem 1rem; }}
     .dev-kpis .label {{ font-size:0.75rem; opacity:0.75; }}
     .dev-kpis .value {{ font-size:1.15rem; font-weight:700; margin-top:0.2rem; }}
     .dev-actions {{ display:flex; flex-wrap:wrap; gap:0.5rem; margin:1rem 0; }}
     .dev-section {{ margin-top:1.75rem; }}
-    .dev-section h2 {{ font-size:1.05rem; margin-bottom:0.5rem; }}
+    .dev-section h2 {{ font-size:1.05rem; margin-bottom:0.35rem; }}
     .dev-hint {{ font-size:0.85rem; opacity:0.8; margin-bottom:0.75rem; }}
+    tr.row-warn td {{ background: rgba(249, 226, 175, 0.12); }}
     code {{ font-size:0.8rem; }}
   </style>
 </head>
@@ -89,96 +167,97 @@ def render_debug_page(
     <div class="page-head">
       <div>
         <h1>Panel Dev</h1>
-        <p class="muted">Diagnóstico operativo: integridad de datos, esquema y acciones de reparación.
-        No es menú de captura diaria.</p>
+        <p class="muted">Integridad, migraciones, semana actual y reparación.</p>
       </div>
       <div class="toolbar">
         <a class="btn btn-secondary" href="/">← Inicio</a>
         <a class="btn btn-secondary" href="/produccion">Plata</a>
-        <a class="btn btn-secondary" href="/trabajadores">Trabajadores</a>
       </div>
     </div>
     {err_html}
-    {sync_html}
+    {action_html}
 
     <div class="dev-kpis">
-      <div class="card">
-        <div class="label">Base de datos</div>
-        <div class="value" style="color:{status_color}">{'OK' if db_ok else 'ERROR'}</div>
-      </div>
-      <div class="card">
-        <div class="label">Desajustes catálogo</div>
-        <div class="value" style="color:{mm_color}">{n_mm}</div>
-      </div>
-      <div class="card">
-        <div class="label">Trabajadores</div>
-        <div class="value">{_esc(counts.get('trabajadores', '—'))}</div>
-      </div>
-      <div class="card">
-        <div class="label">Líneas Plata (total)</div>
-        <div class="value">{_esc(counts.get('plata', '—'))}</div>
-      </div>
-      <div class="card">
-        <div class="label">Semanas</div>
-        <div class="value">{_esc(counts.get('semanas', '—'))}</div>
-      </div>
-      <div class="card">
-        <div class="label">Versión</div>
-        <div class="value" style="font-size:1rem">v{_esc(meta.get('version', '?'))}</div>
-      </div>
+      <div class="card"><div class="label">Base de datos</div>
+        <div class="value" style="color:{status_color}">{'OK' if db_ok else 'ERROR'}</div></div>
+      <div class="card"><div class="label">Desajustes</div>
+        <div class="value">{n_mm}</div></div>
+      <div class="card"><div class="label">Huérfanos</div>
+        <div class="value" style="color:{'#a6e3a1' if n_or==0 else '#f9e2af'}">{n_or}</div></div>
+      <div class="card"><div class="label">Folios duplicados</div>
+        <div class="value" style="color:{'#a6e3a1' if n_fd==0 else '#f38ba8'}">{n_fd}</div></div>
+      <div class="card"><div class="label">Migraciones</div>
+        <div class="value" style="color:{'#a6e3a1' if not mig_bad else '#f38ba8'}">{'OK' if not mig_bad else str(len(mig_bad))+' faltan'}</div></div>
+      <div class="card"><div class="label">Semana actual</div>
+        <div class="value" style="font-size:0.95rem">{'Sí' if existe else 'No'}</div></div>
     </div>
 
     <div class="dev-actions">
       <form method="post" action="/dev/sync" style="display:inline">
         <button type="submit" class="btn">Sincronizar catálogo → nóminas</button>
       </form>
-      <a class="btn btn-secondary" href="/dev">Refrescar diagnóstico</a>
-      <a class="btn btn-secondary" href="/docs" target="_blank" rel="noopener">API docs</a>
-      <a class="btn btn-secondary" href="/api/trabajadores">API trabajadores</a>
+      <form method="post" action="/dev/reparar-huerfanos" style="display:inline">
+        <button type="submit" class="btn btn-secondary">Reparar huérfanos</button>
+      </form>
+      <a class="btn btn-secondary" href="/dev">Refrescar</a>
+      <a class="btn btn-secondary" href="/docs" target="_blank" rel="noopener">API</a>
     </div>
 
     <section class="dev-section">
-      <h2>Integridad: nombre / ubic vs catálogo</h2>
-      <p class="dev-hint">Filas de Plata, Pita o Taller cuyo nombre o ubicación no coinciden con el trabajador ligado.
-      Tras sincronizar deberían quedar en cero. La captura ya muestra el catálogo por JOIN; esto limpia el dato guardado.</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Área</th><th>ID fila</th><th>trab_id</th><th>En nómina</th><th>En catálogo</th></tr></thead>
-          <tbody>{mm_rows}</tbody>
-        </table>
-      </div>
+      <h2>Semana actual (calendario sáb–vie)</h2>
+      <p class="dev-hint">Lo que el sistema considera esta semana de pago según la fecha de hoy.</p>
+      {semana_html}
     </section>
 
     <section class="dev-section">
-      <h2>Muestra «Vela» (búsqueda de ejemplo)</h2>
-      <p class="dev-hint">Compara catálogo vs producción para el mismo apellido — útil al depurar ubicaciones.</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Origen</th><th>ID</th><th>Nombre</th><th>Ubic</th><th>trab_id</th><th>Extra</th></tr></thead>
-          <tbody>{vela_rows}</tbody>
-        </table>
-      </div>
+      <h2>Migraciones / columnas esperadas</h2>
+      <p class="dev-hint">Si algo está faltante, ejecuta el script en HeidiSQL.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tabla</th><th>Columna</th><th>Script</th><th>Estado</th></tr></thead>
+        <tbody>{rows_mig()}</tbody>
+      </table></div>
     </section>
 
     <section class="dev-section">
-      <h2>Esquema (information_schema)</h2>
-      <p class="dev-hint">Tipos reales en MariaDB. Si falta una columna de v3.17+, ejecuta la migración SQL correspondiente.</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Tabla</th><th>Columna</th><th>Tipo</th><th>Null</th><th>Key</th></tr></thead>
-          <tbody>{col_rows or '<tr><td colspan="5" class="muted">No legible</td></tr>'}</tbody>
-        </table>
-      </div>
+      <h2>Folios repetidos entre trabajadores</h2>
+      <p class="dev-hint">Mismo folio en 2+ personas distintas. También se resaltan en Plata.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Folio</th><th>Semana</th><th>Nº personas</th><th>Quiénes</th></tr></thead>
+        <tbody>{rows_fd()}</tbody>
+      </table></div>
     </section>
 
     <section class="dev-section">
-      <h2>Atajos útiles</h2>
-      <ul class="dev-hint">
-        <li><code>/api/trabajadores/sincronizar-todo</code> — POST sync global</li>
-        <li><code>/trabajadores/{{id}}/qr</code> — ficha QR</li>
-        <li><code>/m/t/{{id}}</code> — vista móvil por QR</li>
-        <li>Migraciones: <code>db/schema/003_taller_fijo_folio_qr.sql</code></li>
-      </ul>
+      <h2>Huérfanos (sin trabajador válido)</h2>
+      <p class="dev-hint">Reparar enlaza por nombre + ubic exactos del catálogo.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Área</th><th>ID</th><th>Nombre</th><th>Ubic</th><th>trab_id</th></tr></thead>
+        <tbody>{rows_or()}</tbody>
+      </table></div>
+    </section>
+
+    <section class="dev-section">
+      <h2>Desajustes nombre/ubic</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Área</th><th>ID</th><th>trab_id</th><th>Nómina</th><th>Catálogo</th></tr></thead>
+        <tbody>{rows_mm()}</tbody>
+      </table></div>
+    </section>
+
+    <section class="dev-section">
+      <h2>Muestra «Vela»</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Origen</th><th>ID</th><th>Nombre</th><th>Ubic</th><th>trab_id</th><th>Extra</th></tr></thead>
+        <tbody>{rows_vela()}</tbody>
+      </table></div>
+    </section>
+
+    <section class="dev-section">
+      <h2>Esquema</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tabla</th><th>Columna</th><th>Tipo</th><th>Null</th><th>Key</th></tr></thead>
+        <tbody>{rows_col()}</tbody>
+      </table></div>
     </section>
   </main>
 </body>

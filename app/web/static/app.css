@@ -1729,3 +1729,11 @@ td.col-actions,
   background: rgba(203, 166, 247, 0.22);
   color: #e0d0ff;
 }
+
+
+/* Ordenación de tablas */
+th[data-sort-col] { user-select: none; }
+th[data-sort-col]:hover { color: var(--accent, #f9e2af); }
+th .sort-mark { font-size: 0.7em; opacity: 0.85; }
+tr.folio-dup td { box-shadow: inset 3px 0 0 #f38ba8; }
+tr.folio-dup td.col-folio { color: #f38ba8; font-weight: 600; }

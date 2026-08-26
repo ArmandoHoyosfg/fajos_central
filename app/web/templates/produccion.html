@@ -72,9 +72,10 @@
   <input type="search" id="flt-texto" placeholder="Filtrar nombre, folio, material…" style="min-width:200px;">
   <label><input type="checkbox" id="flt-sin-firma"> Solo sin firmar</label>
   <label><input type="checkbox" id="flt-sin-hoy"> Solo sin gramos hoy</label>
+  <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.8rem" data-sort-reset="table.sortable" title="Quitar orden de columnas">Reset orden</button>
 </div>
 <div class="table-wrap table-plt no-sticky-col">
-<table>
+<table class="sortable" data-sortable="1">
   <colgroup>
     <col class="col-del"><col class="col-nom"><col class="col-ubic"><col class="col-folio">
     <col class="col-mod"><col class="col-mat"><col class="col-tar">
@@ -85,14 +86,23 @@
   <thead>
     <tr>
       <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
-      <th>Nombre</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>$/g</th>
-      <th>Sáb</th><th>Dom</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th>
-      <th>Gr</th><th>$</th><th>✓</th>
+      <th data-sort-col="1">Nombre</th>
+      <th data-sort-col="2">Ubic</th>
+      <th data-sort-col="3">Folio</th>
+      <th data-sort-col="4">Modelo</th>
+      <th data-sort-col="5">Mat</th>
+      <th data-sort-col="6">$/g</th>
+      <th data-sort-col="7">Sáb</th><th data-sort-col="8">Dom</th><th data-sort-col="9">Lun</th>
+      <th data-sort-col="10">Mar</th><th data-sort-col="11">Mié</th><th data-sort-col="12">Jue</th>
+      <th data-sort-col="13">Vie</th>
+      <th data-sort-col="14">Gr</th>
+      <th data-sort-col="15">$</th>
+      <th>✓</th>
     </tr>
   </thead>
   <tbody>
     {% for r in lineas %}
-    <tr class="mat-{{ (r.material or '')|lower }}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
+    <tr class="mat-{{ (r.material or '')|lower }}{% if r.folio and folios_dup_set and (r.folio|string) in folios_dup_set %} folio-dup{% endif %}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
       {% set row_data = {
             "nombre": r.nombre,
             "ubic": r.ubic,
@@ -274,6 +284,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/table_sort.js?v=3178"></script>
 <script src="/static/capture_guard.js?v=3130"></script>
 
 <script src="/static/semana_ops.js?v=3122"></script>

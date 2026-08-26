@@ -50,6 +50,48 @@ def _ctx(request: Request, **kwargs):
     return build_template_context(request, **kwargs)
 
 
+def _dev_page_payload(repo: TrabajadoresRepo, *, action_result=None, sync_result=None, error=None):
+    from app.web.debug_pages import render_debug_page
+    from app.services.dashboard_service import check_db
+    from app import __version__
+    data: dict = {
+        "mismatches": [], "sample_vela": [], "columns": [], "counts": {},
+        "orphans": [], "migrations": [], "folios_duplicados": [], "semana_actual": {},
+    }
+    try:
+        data = repo.diagnostico_sync()
+    except Exception as e:
+        if error is None:
+            error = str(e)
+    lan = "—"
+    try:
+        from app.core.network import lan_urls
+        from app.core.config import get_settings
+        s = get_settings()
+        port = int(getattr(s, "app_port", 8000) or 8000)
+        urls = lan_urls(port=port)
+        lan = f"{urls.get('ip')}:{port}"
+    except Exception:
+        pass
+    return render_debug_page(
+        db_ok=check_db(),
+        columns=data.get("columns") or [],
+        mismatches=data.get("mismatches") or [],
+        sample_vela=data.get("sample_vela") or [],
+        meta={"version": __version__, "lan": lan},
+        counts=data.get("counts") or {},
+        orphans=data.get("orphans") or [],
+        migrations=data.get("migrations") or [],
+        folios_dup=data.get("folios_duplicados") or [],
+        semana_actual=data.get("semana_actual") or {},
+        sync_result=sync_result,
+        action_result=action_result,
+        error=error,
+    )
+
+
+
+
 # ---------- Web pages ----------
 
 @router.get("/", response_class=HTMLResponse)
@@ -89,34 +131,7 @@ async def page_dev(
     request: Request,
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
-    from app.web.debug_pages import render_debug_page
-    from app.services.dashboard_service import check_db
-    from app import __version__
-    error = None
-    data: dict = {"mismatches": [], "sample_vela": [], "columns": [], "counts": {}}
-    try:
-        data = repo.diagnostico_sync()
-    except Exception as e:
-        error = str(e)
-    lan = ""
-    try:
-        from app.core.network import lan_urls
-        from app.core.config import get_settings
-        s = get_settings()
-        port = int(getattr(s, "app_port", 8000) or 8000)
-        urls = lan_urls(port=port)
-        lan = f"{urls.get('ip')}:{port}"
-    except Exception:
-        lan = "—"
-    return render_debug_page(
-        db_ok=check_db(),
-        columns=data.get("columns") or [],
-        mismatches=data.get("mismatches") or [],
-        sample_vela=data.get("sample_vela") or [],
-        meta={"version": __version__, "lan": lan},
-        counts=data.get("counts") or {},
-        error=error,
-    )
+    return _dev_page_payload(repo)
 
 
 @router.post("/dev/sync", response_class=HTMLResponse)
@@ -124,41 +139,56 @@ async def page_dev_sync(
     request: Request,
     repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
 ):
-    from app.web.debug_pages import render_debug_page
-    from app.services.dashboard_service import check_db
-    from app import __version__
     sync_result = None
     error = None
-    data: dict = {"mismatches": [], "sample_vela": [], "columns": [], "counts": {}}
     try:
         sync_result = repo.sincronizar_todos_denormalizados()
-        data = repo.diagnostico_sync()
     except Exception as e:
         error = str(e)
-        try:
-            data = repo.diagnostico_sync()
-        except Exception:
-            pass
-    lan = ""
+    return _dev_page_payload(repo, sync_result=sync_result, error=error)
+
+
+@router.post("/dev/reparar-huerfanos", response_class=HTMLResponse)
+async def page_dev_reparar_huerfanos(
+    request: Request,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    result = None
+    error = None
     try:
-        from app.core.network import lan_urls
-        from app.core.config import get_settings
-        s = get_settings()
-        port = int(getattr(s, "app_port", 8000) or 8000)
-        urls = lan_urls(port=port)
-        lan = f"{urls.get('ip')}:{port}"
-    except Exception:
-        lan = "—"
-    return render_debug_page(
-        db_ok=check_db(),
-        columns=data.get("columns") or [],
-        mismatches=data.get("mismatches") or [],
-        sample_vela=data.get("sample_vela") or [],
-        meta={"version": __version__, "lan": lan},
-        counts=data.get("counts") or {},
-        sync_result=sync_result,
-        error=error,
-    )
+        result = repo.reparar_huerfanos()
+        # tras enlazar, sincronizar nombre/ubic
+        repo.sincronizar_todos_denormalizados()
+    except Exception as e:
+        error = str(e)
+    return _dev_page_payload(repo, action_result=result, error=error)
+
+
+@router.post("/dev/crear-semana-actual", response_class=HTMLResponse)
+async def page_dev_crear_semana_actual(
+    request: Request,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    from app.core.calendar_util import sugerir_codigo_semana
+    result = None
+    error = None
+    try:
+        info = repo.semana_actual_info()
+        if info.get("existe"):
+            result = {"ok": True, "mensaje": "Ya existía", **info}
+        else:
+            codigo, sab, vie = sugerir_codigo_semana()
+            sid = sem_repo.crear({
+                "codigo": codigo,
+                "fecha_inicio": sab.isoformat(),
+                "fecha_fin": vie.isoformat(),
+                "anio": sab.year,
+            })
+            result = {"ok": True, "creada_id": sid, "codigo": codigo, "inicio": sab.isoformat(), "fin": vie.isoformat()}
+    except Exception as e:
+        error = str(e)
+    return _dev_page_payload(repo, action_result=result, error=error)
 
 
 @router.get("/trabajadores", response_class=HTMLResponse)
@@ -213,6 +243,13 @@ async def page_produccion(
     lineas = prod_repo.listar_por_semana(semana_id) if semana_id else []
     totales = prod_repo.totales_semana(semana_id) if semana_id else {}
     trabajadores = trab_repo.listar(solo_plt=False, solo_activos=True)
+    folios_dup_set: set = set()
+    try:
+        for d in trab_repo.folios_duplicados(semana_id if semana_id else None):
+            if d.get("folio"):
+                folios_dup_set.add(str(d["folio"]).strip())
+    except Exception:
+        pass
     return templates.TemplateResponse(
         request,
         "produccion.html",
@@ -228,6 +265,7 @@ async def page_produccion(
             ) if semana_id else False,
             col_hoy=__import__("app.core.dias", fromlist=["col_hoy"]).col_hoy(),
             day_cols=["gm_sab","gm_dom","gm_lun","gm_mar","gm_mie","gm_jue","gm_vie"],
+            folios_dup_set=folios_dup_set,
         ),
     )
 

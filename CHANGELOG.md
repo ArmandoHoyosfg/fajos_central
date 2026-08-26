@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.8] — 2026-08-26
+
+### Dev: huérfanos, semana, migraciones, folios dup + orden tablas
+- Reparar vínculos huérfanos; semana actual (crear si falta); columnas de migración
+- Folios repetidos entre trabajadores (Dev + resalte en Plata)
+- Orden asc/desc por columna + Reset orden (Plata, Trabajadores, …)
+
 ## [3.17.7] — 2026-08-26
 
 ### Panel Dev reubicado y útil

@@ -53,15 +53,18 @@
   </form>
 </div>
 <div class="table-wrap table-compact">
-<table>
+<table class="sortable" data-sortable="1">
   <colgroup>
     <col class="col-del"><col class="col-nombre"><col class="col-ubic"><col class="col-puesto">
     <col class="col-sueldo"><col class="col-extras"><col class="col-total"><col class="col-firma">
   </colgroup>
   <thead>
     <tr>
-      <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th><th class="col-nombre">Nombre</th><th>Ubic</th><th>Puesto</th>
-      <th>Sueldo</th><th>Extras</th><th>Total</th><th>Firma</th>
+      <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
+      <th class="col-nombre" data-sort-col="1">Nombre</th>
+      <th data-sort-col="2">Ubic</th><th data-sort-col="3">Puesto</th>
+      <th data-sort-col="4">Sueldo</th><th data-sort-col="5">Extras</th>
+      <th data-sort-col="6">Total</th><th>Firma</th>
     </tr>
   </thead>
   <tbody>
@@ -128,6 +131,7 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/table_sort.js?v=3178"></script>
 <style>
 .badge-fijo{background:#2e7d32;color:#fff;padding:0.1rem 0.35rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem}
 .badge-var{background:#5c6bc0;color:#fff;padding:0.1rem 0.35rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem}

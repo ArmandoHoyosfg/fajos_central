@@ -391,13 +391,225 @@ class TrabajadoresRepo(BaseRepo):
                 counts["semanas"] = int((cur.fetchone() or {}).get("n") or 0)
         except Exception:
             pass
+
+        orphans = self.listar_huerfanos()
+        migrations = self.migraciones_pendientes()
+        folios_dup = self.folios_duplicados()
+        semana_info = self.semana_actual_info()
+
         return {
             "mismatches": mismatches,
             "sample_vela": sample_vela,
             "columns": columns,
             "n_mismatches": len(mismatches),
             "counts": counts,
+            "orphans": orphans,
+            "n_orphans": len(orphans),
+            "migrations": migrations,
+            "folios_duplicados": folios_dup,
+            "n_folios_dup": len(folios_dup),
+            "semana_actual": semana_info,
         }
+
+    def listar_huerfanos(self) -> list[dict]:
+        """Filas sin trabajador_id válido o con id inexistente."""
+        out: list[dict] = []
+        with self.db.cursor() as cur:
+            for area, table in (
+                ("plata", "produccion_plata"),
+                ("pita", "produccion_pita"),
+                ("taller", "nomina_taller"),
+            ):
+                try:
+                    cur.execute(
+                        f"""
+                        SELECT p.id AS prod_id, p.nombre, p.ubic, p.trabajador_id,
+                               tr.id AS cat_id
+                        FROM {table} p
+                        LEFT JOIN trabajadores tr ON tr.id = p.trabajador_id
+                        WHERE p.trabajador_id IS NULL OR p.trabajador_id = 0 OR tr.id IS NULL
+                        LIMIT 200
+                        """
+                    )
+                    for r in cur.fetchall() or []:
+                        row = dict(r)
+                        row["area"] = area
+                        out.append(row)
+                except Exception as e:
+                    out.append({"area": area, "prod_id": "?", "nombre": str(e)})
+        return out
+
+    def reparar_huerfanos(self) -> dict:
+        """
+        Enlaza filas huérfanas a trabajadores por nombre_mostrar + ubic exactos.
+        No inventa trabajadores nuevos.
+        """
+        linked = {"plata": 0, "pita": 0, "taller": 0, "sin_match": 0}
+        with self.db.cursor() as cur:
+            for area, table in (
+                ("plata", "produccion_plata"),
+                ("pita", "produccion_pita"),
+                ("taller", "nomina_taller"),
+            ):
+                try:
+                    cur.execute(
+                        f"""
+                        SELECT p.id, p.nombre, p.ubic
+                        FROM {table} p
+                        LEFT JOIN trabajadores tr ON tr.id = p.trabajador_id
+                        WHERE p.trabajador_id IS NULL OR p.trabajador_id = 0 OR tr.id IS NULL
+                        """
+                    )
+                    rows = list(cur.fetchall() or [])
+                except Exception:
+                    continue
+                for r in rows:
+                    cur.execute(
+                        """
+                        SELECT id FROM trabajadores
+                        WHERE nombre_mostrar = %s AND ubic = %s
+                        LIMIT 1
+                        """,
+                        (r.get("nombre"), r.get("ubic")),
+                    )
+                    hit = cur.fetchone()
+                    if not hit:
+                        linked["sin_match"] += 1
+                        continue
+                    tid = int(hit["id"])
+                    cur.execute(
+                        f"UPDATE {table} SET trabajador_id = %s WHERE id = %s",
+                        (tid, r["id"]),
+                    )
+                    linked[area] += max(0, cur.rowcount or 0)
+            try:
+                self.db.connect().commit()
+            except Exception:
+                pass
+        return linked
+
+    def migraciones_pendientes(self) -> list[dict]:
+        """Columnas esperadas por versión vs information_schema."""
+        expected = [
+            ("trabajadores", "sueldo_modo", "003_taller_fijo_folio_qr.sql"),
+            ("trabajadores", "sueldo_base", "003_taller_fijo_folio_qr.sql"),
+            ("trabajadores", "codigo_qr", "003_taller_fijo_folio_qr.sql"),
+            ("trabajos", "terminado_en", "003_taller_fijo_folio_qr.sql"),
+        ]
+        missing = []
+        with self.db.cursor() as cur:
+            for table, col, script in expected:
+                try:
+                    cur.execute(
+                        """
+                        SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = %s AND COLUMN_NAME = %s
+                        """,
+                        (table, col),
+                    )
+                    n = int((cur.fetchone() or {}).get("n") or 0)
+                    if n == 0:
+                        missing.append({
+                            "table": table,
+                            "column": col,
+                            "script": script,
+                            "status": "faltante",
+                        })
+                    else:
+                        missing.append({
+                            "table": table,
+                            "column": col,
+                            "script": script,
+                            "status": "ok",
+                        })
+                except Exception as e:
+                    missing.append({
+                        "table": table,
+                        "column": col,
+                        "script": script,
+                        "status": f"error: {e}",
+                    })
+        return missing
+
+    def folios_duplicados(self, semana_id: int | None = None) -> list[dict]:
+        """
+        Folios no vacíos usados por más de un trabajador_id distinto
+        (misma semana si se indica; si no, global).
+        """
+        out: list[dict] = []
+        sql = """
+            SELECT p.folio, p.semana_id, s.codigo AS semana_codigo,
+                   COUNT(DISTINCT p.trabajador_id) AS n_trabajadores,
+                   GROUP_CONCAT(DISTINCT CONCAT(p.nombre, ' [', p.ubic, ']')
+                                ORDER BY p.nombre SEPARATOR ' | ') AS quienes,
+                   GROUP_CONCAT(DISTINCT p.trabajador_id) AS ids
+            FROM produccion_plata p
+            LEFT JOIN semanas s ON s.id = p.semana_id
+            WHERE p.folio IS NOT NULL AND TRIM(p.folio) <> ''
+        """
+        params: list = []
+        if semana_id:
+            sql += " AND p.semana_id = %s"
+            params.append(semana_id)
+        sql += """
+            GROUP BY p.folio, p.semana_id, s.codigo
+            HAVING COUNT(DISTINCT p.trabajador_id) > 1
+            ORDER BY p.semana_id DESC, p.folio
+            LIMIT 100
+        """
+        with self.db.cursor() as cur:
+            try:
+                cur.execute(sql, params)
+                out = [dict(r) for r in (cur.fetchall() or [])]
+            except Exception:
+                out = []
+        return out
+
+    def semana_actual_info(self) -> dict:
+        """Rango sáb–vie de hoy y si existe semana en BD."""
+        from app.core.calendar_util import sugerir_codigo_semana, today
+        codigo, sab, vie = sugerir_codigo_semana()
+        info = {
+            "hoy": today().isoformat(),
+            "codigo": codigo,
+            "fecha_inicio": sab.isoformat(),
+            "fecha_fin": vie.isoformat(),
+            "existe": False,
+            "semana_id": None,
+            "cerrada": None,
+        }
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, codigo, fecha_inicio, fecha_fin, cerrada
+                    FROM semanas
+                    WHERE fecha_inicio = %s AND fecha_fin = %s
+                    LIMIT 1
+                    """,
+                    (sab.isoformat(), vie.isoformat()),
+                )
+                row = cur.fetchone()
+                if not row:
+                    cur.execute(
+                        """
+                        SELECT id, codigo, fecha_inicio, fecha_fin, cerrada
+                        FROM semanas
+                        WHERE codigo = %s AND anio = %s
+                        LIMIT 1
+                        """,
+                        (codigo, sab.year),
+                    )
+                    row = cur.fetchone()
+                if row:
+                    info["existe"] = True
+                    info["semana_id"] = int(row["id"])
+                    info["cerrada"] = bool(row.get("cerrada"))
+                    info["codigo_bd"] = row.get("codigo")
+        except Exception as e:
+            info["error"] = str(e)
+        return info
 
     def sincronizar_todos_denormalizados(self) -> dict:
         """Repara todas las líneas ligadas a un trabajador_id válido."""

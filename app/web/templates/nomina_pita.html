@@ -55,7 +55,7 @@
   </form>
 </div>
 <div class="table-wrap table-compact">
-<table>
+<table class="sortable" data-sortable="1">
   <colgroup>
     <col class="col-del"><col class="col-nombre"><col class="col-ubic"><col class="col-modelo"><col class="col-folio">
     <col class="col-mat"><col class="col-prod"><col class="col-pitas"><col class="col-efec"><col class="col-firma">
@@ -63,8 +63,10 @@
   <thead>
     <tr>
       <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
-      <th class="col-nombre">Nombre</th><th>Ubic</th><th>Modelo</th><th>Folio</th>
-      <th>Material</th><th>Producto</th><th>Pitas</th><th>Efectivo</th><th>Firma</th>
+      <th class="col-nombre" data-sort-col="1">Nombre</th>
+      <th data-sort-col="2">Ubic</th><th data-sort-col="3">Modelo</th><th data-sort-col="4">Folio</th>
+      <th data-sort-col="5">Material</th><th data-sort-col="6">Producto</th>
+      <th data-sort-col="7">Pitas</th><th data-sort-col="8">Efectivo</th><th>Firma</th>
     </tr>
   </thead>
   <tbody>
@@ -139,6 +141,7 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/table_sort.js?v=3178"></script>
 <script src="/static/semana_ops.js?v=3122"></script>
 <script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "pit";</script>
 
