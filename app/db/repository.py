@@ -192,28 +192,48 @@ class TrabajadoresRepo(BaseRepo):
         ubic_ant: int | None = None,
     ) -> dict:
         """
-        Copia nombre_mostrar, ubic (y puesto en taller) del catálogo hacia:
-        produccion_plata, produccion_pita, nomina_taller.
-
-        1) Por trabajador_id (preferido)
-        2) Filas huérfanas con el nombre+ubic anteriores (si se pasan)
+        Copia nombre_mostrar/ubic del catálogo a Plata, Pita y Taller.
+        Actualiza por trabajador_id y también por nombre exacto (mismo trabajador).
         """
         t = self.obtener(trabajador_id)
         nombre = t.get("nombre_mostrar")
         ubic = t.get("ubic")
         puesto = t.get("puesto")
-        counts = {"plata": 0, "pita": 0, "taller": 0, "orphans": 0}
+        counts = {"plata": 0, "pita": 0, "taller": 0, "orphans": 0, "by_name": 0}
         with self.db.cursor() as cur:
+            # --- Plata por id ---
             cur.execute(
                 """
                 UPDATE produccion_plata
                    SET nombre = %s, ubic = %s
                  WHERE trabajador_id = %s
+                   AND (nombre <> %s OR ubic <> %s OR nombre IS NULL OR ubic IS NULL)
                 """,
-                (nombre, ubic, trabajador_id),
+                (nombre, ubic, trabajador_id, nombre, ubic),
             )
-            counts["plata"] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+            counts["plata"] = max(0, cur.rowcount or 0)
 
+            # --- Plata por nombre exacto (corrige filas con id incorrecto o desfasado) ---
+            # Solo si el nombre_mostrar es único en catálogo
+            cur.execute(
+                "SELECT COUNT(*) AS n FROM trabajadores WHERE nombre_mostrar = %s AND activo = 1",
+                (nombre,),
+            )
+            n_name = int((cur.fetchone() or {}).get("n") or 0)
+            if n_name == 1 and nombre:
+                cur.execute(
+                    """
+                    UPDATE produccion_plata
+                       SET nombre = %s, ubic = %s, trabajador_id = %s
+                     WHERE nombre = %s
+                       AND (trabajador_id IS NULL OR trabajador_id = 0 OR trabajador_id = %s
+                            OR ubic <> %s)
+                    """,
+                    (nombre, ubic, trabajador_id, nombre, trabajador_id, ubic),
+                )
+                counts["by_name"] += max(0, cur.rowcount or 0)
+
+            # --- Pita ---
             cur.execute(
                 """
                 UPDATE produccion_pita
@@ -222,8 +242,21 @@ class TrabajadoresRepo(BaseRepo):
                 """,
                 (nombre, ubic, trabajador_id),
             )
-            counts["pita"] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+            counts["pita"] = max(0, cur.rowcount or 0)
+            if n_name == 1 and nombre:
+                cur.execute(
+                    """
+                    UPDATE produccion_pita
+                       SET nombre = %s, ubic = %s, trabajador_id = %s
+                     WHERE nombre = %s
+                       AND (trabajador_id IS NULL OR trabajador_id = 0 OR trabajador_id = %s
+                            OR ubic <> %s)
+                    """,
+                    (nombre, ubic, trabajador_id, nombre, trabajador_id, ubic),
+                )
+                counts["by_name"] += max(0, cur.rowcount or 0)
 
+            # --- Taller ---
             cur.execute(
                 """
                 UPDATE nomina_taller
@@ -232,42 +265,127 @@ class TrabajadoresRepo(BaseRepo):
                 """,
                 (nombre, ubic, puesto, trabajador_id),
             )
-            counts["taller"] = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+            counts["taller"] = max(0, cur.rowcount or 0)
 
-            # Huérfanas: mismo nombre+ubic viejos, sin trabajador_id o con NULL
+            # --- Huérfanas con nombre+ubic anteriores ---
             if nombre_ant is not None and ubic_ant is not None:
-                for table in ("produccion_plata", "produccion_pita", "nomina_taller"):
+                for table, extra in (
+                    ("produccion_plata", ""),
+                    ("produccion_pita", ""),
+                    ("nomina_taller", ", puesto = COALESCE(%s, puesto)"),
+                ):
                     if table == "nomina_taller":
                         cur.execute(
                             f"""
                             UPDATE {table}
-                               SET nombre = %s, ubic = %s, trabajador_id = %s,
-                                   puesto = COALESCE(%s, puesto)
-                             WHERE (trabajador_id IS NULL OR trabajador_id = 0)
-                               AND nombre = %s AND ubic = %s
+                               SET nombre = %s, ubic = %s, trabajador_id = %s
+                                   {extra}
+                             WHERE nombre = %s AND ubic = %s
+                               AND (trabajador_id IS NULL OR trabajador_id = 0 OR trabajador_id = %s)
                             """,
-                            (nombre, ubic, trabajador_id, puesto, nombre_ant, ubic_ant),
+                            (nombre, ubic, trabajador_id, puesto, nombre_ant, ubic_ant, trabajador_id),
                         )
                     else:
                         cur.execute(
                             f"""
                             UPDATE {table}
                                SET nombre = %s, ubic = %s, trabajador_id = %s
-                             WHERE (trabajador_id IS NULL OR trabajador_id = 0)
-                               AND nombre = %s AND ubic = %s
+                             WHERE nombre = %s AND ubic = %s
+                               AND (trabajador_id IS NULL OR trabajador_id = 0 OR trabajador_id = %s)
                             """,
-                            (nombre, ubic, trabajador_id, nombre_ant, ubic_ant),
+                            (nombre, ubic, trabajador_id, nombre_ant, ubic_ant, trabajador_id),
                         )
-                    n = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
-                    counts["orphans"] += n
-                    # También filas con trabajador_id ya correcto ya actualizadas;
-                    # filas con OTRO id no se tocan.
+                    counts["orphans"] += max(0, cur.rowcount or 0)
 
-                # Filas que aún tienen el ubic/nombre viejos pero YA tienen este trabajador_id
-                # (por si el UPDATE por id falló parcialmente) — redundante pero seguro
+            # Forzar commit si el driver no autocommitea en este cursor
+            try:
+                self.db.connect().commit()
+            except Exception:
                 pass
 
         return counts
+
+
+    def diagnostico_sync(self) -> dict:
+        """Desajustes catálogo vs nóminas + muestra Vela + tipos de columna."""
+        mismatches: list[dict] = []
+        sample_vela: list[dict] = []
+        columns: list[dict] = []
+        with self.db.cursor() as cur:
+            for area, table in (
+                ("plata", "produccion_plata"),
+                ("pita", "produccion_pita"),
+                ("taller", "nomina_taller"),
+            ):
+                try:
+                    cur.execute(
+                        f"""
+                        SELECT p.id AS prod_id, p.trabajador_id, p.nombre AS nombre_fila, p.ubic AS ubic_fila,
+                               tr.nombre_mostrar AS cat_nombre, tr.ubic AS cat_ubic
+                        FROM {table} p
+                        LEFT JOIN trabajadores tr ON tr.id = p.trabajador_id
+                        WHERE tr.id IS NOT NULL
+                          AND (p.nombre <> tr.nombre_mostrar OR p.ubic <> tr.ubic)
+                        LIMIT 100
+                        """
+                    )
+                    for r in cur.fetchall() or []:
+                        r = dict(r)
+                        r["area"] = area
+                        mismatches.append(r)
+                except Exception as e:
+                    mismatches.append({"area": area, "prod_id": "?", "nombre_fila": str(e)})
+
+            try:
+                cur.execute(
+                    """
+                    SELECT id, nombre_mostrar AS nombre, ubic, tipo AS extra, id AS trabajador_id
+                    FROM trabajadores
+                    WHERE nombre_mostrar LIKE %s OR nombre_completo LIKE %s
+                    LIMIT 20
+                    """,
+                    ("%Vela%", "%Vela%"),
+                )
+                for r in cur.fetchall() or []:
+                    sample_vela.append({**dict(r), "src": "trabajadores"})
+            except Exception:
+                pass
+            try:
+                cur.execute(
+                    """
+                    SELECT id, nombre, ubic, trabajador_id, folio AS extra
+                    FROM produccion_plata
+                    WHERE nombre LIKE %s
+                    LIMIT 30
+                    """,
+                    ("%Vela%",),
+                )
+                for r in cur.fetchall() or []:
+                    sample_vela.append({**dict(r), "src": "produccion_plata"})
+            except Exception:
+                pass
+            try:
+                cur.execute(
+                    """
+                    SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, IS_NULLABLE, COLUMN_KEY
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME IN (
+                        'trabajadores','produccion_plata','produccion_pita','nomina_taller',
+                        'trabajos','semanas'
+                      )
+                    ORDER BY TABLE_NAME, ORDINAL_POSITION
+                    """
+                )
+                columns = [dict(r) for r in (cur.fetchall() or [])]
+            except Exception:
+                columns = []
+        return {
+            "mismatches": mismatches,
+            "sample_vela": sample_vela,
+            "columns": columns,
+            "n_mismatches": len(mismatches),
+        }
 
     def sincronizar_todos_denormalizados(self) -> dict:
         """Repara todas las líneas ligadas a un trabajador_id válido."""
@@ -441,18 +559,39 @@ class ProduccionRepo(BaseRepo):
             return cur.fetchone()
 
     def listar_por_semana(self, semana_id: int) -> list[dict]:
+        """Lista producción; nombre/ubic preferidos del catálogo si hay trabajador_id."""
         sql = """
-            SELECT id, semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo,
-                   material, tarifa_gr,
-                   gm_sab, gm_dom, gm_lun, gm_mar, gm_mie, gm_jue, gm_vie,
-                   total_gramos, efectivo, firmado, notas
-            FROM produccion_plata
-            WHERE semana_id = %s
-            ORDER BY nombre, ubic, id
+            SELECT p.id, p.semana_id, p.trabajador_id, p.trabajo_id,
+                   COALESCE(tr.nombre_mostrar, p.nombre) AS nombre,
+                   COALESCE(tr.ubic, p.ubic) AS ubic,
+                   p.folio, p.modelo, p.material, p.tarifa_gr,
+                   p.gm_sab, p.gm_dom, p.gm_lun, p.gm_mar, p.gm_mie, p.gm_jue, p.gm_vie,
+                   p.total_gramos, p.efectivo, p.firmado, p.notas,
+                   p.nombre AS nombre_guardado, p.ubic AS ubic_guardada,
+                   tr.nombre_mostrar AS cat_nombre, tr.ubic AS cat_ubic
+            FROM produccion_plata p
+            LEFT JOIN trabajadores tr ON tr.id = p.trabajador_id
+            WHERE p.semana_id = %s
+            ORDER BY COALESCE(tr.nombre_mostrar, p.nombre), COALESCE(tr.ubic, p.ubic), p.id
         """
         with self.db.cursor() as cur:
-            cur.execute(sql, (semana_id,))
-            return list(cur.fetchall())
+            try:
+                cur.execute(sql, (semana_id,))
+                return list(cur.fetchall() or [])
+            except Exception:
+                cur.execute(
+                    """
+                    SELECT id, semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo,
+                           material, tarifa_gr,
+                           gm_sab, gm_dom, gm_lun, gm_mar, gm_mie, gm_jue, gm_vie,
+                           total_gramos, efectivo, firmado, notas
+                    FROM produccion_plata
+                    WHERE semana_id = %s
+                    ORDER BY nombre, ubic, id
+                    """,
+                    (semana_id,),
+                )
+                return list(cur.fetchall() or [])
 
     def insertar(self, semana_id: int, data: dict) -> int:
         from app.services.audit_service import AuditService
@@ -1143,14 +1282,17 @@ class NominaTallerRepo(BaseRepo):
             try:
                 cur.execute(
                     """
-                    SELECT n.id, n.semana_id, n.trabajador_id, n.nombre, n.ubic, n.puesto,
+                    SELECT n.id, n.semana_id, n.trabajador_id,
+                           COALESCE(tr.nombre_mostrar, n.nombre) AS nombre,
+                           COALESCE(tr.ubic, n.ubic) AS ubic,
+                           COALESCE(tr.puesto, n.puesto) AS puesto,
                            n.sueldo, n.extras, n.total, n.firmado, n.notas,
                            COALESCE(tr.sueldo_modo, 'variable') AS sueldo_modo,
                            tr.sueldo_base
                     FROM nomina_taller n
                     LEFT JOIN trabajadores tr ON tr.id = n.trabajador_id
                     WHERE n.semana_id = %s
-                    ORDER BY n.ubic, n.nombre
+                    ORDER BY COALESCE(tr.ubic, n.ubic), COALESCE(tr.nombre_mostrar, n.nombre)
                     """,
                     (semana_id,),
                 )
@@ -1233,11 +1375,15 @@ class ProduccionPitaRepo(BaseRepo):
         with self.db.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, semana_id, trabajador_id, nombre, ubic, modelo, folio,
-                       material, producto, pitas, efectivo, firmado, notas
-                FROM produccion_pita
-                WHERE semana_id = %s
-                ORDER BY ubic, nombre
+                SELECT p.id, p.semana_id, p.trabajador_id,
+                       COALESCE(tr.nombre_mostrar, p.nombre) AS nombre,
+                       COALESCE(tr.ubic, p.ubic) AS ubic,
+                       p.modelo, p.folio, p.material, p.producto, p.pitas, p.efectivo,
+                       p.firmado, p.notas
+                FROM produccion_pita p
+                LEFT JOIN trabajadores tr ON tr.id = p.trabajador_id
+                WHERE p.semana_id = %s
+                ORDER BY COALESCE(tr.ubic, p.ubic), COALESCE(tr.nombre_mostrar, p.nombre)
                 """,
                 (semana_id,),
             )

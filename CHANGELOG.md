@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.6] — 2026-08-26
+
+### Sync real + lectura desde catálogo + Dev
+- **Plata/Pita/Taller**: al listar, `nombre`/`ubic` salen del catálogo (`JOIN trabajadores`)
+- Sync más agresivo: por `trabajador_id` y por nombre único
+- Página **Dev** (`/dev`): desajustes, muestra Vela, tipos de columna, botón sincronizar
+- Commit explícito tras sync
+
 ## [3.17.5] — 2026-08-26
 
 ### Sincronización catálogo → nóminas

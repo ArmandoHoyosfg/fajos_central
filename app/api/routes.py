@@ -83,6 +83,58 @@ async def page_dashboard(
     )
 
 
+
+@router.get("/dev", response_class=HTMLResponse)
+async def page_dev(
+    request: Request,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    from app.web.debug_pages import render_debug_page
+    from app.services.dashboard_service import check_db
+    error = None
+    data = {"mismatches": [], "sample_vela": [], "columns": []}
+    try:
+        data = repo.diagnostico_sync()
+    except Exception as e:
+        error = str(e)
+    return render_debug_page(
+        db_ok=check_db(),
+        columns=data.get("columns") or [],
+        mismatches=data.get("mismatches") or [],
+        sample_vela=data.get("sample_vela") or [],
+        error=error,
+    )
+
+
+@router.post("/dev/sync", response_class=HTMLResponse)
+async def page_dev_sync(
+    request: Request,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    from app.web.debug_pages import render_debug_page
+    from app.services.dashboard_service import check_db
+    sync_result = None
+    error = None
+    try:
+        sync_result = repo.sincronizar_todos_denormalizados()
+        data = repo.diagnostico_sync()
+    except Exception as e:
+        error = str(e)
+        data = {"mismatches": [], "sample_vela": [], "columns": []}
+        try:
+            data = repo.diagnostico_sync()
+        except Exception:
+            pass
+    return render_debug_page(
+        db_ok=check_db(),
+        columns=data.get("columns") or [],
+        mismatches=data.get("mismatches") or [],
+        sample_vela=data.get("sample_vela") or [],
+        sync_result=sync_result,
+        error=error,
+    )
+
+
 @router.get("/trabajadores", response_class=HTMLResponse)
 async def page_trabajadores(
     request: Request,
