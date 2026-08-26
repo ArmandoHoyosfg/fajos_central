@@ -1708,3 +1708,24 @@ td.col-actions,
   font-size: 11px !important;
   letter-spacing: -1px;
 }
+
+
+/* Badge Dev junto a versión / LAN (no en el menú principal) */
+.dev-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  color: #cba6f7;
+  border: 1px solid rgba(203, 166, 247, 0.45);
+  background: rgba(203, 166, 247, 0.12);
+  white-space: nowrap;
+}
+.dev-badge:hover {
+  background: rgba(203, 166, 247, 0.22);
+  color: #e0d0ff;
+}

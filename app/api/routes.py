@@ -91,17 +91,30 @@ async def page_dev(
 ):
     from app.web.debug_pages import render_debug_page
     from app.services.dashboard_service import check_db
+    from app import __version__
     error = None
-    data = {"mismatches": [], "sample_vela": [], "columns": []}
+    data: dict = {"mismatches": [], "sample_vela": [], "columns": [], "counts": {}}
     try:
         data = repo.diagnostico_sync()
     except Exception as e:
         error = str(e)
+    lan = ""
+    try:
+        from app.core.network import lan_urls
+        from app.core.config import get_settings
+        s = get_settings()
+        port = int(getattr(s, "app_port", 8000) or 8000)
+        urls = lan_urls(port=port)
+        lan = f"{urls.get('ip')}:{port}"
+    except Exception:
+        lan = "—"
     return render_debug_page(
         db_ok=check_db(),
         columns=data.get("columns") or [],
         mismatches=data.get("mismatches") or [],
         sample_vela=data.get("sample_vela") or [],
+        meta={"version": __version__, "lan": lan},
+        counts=data.get("counts") or {},
         error=error,
     )
 
@@ -113,23 +126,36 @@ async def page_dev_sync(
 ):
     from app.web.debug_pages import render_debug_page
     from app.services.dashboard_service import check_db
+    from app import __version__
     sync_result = None
     error = None
+    data: dict = {"mismatches": [], "sample_vela": [], "columns": [], "counts": {}}
     try:
         sync_result = repo.sincronizar_todos_denormalizados()
         data = repo.diagnostico_sync()
     except Exception as e:
         error = str(e)
-        data = {"mismatches": [], "sample_vela": [], "columns": []}
         try:
             data = repo.diagnostico_sync()
         except Exception:
             pass
+    lan = ""
+    try:
+        from app.core.network import lan_urls
+        from app.core.config import get_settings
+        s = get_settings()
+        port = int(getattr(s, "app_port", 8000) or 8000)
+        urls = lan_urls(port=port)
+        lan = f"{urls.get('ip')}:{port}"
+    except Exception:
+        lan = "—"
     return render_debug_page(
         db_ok=check_db(),
         columns=data.get("columns") or [],
         mismatches=data.get("mismatches") or [],
         sample_vela=data.get("sample_vela") or [],
+        meta={"version": __version__, "lan": lan},
+        counts=data.get("counts") or {},
         sync_result=sync_result,
         error=error,
     )

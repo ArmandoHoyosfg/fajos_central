@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.7] — 2026-08-26
+
+### Panel Dev reubicado y útil
+- Acceso **solo** junto a versión / IP (badge), fuera del menú de captura
+- Panel con KPIs (BD, desajustes, conteos), integridad, esquema, acciones de sync
+- Sin botón Dev duplicado en Trabajadores ni en la nav principal
+
 ## [3.17.6] — 2026-08-26
 
 ### Sync real + lectura desde catálogo + Dev

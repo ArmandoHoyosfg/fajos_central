@@ -33,6 +33,7 @@
       🌐 {{ lan_ip }}{% if app_port %}:{{ app_port }}{% endif %}
     </span>
     {% endif %}
+    <a class="dev-badge" href="/dev" title="Herramientas de diagnóstico (solo red local)">Dev</a>
     <nav class="nav">
       <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
         <i data-lucide="layout-dashboard"></i> Dashboard
@@ -60,9 +61,6 @@
       </a>
       <a href="/semanas" class="{% if '/semanas' in request.url.path %}active{% endif %}">
         <i data-lucide="calendar-range"></i> Semanas
-      </a>
-      <a href="/dev" title="Diagnóstico">
-        <i data-lucide="bug"></i> Dev
       </a>
       <a href="/docs" target="_blank" rel="noopener">
         <i data-lucide="book-open"></i> API

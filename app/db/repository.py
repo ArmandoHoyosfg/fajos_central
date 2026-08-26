@@ -380,11 +380,23 @@ class TrabajadoresRepo(BaseRepo):
                 columns = [dict(r) for r in (cur.fetchall() or [])]
             except Exception:
                 columns = []
+        counts = {"trabajadores": 0, "plata": 0, "semanas": 0}
+        try:
+            with self.db.cursor() as cur:
+                cur.execute("SELECT COUNT(*) AS n FROM trabajadores")
+                counts["trabajadores"] = int((cur.fetchone() or {}).get("n") or 0)
+                cur.execute("SELECT COUNT(*) AS n FROM produccion_plata")
+                counts["plata"] = int((cur.fetchone() or {}).get("n") or 0)
+                cur.execute("SELECT COUNT(*) AS n FROM semanas")
+                counts["semanas"] = int((cur.fetchone() or {}).get("n") or 0)
+        except Exception:
+            pass
         return {
             "mismatches": mismatches,
             "sample_vela": sample_vela,
             "columns": columns,
             "n_mismatches": len(mismatches),
+            "counts": counts,
         }
 
     def sincronizar_todos_denormalizados(self) -> dict:
