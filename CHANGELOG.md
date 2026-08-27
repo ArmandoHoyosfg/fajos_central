@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.17.10] — 2026-08-26
+
+### Fix visual tablas Plata
+- Folio duplicado: barra solo en el borde de la fila (ya no rayas rosa en cada columna)
+- Encabezados alineados con clases de columna; sin sticky lateral fantasma
+
 ## [3.17.9] — 2026-08-26
 
 ### Export Excel de trabajadores

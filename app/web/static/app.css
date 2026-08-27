@@ -1735,5 +1735,47 @@ td.col-actions,
 th[data-sort-col] { user-select: none; }
 th[data-sort-col]:hover { color: var(--accent, #f9e2af); }
 th .sort-mark { font-size: 0.7em; opacity: 0.85; }
-tr.folio-dup td { box-shadow: inset 3px 0 0 #f38ba8; }
-tr.folio-dup td.col-folio { color: #f38ba8; font-weight: 600; }
+/* Folio duplicado: una sola marca de fila, sin rayas en cada celda */
+tr.folio-dup > td:first-child {
+  box-shadow: inset 3px 0 0 #f38ba8;
+}
+tr.folio-dup {
+  background: color-mix(in srgb, #f38ba8 7%, transparent);
+}
+tr.folio-dup td.col-folio,
+tr.folio-dup [data-field="folio"] {
+  color: #f38ba8;
+  font-weight: 600;
+}
+
+/* Plata: sin sticky lateral (evita columna fantasma / desalineación) */
+.table-wrap.table-plt th,
+.table-wrap.table-plt td {
+  position: static !important;
+  left: auto !important;
+}
+.table-wrap.table-plt thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 5;
+}
+.table-wrap.table-plt {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.table-wrap.table-plt table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+/* Encabezados de día centrados, sin desbordar */
+.table-wrap.table-plt th[data-sort-col] {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+.table-wrap.table-plt th .sort-mark {
+  font-size: 0.65em;
+  opacity: 0.7;
+}
