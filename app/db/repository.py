@@ -1569,7 +1569,14 @@ class NominaTallerRepo(BaseRepo):
                            COALESCE(tr.sueldo_modo, 'variable') AS sueldo_modo,
                            tr.sueldo_base
                     FROM nomina_taller n
-                    LEFT JOIN trabajadores tr ON tr.id = n.trabajador_id
+                    LEFT JOIN trabajadores tr ON (
+                        (n.trabajador_id IS NOT NULL AND tr.id = n.trabajador_id)
+                        OR (
+                            (n.trabajador_id IS NULL OR n.trabajador_id = 0)
+                            AND tr.nombre_mostrar = n.nombre
+                            AND tr.ubic = n.ubic
+                        )
+                    )
                     WHERE n.semana_id = %s
                     ORDER BY
                       CASE WHEN LOWER(COALESCE(tr.puesto, n.puesto, '')) LIKE '%%torcedor%%' THEN 1 ELSE 0 END,
@@ -1591,13 +1598,77 @@ class NominaTallerRepo(BaseRepo):
                     (semana_id,),
                 )
                 rows = list(cur.fetchall() or [])
-            for r in rows:
-                r.setdefault("sueldo_modo", "variable")
-                r.setdefault("sueldo_base", None)
-                r.setdefault("pitas", None)
-                r.setdefault("precio_pita", self.PRECIO_PITA_DEFAULT)
-                r["es_torcedor"] = self.es_torcedor(r.get("puesto"))
+            return self._enriquecer_taller_lineas(rows)
+
+
+    def _enriquecer_taller_lineas(self, rows: list[dict]) -> list[dict]:
+        """
+        Asegura sueldo_modo/sueldo_base desde el catálogo.
+        Si falta trabajador_id, intenta enlazar por nombre + ubic y lo guarda.
+        """
+        if not rows:
             return rows
+        # índice de trabajadores
+        by_id: dict[int, dict] = {}
+        by_key: dict[tuple, dict] = {}
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, nombre_mostrar, ubic, puesto, sueldo_modo, sueldo_base, tipo, activo
+                    FROM trabajadores
+                    """
+                )
+                for t in cur.fetchall() or []:
+                    by_id[int(t["id"])] = t
+                    k = (
+                        str(t.get("nombre_mostrar") or "").strip().lower(),
+                        int(t.get("ubic") or 0),
+                    )
+                    by_key[k] = t
+        except Exception:
+            pass
+
+        for r in rows:
+            tid = r.get("trabajador_id")
+            t = by_id.get(int(tid)) if tid is not None else None
+            if t is None:
+                k = (
+                    str(r.get("nombre") or "").strip().lower(),
+                    int(r.get("ubic") or 0),
+                )
+                t = by_key.get(k)
+                if t is not None:
+                    r["trabajador_id"] = int(t["id"])
+                    # backfill silencioso
+                    try:
+                        with self.db.cursor() as cur:
+                            cur.execute(
+                                "UPDATE nomina_taller SET trabajador_id=%s WHERE id=%s AND (trabajador_id IS NULL OR trabajador_id=0)",
+                                (int(t["id"]), int(r["id"])),
+                            )
+                    except Exception:
+                        pass
+            if t is not None:
+                modo = str(t.get("sueldo_modo") or "variable").strip().lower()
+                r["sueldo_modo"] = "fijo" if modo == "fijo" else "variable"
+                r["sueldo_base"] = t.get("sueldo_base")
+                if not r.get("puesto") and t.get("puesto"):
+                    r["puesto"] = t.get("puesto")
+            else:
+                modo = str(r.get("sueldo_modo") or "variable").strip().lower()
+                r["sueldo_modo"] = "fijo" if modo == "fijo" else "variable"
+                r.setdefault("sueldo_base", None)
+            r.setdefault("pitas", None)
+            r.setdefault("precio_pita", self.PRECIO_PITA_DEFAULT)
+            r["es_torcedor"] = self.es_torcedor(r.get("puesto"))
+            # Si es fijo y la línea tiene sueldo 0 pero hay base, sugerir base en UI (no forzar overwrite)
+            try:
+                if r["sueldo_modo"] == "fijo" and float(r.get("sueldo") or 0) == 0 and r.get("sueldo_base") is not None:
+                    r["sueldo_sugerido"] = float(r["sueldo_base"])
+            except (TypeError, ValueError):
+                pass
+        return rows
 
     def totales(self, semana_id: int) -> dict:
         with self.db.cursor() as cur:
@@ -1634,8 +1705,34 @@ class NominaTallerRepo(BaseRepo):
         data["sueldo"] = round(pitas * precio, 2)
         return data
 
+    def _resolve_trabajador_id(self, data: dict) -> dict:
+        if data.get("trabajador_id"):
+            return data
+        nombre = str(data.get("nombre") or "").strip()
+        ubic = data.get("ubic")
+        if not nombre or ubic is None:
+            return data
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    "SELECT id, sueldo_modo, sueldo_base, puesto FROM trabajadores WHERE nombre_mostrar=%s AND ubic=%s LIMIT 1",
+                    (nombre, int(ubic)),
+                )
+                t = cur.fetchone()
+                if t:
+                    data = dict(data)
+                    data["trabajador_id"] = int(t["id"])
+                    if not data.get("puesto") and t.get("puesto"):
+                        data["puesto"] = t.get("puesto")
+                    if data.get("sueldo") in (None, "", 0, 0.0) and str(t.get("sueldo_modo") or "").lower() == "fijo" and t.get("sueldo_base") is not None:
+                        data["sueldo"] = float(t["sueldo_base"])
+        except Exception:
+            pass
+        return data
+
     def insertar(self, semana_id: int, data: dict) -> int:
-        data = self._calc_torcedor(dict(data))
+        data = self._resolve_trabajador_id(dict(data))
+        data = self._calc_torcedor(data)
         with self.db.cursor() as cur:
             try:
                 cur.execute(

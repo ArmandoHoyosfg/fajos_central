@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.9] — 2026-08-28
+
+### Taller: sueldo fijo desde catálogo
+- Badge Fijo/Var ya toma `sueldo_modo` del trabajador aunque falte `trabajador_id` en la línea
+- Enlace automático por nombre + ubicación
+- Al agregar línea, resuelve trabajador y copia sueldo base si es fijo
+
 ## [3.18.8] — 2026-08-28
 
 ### Torcedores en nómina Taller

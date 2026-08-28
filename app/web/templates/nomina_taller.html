@@ -92,7 +92,7 @@
         </div>
       </td>
       <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
-          ondblclick='openEditTll({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}{% if (r.sueldo_modo or 'variable') == 'fijo' %} <span class="badge-fijo">Fijo</span>{% else %} <span class="badge-var">Var</span>{% endif %}</td>
+          ondblclick='openEditTll({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}{% set _modo = (r.sueldo_modo or 'variable')|string|lower %}{% if _modo == 'fijo' %} <span class="badge-fijo" title="Sueldo fijo del catálogo{% if r.sueldo_base %} · base ${{ '%.2f'|format(r.sueldo_base|float) }}{% endif %}">Fijo</span>{% else %} <span class="badge-var" title="Sueldo variable — llenar cada semana">Var</span>{% endif %}</td>
       <td>{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="puesto" value="{{ r.puesto or '' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint">{% if r.es_torcedor or 'torcedor' in (r.puesto or '')|lower %}<input class="cell-edit" data-field="pitas" type="number" step="1" min="0" value="{{ r.pitas if r.pitas is not none else '' }}" readonly title="Pitas × $3.20 = sueldo">{% else %}<span class="muted">—</span>{% endif %}</td>
