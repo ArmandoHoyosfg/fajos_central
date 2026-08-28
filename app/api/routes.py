@@ -1545,7 +1545,7 @@ async def page_nomina_taller(
     if semana_id is None and semanas:
         actual = next((s for s in semanas if s.get("es_actual")), None)
         semana_id = (actual or semanas[0]).get("id")
-    lineas = repo.listar_por_semana(semana_id, incluir_terminados=True) if semana_id else []
+    lineas = repo.listar_por_semana(semana_id) if semana_id else []
     totales = repo.totales(semana_id) if semana_id else {}
     trabajadores = [t for t in trab_repo.listar(solo_activos=True) if "TLL" in str(t.get("tipo") or "").upper() or "Mixto" in str(t.get("tipo") or "")]
     return templates.TemplateResponse(
@@ -1571,7 +1571,7 @@ async def page_nomina_pita(
     if semana_id is None and semanas:
         actual = next((s for s in semanas if s.get("es_actual")), None)
         semana_id = (actual or semanas[0]).get("id")
-    lineas = repo.listar_por_semana(semana_id, incluir_terminados=True) if semana_id else []
+    lineas = repo.listar_por_semana(semana_id) if semana_id else []
     totales = repo.totales(semana_id) if semana_id else {}
     trabajadores = [t for t in trab_repo.listar(solo_activos=True) if "PIT" in str(t.get("tipo") or "").upper() or "Mixto" in str(t.get("tipo") or "")]
     return templates.TemplateResponse(
