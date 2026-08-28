@@ -12,19 +12,62 @@
     <h1>Trabajadores</h1>
     <p class="muted">Alta, edición, cambios y bajas. Los inactivos no aparecen en captura nueva.</p>
   </div>
-  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-    <button type="button" class="btn" onclick="openEditId(null)">＋ Nuevo</button>
-    <a class="btn btn-secondary" href="/trabajadores/qr-lote">QR de todos</a>
-    <button type="button" class="btn btn-secondary" onclick="syncTodos()" title="Propaga nombre y ubicación del catálogo a Plata, Pita y Taller">Sincronizar nóminas</button>
-    <a class="btn btn-secondary" href="/api/export/trabajadores" title="Descargar catálogo en Excel">Excel</a>
-    <a class="btn btn-secondary" href="/api/export/trabajadores?activos=1" title="Solo activos">Excel activos</a>
-    {% if duplicados %}
-    <a class="btn btn-secondary" href="#unir-fichas">Unir fichas ({{ duplicados|length }})</a>
-    {% endif %}
-  </div>
 </div>
 
-<div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+<div class="plt-capture-bar trab-actions-bar" id="trab-actions-bar">
+  <button type="button" class="btn" onclick="openEditId(null)">＋ Nuevo</button>
+  <a class="btn btn-secondary" href="/trabajadores/qr-lote">QR de todos</a>
+  <button type="button" class="btn btn-secondary" onclick="syncTodos()" title="Propaga nombre y ubicación del catálogo a Plata, Pita y Taller">Sincronizar nóminas</button>
+  <a class="btn btn-secondary" href="/api/export/trabajadores" title="Descargar catálogo en Excel">Excel</a>
+  <a class="btn btn-secondary" href="/api/export/trabajadores?activos=1" title="Solo activos">Excel activos</a>
+  {% if duplicados %}
+  <a class="btn btn-secondary" href="#unir-fichas">Duplicados ({{ duplicados|length }})</a>
+  {% endif %}
+</div>
+<div id="toast" class="toast-web" hidden></div>
+
+{% if duplicados %}
+<details class="folio-hints-compact" id="unir-fichas">
+  <summary>
+    <span>{{ duplicados|length }} posible(s) duplicado(s)</span>
+    <span class="muted"> — unir o descartar 7 días</span>
+  </summary>
+  <div class="folio-hint-block">
+    <p class="muted" style="margin:0 0 0.4rem;font-size:0.82rem">
+      Mismo nombre, o nombres parecidos en la misma ubicación.
+      <strong>Descartar</strong> oculta la sugerencia una semana (vuelve a salir después si sigue).
+    </p>
+    {% for c in duplicados %}
+    <form class="merge-row" onsubmit="return unirFichas(event)">
+      <div class="merge-row-label">
+        <strong>{{ c.nombre }}</strong>
+        <span class="muted">· {{ c.motivo or 'posible' }} · {{ c.n }} fichas</span>
+      </div>
+      <select name="id_keep" required title="Se queda">
+        {% for d in c.detalle %}
+        <option value="{{ d.id }}" {% if loop.first %}selected{% endif %}>
+          ID {{ d.id }} · ubic {{ d.ubic }} · {{ 'act' if d.activo else 'baja' }}{% if d.tipo %} · {{ d.tipo }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <span class="muted">← keep</span>
+      <select name="id_merge" required title="Se da de baja">
+        {% for d in c.detalle %}
+        <option value="{{ d.id }}" {% if loop.index == 2 %}selected{% endif %}>
+          ID {{ d.id }} · ubic {{ d.ubic }} · {{ 'act' if d.activo else 'baja' }}{% if d.tipo %} · {{ d.tipo }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-xs">Unir</button>
+      <button type="button" class="btn btn-secondary btn-xs"
+              onclick="descartarDup({{ c.detalle[0].id }}, {{ c.detalle[1].id if c.detalle|length > 1 else c.detalle[0].id }})">Descartar</button>
+    </form>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;">
   <form class="inline" method="get" action="/trabajadores">
     <input type="search" name="q" value="{{ q or '' }}" placeholder="Buscar nombre o ubic…" style="min-width:220px;">
     <button type="submit" class="btn btn-secondary">Buscar</button>
@@ -33,43 +76,6 @@
   <input type="search" id="flt-local" placeholder="Filtro rápido…" style="min-width:160px;" oninput="filterRows()">
   <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.8rem" data-sort-reset="table.sortable">Reset orden</button>
 </div>
-<div id="toast" class="toast-web" hidden></div>
-
-{% if duplicados %}
-<section class="merge-panel" id="unir-fichas">
-  <h2>Unir fichas duplicadas</h2>
-  <p class="muted">La misma persona aparece más de una vez. Elige <strong>cuál se queda</strong> y <strong>cuál se da de baja</strong>.
-  Las nóminas (Plata, Pita, Taller y folios) de la ficha que se da de baja pasan a la principal. No se borra historial.</p>
-  {% for c in duplicados %}
-  <form class="merge-form" onsubmit="return unirFichas(event)">
-    <p class="merge-name">{{ c.nombre }} <span class="muted">· {{ c.n }} fichas</span></p>
-    <div class="merge-grid">
-      <label>
-        <span>Se queda (principal)</span>
-        <select name="id_keep" required>
-          {% for d in c.detalle %}
-          <option value="{{ d.id }}" {% if loop.first %}selected{% endif %}>
-            ID {{ d.id }} · ubic {{ d.ubic }} · {{ 'activo' if d.activo else 'baja' }}{% if d.tipo %} · {{ d.tipo }}{% endif %}
-          </option>
-          {% endfor %}
-        </select>
-      </label>
-      <label>
-        <span>Se da de baja (mover datos)</span>
-        <select name="id_merge" required>
-          {% for d in c.detalle %}
-          <option value="{{ d.id }}" {% if loop.index == 2 %}selected{% endif %}>
-            ID {{ d.id }} · ubic {{ d.ubic }} · {{ 'activo' if d.activo else 'baja' }}{% if d.tipo %} · {{ d.tipo }}{% endif %}
-          </option>
-          {% endfor %}
-        </select>
-      </label>
-    </div>
-    <button type="submit" class="btn">Unir estas fichas</button>
-  </form>
-  {% endfor %}
-</section>
-{% endif %}
 
 <div class="table-wrap no-sticky-col">
 <table class="sortable" data-sortable="1">
@@ -371,7 +377,24 @@ async function guardarSueldoBase(id, inp) {
   showToast('Sueldo base actualizado');
 }
 
+async function descartarDup(idA, idB) {
+  if (!confirm('¿Ocultar esta sugerencia durante 7 días?\nSi sigue siendo duplicado, volverá a aparecer después.')) return;
+  const fd = new FormData();
+  fd.set('id_a', idA);
+  fd.set('id_b', idB);
+  try {
+    const res = await fetch('/api/trabajadores/duplicados/descartar', { method: 'POST', body: fd });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showToast(d.error || d.message || 'No se pudo descartar', true);
+      return;
+    }
+    showToast('Sugerencia ocultada por 7 días');
+    setTimeout(() => location.reload(), 400);
+  } catch (e) { showToast('Error de red', true); }
+}
 async function unirFichas(e) {
+
   e.preventDefault();
   const form = e.target;
   const keep = form.querySelector('[name="id_keep"]').value;

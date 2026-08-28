@@ -402,40 +402,163 @@ class AprendizajeService:
             )
         return {"ok": True, "eliminados": deleted, "dias": dias}
 
+    @staticmethod
+    def _norm_nombre(s: str) -> str:
+        import unicodedata
+        s = unicodedata.normalize("NFD", (s or "").strip().lower())
+        s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+        return " ".join(s.split())
+
+    @classmethod
+    def _nombres_similares(cls, a: str, b: str) -> bool:
+        na, nb = cls._norm_nombre(a), cls._norm_nombre(b)
+        if not na or not nb:
+            return False
+        if na == nb:
+            return True
+        if na in nb or nb in na:
+            return True
+        ta, tb = na.split(), nb.split()
+        if ta and tb and ta[0] == tb[0] and len(ta[0]) >= 3:
+            # mismo primer nombre + al menos un token extra en común, o uno es solo el nombre corto
+            if len(ta) == 1 or len(tb) == 1:
+                return True
+            if set(ta) & set(tb) - {ta[0]}:
+                return True
+        return False
+
+    def _pares_descartados(self, dias: int = 7) -> set[tuple[int, int]]:
+        """Pares (id_min, id_max) descartados hace menos de N días."""
+        out: set[tuple[int, int]] = set()
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT clave, actualizado_en FROM aprendizaje_stats
+                     WHERE clave LIKE 'dup_skip_%%'
+                       AND actualizado_en >= (NOW() - INTERVAL %s DAY)
+                    """,
+                    (max(1, int(dias)),),
+                )
+                for row in cur.fetchall() or []:
+                    k = str(row.get("clave") or "")
+                    parts = k.replace("dup_skip_", "").split("_")
+                    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                        out.add((int(parts[0]), int(parts[1])))
+        except Exception:
+            pass
+        return out
+
+    def descartar_duplicado(self, id_a: int, id_b: int, dias: int = 7) -> dict:
+        """Oculta la sugerencia de fusión por N días (default 7)."""
+        a, b = sorted([int(id_a), int(id_b)])
+        if a == b:
+            return {"ok": False, "error": "IDs iguales"}
+        key = f"dup_skip_{a}_{b}"
+        self.bump_stat(key, valor_num=float(dias), valor_txt="descartado")
+        self.registrar(
+            "dup_descartado",
+            entidad="trabajador",
+            entidad_id=a,
+            payload={"id_a": a, "id_b": b, "dias": dias},
+        )
+        return {"ok": True, "id_a": a, "id_b": b, "dias": dias}
+
     def candidatos_duplicados_trabajadores(self) -> list[dict]:
         """
         Posibles duplicados:
-        - mismo nombre_mostrar con distinta ubic
-        - nombre_completo casi igual
+        - mismo nombre (sin importar ubic)
+        - nombres similares en la misma ubicación
+        Respeta descartes recientes (7 días).
         """
         rows = self.trab.listar(solo_activos=False)
+        skipped = self._pares_descartados(7)
+        seen_pairs: set[tuple[int, int]] = set()
+        cands: list[dict] = []
+
+        def _detalle(group):
+            return [
+                {
+                    "id": int(g["id"]),
+                    "nombre_mostrar": g.get("nombre_mostrar"),
+                    "ubic": g.get("ubic"),
+                    "tipo": g.get("tipo"),
+                    "activo": bool(g.get("activo")),
+                }
+                for g in group
+            ]
+
+        def _add(motivo: str, label: str, group: list):
+            ids = sorted(int(g["id"]) for g in group)
+            # si hay >2, generamos el grupo completo; filtramos si todos los pares están descartados
+            pairs_ok = False
+            for i in range(len(ids)):
+                for j in range(i + 1, len(ids)):
+                    p = (ids[i], ids[j])
+                    if p in seen_pairs:
+                        continue
+                    if p in skipped:
+                        continue
+                    pairs_ok = True
+                    seen_pairs.add(p)
+            if not pairs_ok and len(ids) == 2 and (ids[0], ids[1]) in skipped:
+                return
+            if len(ids) < 2:
+                return
+            # si solo 2 y descartado, ya salimos; si >2 y al menos un par vivo, mostrar grupo
+            if len(ids) == 2 and (ids[0], ids[1]) in skipped:
+                return
+            cands.append({
+                "nombre": label,
+                "motivo": motivo,
+                "n": len(group),
+                "ids": ids,
+                "detalle": _detalle(group),
+            })
+
+        # 1) mismo nombre exacto (normalizado)
         by_name: dict[str, list] = {}
         for r in rows:
-            k = (r.get("nombre_mostrar") or "").strip().lower()
+            k = self._norm_nombre(r.get("nombre_mostrar") or "")
             if not k:
                 continue
             by_name.setdefault(k, []).append(r)
-        cands = []
         for name, group in by_name.items():
-            if len(group) < 2:
-                continue
-            activos = [g for g in group if g.get("activo")]
             if len(group) >= 2:
-                cands.append({
-                    "nombre": name,
-                    "n": len(group),
-                    "ids": [int(g["id"]) for g in group],
-                    "detalle": [
-                        {
-                            "id": int(g["id"]),
-                            "nombre_mostrar": g.get("nombre_mostrar"),
-                            "ubic": g.get("ubic"),
-                            "tipo": g.get("tipo"),
-                            "activo": bool(g.get("activo")),
-                        }
-                        for g in group
-                    ],
-                })
+                _add("mismo_nombre", name, group)
+
+        # 2) misma ubic + nombres similares (activos prioritarios)
+        by_ubic: dict[str, list] = {}
+        for r in rows:
+            if not r.get("activo"):
+                continue
+            u = str(r.get("ubic") if r.get("ubic") is not None else "").strip()
+            if not u:
+                continue
+            by_ubic.setdefault(u, []).append(r)
+        for ubic, group in by_ubic.items():
+            n = len(group)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    a, b = group[i], group[j]
+                    ia, ib = int(a["id"]), int(b["id"])
+                    pair = (min(ia, ib), max(ia, ib))
+                    if pair in skipped or pair in seen_pairs:
+                        continue
+                    if self._nombres_similares(a.get("nombre_mostrar") or "", b.get("nombre_mostrar") or ""):
+                        # evitar si ya entró por mismo nombre exacto
+                        if self._norm_nombre(a.get("nombre_mostrar") or "") == self._norm_nombre(b.get("nombre_mostrar") or ""):
+                            continue
+                        seen_pairs.add(pair)
+                        label = f"{a.get('nombre_mostrar')} / {b.get('nombre_mostrar')} · ubic {ubic}"
+                        cands.append({
+                            "nombre": label,
+                            "motivo": "similar_misma_ubic",
+                            "n": 2,
+                            "ids": [ia, ib],
+                            "detalle": _detalle([a, b]),
+                        })
+
         return cands
 
     def fusionar_trabajadores(self, id_keep: int, id_merge: int) -> dict:

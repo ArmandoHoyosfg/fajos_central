@@ -166,6 +166,15 @@ async def api_merge_trabajadores(
     return AprendizajeService().fusionar_trabajadores(id_keep, id_merge)
 
 
+@router.post("/api/trabajadores/duplicados/descartar")
+async def api_descartar_duplicado(
+    id_a: int = Form(...),
+    id_b: int = Form(...),
+):
+    from app.services.aprendizaje_service import AprendizajeService
+    return AprendizajeService().descartar_duplicado(id_a, id_b, dias=7)
+
+
 @router.get("/api/trabajadores/duplicados")
 async def api_trabajadores_duplicados():
     from app.services.aprendizaje_service import AprendizajeService
