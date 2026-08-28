@@ -1547,7 +1547,7 @@ class DashboardRepo(BaseRepo):
 class NominaTallerRepo(BaseRepo):
     """Nómina de taller: sueldo + extras por semana."""
 
-    def listar_por_semana(self, semana_id: int) -> list[dict]:
+    def listar_por_semana(self, semana_id: int, **_kwargs) -> list[dict]:
         with self.db.cursor() as cur:
             try:
                 cur.execute(
@@ -1641,7 +1641,7 @@ class NominaTallerRepo(BaseRepo):
 class ProduccionPitaRepo(BaseRepo):
     """Nómina Pita: modelo/folio/material PITA NxN + efectivo."""
 
-    def listar_por_semana(self, semana_id: int) -> list[dict]:
+    def listar_por_semana(self, semana_id: int, **_kwargs) -> list[dict]:
         with self.db.cursor() as cur:
             cur.execute(
                 """
