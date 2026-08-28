@@ -1601,13 +1601,20 @@ async def api_add_taller(
     puesto: str | None = Form(None),
     sueldo: float = Form(0),
     extras: float = Form(0),
+    pitas: float | None = Form(None),
+    precio_pita: float | None = Form(None),
     trabajador_id: int | None = Form(None),
     repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
 ):
-    new_id = repo.insertar(semana_id, {
+    payload = {
         "nombre": nombre, "ubic": ubic, "puesto": puesto,
         "sueldo": sueldo, "extras": extras, "trabajador_id": trabajador_id,
-    })
+    }
+    if pitas is not None:
+        payload["pitas"] = pitas
+    if precio_pita is not None:
+        payload["precio_pita"] = precio_pita
+    new_id = repo.insertar(semana_id, payload)
     return {"ok": True, "id": new_id}
 
 
@@ -1816,6 +1823,10 @@ async def api_patch_taller(
         data["sueldo"] = _parse_num(str(form.get("sueldo")), default=0, allow_empty_none=False) or 0
     if "extras" in form:
         data["extras"] = _parse_num(str(form.get("extras")), default=0, allow_empty_none=False) or 0
+    if "pitas" in form:
+        data["pitas"] = _parse_num(str(form.get("pitas")), allow_empty_none=True)
+    if "precio_pita" in form:
+        data["precio_pita"] = _parse_num(str(form.get("precio_pita")), default=3.2, allow_empty_none=True)
     if "firmado" in form:
         try:
             data["firmado"] = 1 if int(str(form.get("firmado"))) else 0

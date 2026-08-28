@@ -1545,10 +1545,18 @@ class DashboardRepo(BaseRepo):
 
 
 class NominaTallerRepo(BaseRepo):
-    """Nómina de taller: sueldo + extras por semana."""
+    """Nómina de taller: sueldo + extras. Torcedores: pago = pitas × precio_pita (defecto 3.2)."""
+
+    PRECIO_PITA_DEFAULT = 3.2
+
+    @staticmethod
+    def es_torcedor(puesto: str | None) -> bool:
+        p = (puesto or "").strip().lower()
+        return "torcedor" in p
 
     def listar_por_semana(self, semana_id: int, **_kwargs) -> list[dict]:
         with self.db.cursor() as cur:
+            rows = []
             try:
                 cur.execute(
                     """
@@ -1557,15 +1565,20 @@ class NominaTallerRepo(BaseRepo):
                            COALESCE(tr.ubic, n.ubic) AS ubic,
                            COALESCE(tr.puesto, n.puesto) AS puesto,
                            n.sueldo, n.extras, n.total, n.firmado, n.notas,
+                           n.pitas, n.precio_pita,
                            COALESCE(tr.sueldo_modo, 'variable') AS sueldo_modo,
                            tr.sueldo_base
                     FROM nomina_taller n
                     LEFT JOIN trabajadores tr ON tr.id = n.trabajador_id
                     WHERE n.semana_id = %s
-                    ORDER BY COALESCE(tr.ubic, n.ubic), COALESCE(tr.nombre_mostrar, n.nombre)
+                    ORDER BY
+                      CASE WHEN LOWER(COALESCE(tr.puesto, n.puesto, '')) LIKE '%%torcedor%%' THEN 1 ELSE 0 END,
+                      COALESCE(tr.ubic, n.ubic),
+                      COALESCE(tr.nombre_mostrar, n.nombre)
                     """,
                     (semana_id,),
                 )
+                rows = list(cur.fetchall() or [])
             except Exception:
                 cur.execute(
                     """
@@ -1577,12 +1590,14 @@ class NominaTallerRepo(BaseRepo):
                     """,
                     (semana_id,),
                 )
-            rows = list(cur.fetchall() or [])
+                rows = list(cur.fetchall() or [])
             for r in rows:
                 r.setdefault("sueldo_modo", "variable")
                 r.setdefault("sueldo_base", None)
+                r.setdefault("pitas", None)
+                r.setdefault("precio_pita", self.PRECIO_PITA_DEFAULT)
+                r["es_torcedor"] = self.es_torcedor(r.get("puesto"))
             return rows
-
 
     def totales(self, semana_id: int) -> dict:
         with self.db.cursor() as cur:
@@ -1598,32 +1613,77 @@ class NominaTallerRepo(BaseRepo):
             )
             return cur.fetchone() or {}
 
+    def _calc_torcedor(self, data: dict) -> dict:
+        """Si es torcedor y hay pitas, fija sueldo = pitas × precio."""
+        puesto = data.get("puesto")
+        if not self.es_torcedor(str(puesto) if puesto is not None else None):
+            return data
+        if "pitas" not in data and data.get("pitas") is None:
+            return data
+        try:
+            pitas = float(data.get("pitas") or 0)
+        except (TypeError, ValueError):
+            return data
+        precio = data.get("precio_pita")
+        try:
+            precio = float(precio) if precio is not None else self.PRECIO_PITA_DEFAULT
+        except (TypeError, ValueError):
+            precio = self.PRECIO_PITA_DEFAULT
+        data = dict(data)
+        data["precio_pita"] = precio
+        data["sueldo"] = round(pitas * precio, 2)
+        return data
+
     def insertar(self, semana_id: int, data: dict) -> int:
+        data = self._calc_torcedor(dict(data))
         with self.db.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO nomina_taller
-                  (semana_id, trabajador_id, nombre, ubic, puesto, sueldo, extras, firmado, notas)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """,
-                (
-                    semana_id,
-                    data.get("trabajador_id"),
-                    data["nombre"],
-                    data["ubic"],
-                    data.get("puesto"),
-                    float(data.get("sueldo") or 0),
-                    float(data.get("extras") or 0),
-                    1 if data.get("firmado") else 0,
-                    data.get("notas"),
-                ),
-            )
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO nomina_taller
+                      (semana_id, trabajador_id, nombre, ubic, puesto, sueldo, extras, pitas, precio_pita, firmado, notas)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        semana_id,
+                        data.get("trabajador_id"),
+                        data["nombre"],
+                        data["ubic"],
+                        data.get("puesto"),
+                        float(data.get("sueldo") or 0),
+                        float(data.get("extras") or 0),
+                        data.get("pitas"),
+                        data.get("precio_pita") or self.PRECIO_PITA_DEFAULT,
+                        1 if data.get("firmado") else 0,
+                        data.get("notas"),
+                    ),
+                )
+            except Exception:
+                cur.execute(
+                    """
+                    INSERT INTO nomina_taller
+                      (semana_id, trabajador_id, nombre, ubic, puesto, sueldo, extras, firmado, notas)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        semana_id,
+                        data.get("trabajador_id"),
+                        data["nombre"],
+                        data["ubic"],
+                        data.get("puesto"),
+                        float(data.get("sueldo") or 0),
+                        float(data.get("extras") or 0),
+                        1 if data.get("firmado") else 0,
+                        data.get("notas"),
+                    ),
+                )
             return cur.lastrowid
 
     def actualizar(self, row_id: int, data: dict) -> None:
+        data = self._calc_torcedor(dict(data))
         fields = []
         params: list = []
-        for k in ("nombre", "ubic", "puesto", "sueldo", "extras", "firmado", "notas", "trabajador_id"):
+        for k in ("nombre", "ubic", "puesto", "sueldo", "extras", "pitas", "precio_pita", "firmado", "notas", "trabajador_id"):
             if k in data:
                 fields.append(f"{k}=%s")
                 params.append(data[k])
@@ -1631,7 +1691,19 @@ class NominaTallerRepo(BaseRepo):
             return
         params.append(row_id)
         with self.db.cursor() as cur:
-            cur.execute(f"UPDATE nomina_taller SET {', '.join(fields)} WHERE id=%s", params)
+            try:
+                cur.execute(f"UPDATE nomina_taller SET {', '.join(fields)} WHERE id=%s", params)
+            except Exception:
+                # sin columnas pitas (migración pendiente)
+                fields2, params2 = [], []
+                for k in ("nombre", "ubic", "puesto", "sueldo", "extras", "firmado", "notas", "trabajador_id"):
+                    if k in data:
+                        fields2.append(f"{k}=%s")
+                        params2.append(data[k])
+                if not fields2:
+                    return
+                params2.append(row_id)
+                cur.execute(f"UPDATE nomina_taller SET {', '.join(fields2)} WHERE id=%s", params2)
 
     def eliminar(self, row_id: int) -> None:
         with self.db.cursor() as cur:

@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.8] — 2026-08-28
+
+### Torcedores en nómina Taller
+- Van en bloque aparte en el Excel (después del resto del taller)
+- Pago = **pitas × $3.20** (precio editable)
+- Campo **Pitas** en UI y migración `005_taller_pitas_torcedor.sql`
+
 ## [3.18.7] — 2026-08-28
 
 ### Unir fichas compacto + similares + descartar

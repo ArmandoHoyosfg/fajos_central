@@ -618,6 +618,7 @@ class ExportService:
         self, lineas: list[dict], codigo_semana: str, resumen: dict | None
     ) -> bytes:
         from datetime import datetime
+        from openpyxl.utils import get_column_letter
 
         wb = Workbook()
         ws = wb.active
@@ -626,7 +627,7 @@ class ExportService:
         ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
         ws.merge_cells("A1:G1")
         ws["A2"] = (
-            f"Semana: {codigo_semana}    |    Solo sueldo + extras (sin material)    |    "
+            f"Semana: {codigo_semana}    |    Sueldo + extras · Torcedores = pitas × $3.20    |    "
             f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         )
         ws["A2"].font = Font(name="Calibri", size=10, color="666666")
@@ -640,20 +641,32 @@ class ExportService:
             cell.alignment = Alignment(horizontal="center")
             cell.border = self.THIN
 
+        def _is_torc(r):
+            p = str(r.get("puesto") or "").lower()
+            return "torcedor" in p or bool(r.get("es_torcedor"))
+
+        normales = [r for r in lineas if not _is_torc(r)]
+        torcedores = [r for r in lineas if _is_torc(r)]
+        key = lambda x: (int(x.get("ubic") or 0), str(x.get("nombre") or ""))
+        normales = sorted(normales, key=key)
+        torcedores = sorted(torcedores, key=key)
+
         money = '"$"#,##0.00'
         row_i = 5
         first_data = 5
-        for r in sorted(lineas, key=lambda x: (int(x.get("ubic") or 0), str(x.get("nombre") or ""))):
+        data_rows_idx = []
+
+        def _write_row(r):
+            nonlocal row_i
             sueldo = float(r.get("sueldo") or 0)
             extras = float(r.get("extras") or 0)
-            # D=Sueldo E=Extras F=Total → F = D+E (fórmula)
             vals = [
                 r.get("nombre") or "",
                 r.get("ubic"),
                 r.get("puesto") or "",
                 sueldo if sueldo else None,
                 extras if extras else 0,
-                f"=IF(AND(OR(D{row_i}=\"\",D{row_i}=0),OR(E{row_i}=\"\",E{row_i}=0)),\"\",IF(D{row_i}=\"\",0,D{row_i})+IF(E{row_i}=\"\",0,E{row_i}))",
+                f'=IF(AND(OR(D{row_i}="",D{row_i}=0),OR(E{row_i}="",E{row_i}=0)),"",IF(D{row_i}="",0,D{row_i})+IF(E{row_i}="",0,E{row_i}))',
                 "______" if not r.get("firmado") else "✓",
             ]
             for col, v in enumerate(vals, 1):
@@ -663,58 +676,72 @@ class ExportService:
                     cell.number_format = money
                 if row_i % 2 == 0:
                     cell.fill = self.ALT_FILL
+            data_rows_idx.append(row_i)
             row_i += 1
 
-        last_data = row_i - 1
-        # Total taller con SUM
-        row_i += 1
-        ws.cell(row_i, 3, "TOTAL TALLER").font = Font(bold=True, size=11)
-        if last_data >= first_data:
-            for col, letter in [(4, "D"), (5, "E"), (6, "F")]:
-                cell = ws.cell(row_i, col, value=f"=SUM({letter}{first_data}:{letter}{last_data})")
-                cell.font = Font(bold=True)
-                cell.fill = self.GREEN_FILL
-                cell.number_format = money
-                cell.border = self.THIN
-        total_all_formula_row = row_i
+        for r in normales:
+            _write_row(r)
 
-        # Bloque resumen tres nóminas (si se pasó)
+        if torcedores:
+            # línea en blanco + subtítulo
+            row_i += 1
+            cell = ws.cell(row_i, 1, "Torcedores (pago por pitas × $3.20)")
+            cell.font = Font(name="Calibri", bold=True, size=11, color="1F4E79")
+            ws.merge_cells(start_row=row_i, start_column=1, end_row=row_i, end_column=7)
+            row_i += 1
+            for r in torcedores:
+                _write_row(r)
+
+        last_data = data_rows_idx[-1] if data_rows_idx else row_i - 1
+        first_data = data_rows_idx[0] if data_rows_idx else 5
+        row_i = last_data + 2
+        ws.cell(row_i, 3, "TOTAL TALLER").font = Font(bold=True, size=11)
+        if data_rows_idx:
+            # SUM de cada bloque: usar lista de celdas
+            for col, letter in [(4, "D"), (5, "E"), (6, "F")]:
+                refs = ",".join(f"{letter}{i}" for i in data_rows_idx)
+                cell = ws.cell(row_i, col, value=f"=SUM({refs})" if len(data_rows_idx) <= 50 else f"=SUM({letter}{first_data}:{letter}{last_data})")
+                cell.font = Font(bold=True)
+                cell.number_format = money
+                cell.fill = PatternFill("solid", fgColor="C6EFCE")
+                cell.border = self.THIN
+        else:
+            for col in (4, 5, 6):
+                cell = ws.cell(row_i, col, 0)
+                cell.number_format = money
+                cell.fill = PatternFill("solid", fgColor="C6EFCE")
+
         if resumen:
             row_i += 2
-            ws.cell(row_i, 1, "RESUMEN DE NÓMINAS DE LA SEMANA").font = Font(bold=True, size=12, color="1F4E79")
+            ws.cell(row_i, 1, "RESUMEN NÓMINAS").font = Font(bold=True, size=11, color="1F4E79")
             row_i += 1
-            labels = [
-                ("Nómina Taller", float(resumen.get("nomina_taller") or 0)),
-                ("Nómina Plata", float(resumen.get("nomina_plata") or 0)),
-                ("Nómina Pita", float(resumen.get("nomina_pita") or 0)),
-            ]
-            start_res = row_i
-            for label, amount in labels:
+            for label, key in (
+                ("Nómina Taller", "nomina_taller"),
+                ("Nómina Plata", "nomina_plata"),
+                ("Nómina Pita", "nomina_pita"),
+            ):
                 ws.cell(row_i, 1, label)
-                cell = ws.cell(row_i, 2, amount)
+                cell = ws.cell(row_i, 2, float(resumen.get(key) or 0))
                 cell.number_format = money
                 row_i += 1
-            ws.cell(row_i, 1, "Total Nómina").font = Font(bold=True, size=12)
-            cell = ws.cell(row_i, 2, f"=SUM(B{start_res}:B{row_i-1})")
-            cell.font = Font(bold=True, size=12)
-            cell.fill = self.GREEN_FILL
+            tot = sum(float(resumen.get(k) or 0) for k in ("nomina_taller", "nomina_plata", "nomina_pita"))
+            ws.cell(row_i, 1, "GRAN TOTAL").font = Font(bold=True)
+            cell = ws.cell(row_i, 2, tot)
+            cell.font = Font(bold=True)
             cell.number_format = money
+            cell.fill = PatternFill("solid", fgColor="C6EFCE")
 
-        from openpyxl.utils import get_column_letter
-        widths = [20, 8, 14, 12, 12, 12, 10]
-        for i, w in enumerate(widths, 1):
-            ws.column_dimensions[get_column_letter(i)].width = w
-
-        ws.print_title_rows = "4:4"
+        for col, w in enumerate([28, 8, 14, 12, 10, 12, 10], 1):
+            ws.column_dimensions[get_column_letter(col)].width = w
         ws.page_setup.orientation = "landscape"
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
-        ws.oddFooter.center.text = f"Nómina Taller {codigo_semana}"
-
+        ws.print_title_rows = "4:4"
         buf = BytesIO()
         wb.save(buf)
         return buf.getvalue()
+
 
     def _xlsx_pita(
         self, lineas: list[dict], codigo_semana: str, resumen: dict | None
