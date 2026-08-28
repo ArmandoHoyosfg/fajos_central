@@ -33,6 +33,7 @@
       🌐 {{ lan_ip }}{% if app_port %}:{{ app_port }}{% endif %}
     </span>
     {% endif %}
+    <a class="dev-badge" href="/asistente" title="Guía paso a paso" style="border-color:rgba(166,227,161,0.45);color:#a6e3a1;background:rgba(166,227,161,0.12)">Ayuda</a>
     <a class="dev-badge" href="/dev" title="Herramientas de diagnóstico (solo red local)">Dev</a>
     <nav class="nav">
       <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">

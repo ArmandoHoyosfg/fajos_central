@@ -82,10 +82,11 @@ class AprendizajeService:
         except (TypeError, ValueError):
             return 0.0
 
+
     def detectar_folios_inactivos(self, semana_id: int | None = None) -> list[dict]:
         """
-        Folios activos (no terminados) con 0 g en la semana actual
-        y que tuvieron gramos en la semana anterior → posible finalizado / reasignado.
+        Folios con 0 g esta semana.
+        Si la semana previa tuvo gramos → posible_finalizado o posible_reasignacion.
         """
         semanas = self.semanas.listar()
         actual = None
@@ -101,54 +102,52 @@ class AprendizajeService:
 
         sid = int(actual["id"])
         lineas = self.prod.listar_por_semana(sid)
-        # semana anterior por fecha
         prev = None
         fi = parse_db_date(actual.get("fecha_inicio"))
         if fi:
-            prev_ref = fi - timedelta(days=1)
-            prev = encontrar_semana_actual(semanas, prev_ref)
+            prev = encontrar_semana_actual(semanas, fi - timedelta(days=1))
 
-        prev_map: dict[str, dict] = {}
+        prev_by_folio: dict[str, list[dict]] = {}
         if prev:
             for r in self.prod.listar_por_semana(int(prev["id"])):
                 folio = (r.get("folio") or "").strip()
                 if not folio:
                     continue
-                key = folio.upper()
                 g = self._gramos_linea(r)
-                if g > 0:
-                    prev_map[key] = {
-                        "nombre": r.get("nombre"),
-                        "ubic": r.get("ubic"),
-                        "trabajador_id": r.get("trabajador_id"),
-                        "gramos": g,
-                        "semana": prev.get("codigo"),
-                    }
+                if g <= 0:
+                    continue
+                prev_by_folio.setdefault(folio.upper(), []).append({
+                    "nombre": r.get("nombre"),
+                    "ubic": r.get("ubic"),
+                    "trabajador_id": r.get("trabajador_id"),
+                    "gramos": g,
+                    "semana": prev.get("codigo"),
+                    "prod_id": r.get("id"),
+                })
 
         out: list[dict] = []
         for r in lineas:
             folio = (r.get("folio") or "").strip()
             if not folio:
                 continue
-            g = self._gramos_linea(r)
-            if g > 0:
+            if self._gramos_linea(r) > 0:
                 continue
             key = folio.upper()
-            prev_info = prev_map.get(key)
-            # también: folio en trabajos activos sin gramos esta semana
+            prev_list = prev_by_folio.get(key) or []
             hint = "sin_avance_esta_semana"
+            prev_info = prev_list[0] if prev_list else None
             if prev_info:
-                if prev_info.get("trabajador_id") and r.get("trabajador_id"):
-                    if int(prev_info["trabajador_id"]) != int(r["trabajador_id"]):
-                        hint = "posible_reasignacion"
-                    else:
-                        hint = "posible_finalizado"
+                tid_now = r.get("trabajador_id")
+                tid_prev = prev_info.get("trabajador_id")
+                same_person = False
+                if tid_now and tid_prev:
+                    same_person = int(tid_now) == int(tid_prev)
                 else:
-                    same = (
+                    same_person = (
                         str(prev_info.get("nombre") or "").lower()
                         == str(r.get("nombre") or "").lower()
                     )
-                    hint = "posible_finalizado" if same else "posible_reasignacion"
+                hint = "posible_finalizado" if same_person else "posible_reasignacion"
             out.append({
                 "prod_id": r.get("id"),
                 "folio": folio,
@@ -158,8 +157,133 @@ class AprendizajeService:
                 "hint": hint,
                 "prev": prev_info,
                 "semana_id": sid,
+                "accion_sugerida": (
+                    "marcar_terminado" if hint == "posible_finalizado"
+                    else "revisar_reasignacion" if hint == "posible_reasignacion"
+                    else "revisar"
+                ),
             })
         return out
+
+    def detectar_reasignaciones(self, semana_id: int | None = None) -> list[dict]:
+        """
+        Folio con avance esta semana en trabajador B, y la semana previa
+        el mismo folio tenía avance en trabajador A (A != B).
+        """
+        semanas = self.semanas.listar()
+        actual = None
+        if semana_id:
+            for s in semanas:
+                if int(s["id"]) == int(semana_id):
+                    actual = s
+                    break
+        if not actual:
+            actual = encontrar_semana_actual(semanas, today())
+        if not actual:
+            return []
+        sid = int(actual["id"])
+        fi = parse_db_date(actual.get("fecha_inicio"))
+        prev = encontrar_semana_actual(semanas, fi - timedelta(days=1)) if fi else None
+        if not prev:
+            return []
+
+        prev_owners: dict[str, list[dict]] = {}
+        for r in self.prod.listar_por_semana(int(prev["id"])):
+            folio = (r.get("folio") or "").strip()
+            if not folio or self._gramos_linea(r) <= 0:
+                continue
+            prev_owners.setdefault(folio.upper(), []).append({
+                "trabajador_id": r.get("trabajador_id"),
+                "nombre": r.get("nombre"),
+                "ubic": r.get("ubic"),
+                "gramos": self._gramos_linea(r),
+                "semana": prev.get("codigo"),
+            })
+
+        out = []
+        for r in self.prod.listar_por_semana(sid):
+            folio = (r.get("folio") or "").strip()
+            if not folio or self._gramos_linea(r) <= 0:
+                continue
+            key = folio.upper()
+            prevs = prev_owners.get(key) or []
+            tid = r.get("trabajador_id")
+            for p in prevs:
+                ptid = p.get("trabajador_id")
+                if tid and ptid and int(tid) != int(ptid):
+                    out.append({
+                        "folio": folio,
+                        "de": p,
+                        "a": {
+                            "trabajador_id": tid,
+                            "nombre": r.get("nombre"),
+                            "ubic": r.get("ubic"),
+                            "gramos": self._gramos_linea(r),
+                            "prod_id": r.get("id"),
+                            "semana": actual.get("codigo"),
+                        },
+                        "semana_id": sid,
+                        "mensaje": (
+                            f"El folio {folio} pasó de {p.get('nombre')} (ubic {p.get('ubic')}) "
+                            f"a {r.get('nombre')} (ubic {r.get('ubic')})"
+                        ),
+                    })
+                elif not tid or not ptid:
+                    # fallback por nombre
+                    if str(p.get("nombre") or "").lower() != str(r.get("nombre") or "").lower():
+                        out.append({
+                            "folio": folio,
+                            "de": p,
+                            "a": {
+                                "trabajador_id": tid,
+                                "nombre": r.get("nombre"),
+                                "ubic": r.get("ubic"),
+                                "gramos": self._gramos_linea(r),
+                                "prod_id": r.get("id"),
+                                "semana": actual.get("codigo"),
+                            },
+                            "semana_id": sid,
+                            "mensaje": (
+                                f"El folio {folio} cambió de persona: "
+                                f"{p.get('nombre')} → {r.get('nombre')}"
+                            ),
+                        })
+        return out
+
+    def marcar_folio_terminado(self, prod_id: int | None = None, trabajo_id: int | None = None) -> dict:
+        """Marca trabajo terminado (terminado_en) si hay trabajo_id; si no, intenta por prod."""
+        from datetime import datetime
+        with self.db.cursor() as cur:
+            tid = trabajo_id
+            if not tid and prod_id:
+                cur.execute("SELECT trabajo_id, folio FROM produccion_plata WHERE id=%s", (prod_id,))
+                row = cur.fetchone() or {}
+                tid = row.get("trabajo_id")
+                folio = row.get("folio")
+            else:
+                folio = None
+            if not tid:
+                return {"ok": False, "error": "No hay trabajo ligado a esta línea. Puedes dejar de capturar o editar el folio en Plata."}
+            try:
+                cur.execute(
+                    "UPDATE trabajos SET terminado_en = COALESCE(terminado_en, NOW()), activo = 0 WHERE id = %s",
+                    (tid,),
+                )
+            except Exception as e:
+                # sin columna activo
+                try:
+                    cur.execute(
+                        "UPDATE trabajos SET terminado_en = COALESCE(terminado_en, NOW()) WHERE id = %s",
+                        (tid,),
+                    )
+                except Exception as e2:
+                    return {"ok": False, "error": str(e2)}
+            try:
+                self.db.connect().commit()
+            except Exception:
+                pass
+        self.registrar("folio_terminado", entidad="trabajo", entidad_id=int(tid), payload={"prod_id": prod_id, "folio": folio})
+        return {"ok": True, "trabajo_id": tid}
 
     def candidatos_duplicados_trabajadores(self) -> list[dict]:
         """
@@ -270,6 +394,7 @@ class AprendizajeService:
             out["tabla_ok"] = False
         try:
             out["folios_inactivos"] = self.detectar_folios_inactivos()[:40]
+            out["reasignaciones"] = self.detectar_reasignaciones()[:40]
             out["candidatos_dup"] = self.candidatos_duplicados_trabajadores()[:30]
         except Exception:
             logger.exception("resumen_aprendizaje")

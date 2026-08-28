@@ -172,6 +172,121 @@ async def api_aprendizaje_resumen():
     return AprendizajeService().resumen_aprendizaje()
 
 
+
+@router.post("/dev/folio-accion", response_class=HTMLResponse)
+async def page_dev_folio_accion(
+    request: Request,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    form = await request.form()
+    accion = str(form.get("accion") or "")
+    result = None
+    error = None
+    try:
+        prod_id = int(form.get("prod_id") or 0) or None
+        from app.services.aprendizaje_service import AprendizajeService
+        svc = AprendizajeService()
+        if accion == "terminar" and prod_id:
+            result = svc.marcar_folio_terminado(prod_id=prod_id)
+            if not result.get("ok"):
+                error = result.get("error")
+        else:
+            error = "Acción no reconocida"
+    except Exception as e:
+        error = str(e)
+    return _dev_page_payload(repo, action_result=result, error=error)
+
+
+@router.get("/asistente", response_class=HTMLResponse)
+async def page_asistente(request: Request):
+    """Asistente guiado para usuarios no técnicos."""
+    from app.services.aprendizaje_service import AprendizajeService
+    from app.services.dashboard_service import check_db
+    from app import __version__
+    apr = {}
+    try:
+        apr = AprendizajeService().resumen_aprendizaje()
+    except Exception as e:
+        apr = {"error": str(e), "candidatos_dup": [], "folios_inactivos": [], "reasignaciones": []}
+    n_dup = len(apr.get("candidatos_dup") or [])
+    n_fi = len(apr.get("folios_inactivos") or [])
+    n_re = len(apr.get("reasignaciones") or [])
+    html = f"""<!DOCTYPE html>
+<html lang="es" data-theme="oscuro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Asistente — Fajos Central</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .wiz-steps {{ display:flex; gap:0.5rem; flex-wrap:wrap; margin:1rem 0; }}
+    .wiz-step {{ padding:0.4rem 0.75rem; border-radius:999px; border:1px solid var(--border); font-size:0.85rem; }}
+    .wiz-step.on {{ background: var(--accent); color:#1e1e2e; border-color:transparent; font-weight:600; }}
+    .wiz-card {{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.25rem; margin:1rem 0; }}
+    .wiz-card h2 {{ margin-top:0; font-size:1.15rem; }}
+    .wiz-num {{ display:inline-flex; width:1.6rem; height:1.6rem; align-items:center; justify-content:center;
+                border-radius:50%; background:var(--accent); color:#1e1e2e; font-weight:700; margin-right:0.4rem; }}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span>Fajos Piteados Central</span></a>
+    <span class="version-badge">v{__version__}</span>
+    <a class="dev-badge" href="/dev">Dev</a>
+  </header>
+  <main class="container page-enter">
+    <div class="page-head">
+      <div>
+        <h1>Asistente de revisión</h1>
+        <p class="muted">Pasos simples para limpiar duplicados y folios raros. No hace falta saber de bases de datos.</p>
+      </div>
+      <a class="btn btn-secondary" href="/">← Inicio</a>
+    </div>
+
+    <div class="wiz-steps">
+      <span class="wiz-step on">1 · Resumen</span>
+      <span class="wiz-step">2 · Duplicados</span>
+      <span class="wiz-step">3 · Folios</span>
+      <span class="wiz-step">4 · Listo</span>
+    </div>
+
+    <div class="wiz-card">
+      <h2><span class="wiz-num">1</span> ¿Qué encontró el sistema?</h2>
+      <ul>
+        <li><strong>{n_dup}</strong> nombre(s) con más de una ficha (posibles duplicados)</li>
+        <li><strong>{n_fi}</strong> folio(s) sin gramos esta semana</li>
+        <li><strong>{n_re}</strong> folio(s) que cambiaron de persona vs la semana pasada</li>
+      </ul>
+      <p class="muted">BD: {"OK" if check_db() else "sin conexión"}</p>
+    </div>
+
+    <div class="wiz-card">
+      <h2><span class="wiz-num">2</span> Unir personas duplicadas</h2>
+      <p>Si la misma persona aparece dos veces (mismo nombre, distinta ubicación o ficha),
+      hay que <strong>elegir cuál se queda</strong> y la otra se da de baja moviendo sus nóminas.</p>
+      <a class="btn" href="/dev#dup">Ir a unir fichas (en Dev)</a>
+    </div>
+
+    <div class="wiz-card">
+      <h2><span class="wiz-num">3</span> Revisar folios</h2>
+      <p><strong>Sin avance:</strong> puede que el trabajo ya terminó → marca «terminado» o corrige en Plata.</p>
+      <p><strong>Cambiaron de persona:</strong> confirma si el folio se reasignó o es un error de captura.</p>
+      <a class="btn btn-secondary" href="/dev#folios">Ver folios en Dev</a>
+      <a class="btn btn-secondary" href="/produccion">Abrir Plata</a>
+    </div>
+
+    <div class="wiz-card">
+      <h2><span class="wiz-num">4</span> Captura del día</h2>
+      <p>Cuando los datos estén limpios, usa <strong>Plata → + Un día</strong> para registrar gramos de hoy.</p>
+      <a class="btn" href="/produccion">Ir a captura</a>
+    </div>
+  </main>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
+
 @router.get("/dev", response_class=HTMLResponse)
 async def page_dev(
     request: Request,

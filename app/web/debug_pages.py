@@ -137,46 +137,111 @@ def render_debug_page(
     err_html = f'<p class="flash err">{_esc(error)}</p>' if error else ""
     status_color = "#a6e3a1" if db_ok else "#f38ba8"
 
+
     apr = aprendizaje or {}
     folio_inact = apr.get("folios_inactivos") or []
+    reasig = apr.get("reasignaciones") or []
     cands = apr.get("candidatos_dup") or []
-    fi_rows = "".join(
-        (
-            "<tr><td><code>" + _esc(x.get("folio")) + "</code></td>"
-            "<td>" + _esc(x.get("nombre")) + " / " + _esc(x.get("ubic")) + "</td>"
-            "<td>" + _esc(x.get("hint")) + "</td>"
-            "<td>" + _esc((x.get("prev") or {}).get("nombre"))
-            + " (" + _esc((x.get("prev") or {}).get("gramos")) + " g)</td></tr>"
+
+    def _hint_label(h: str) -> str:
+        return {
+            "posible_finalizado": "Parece terminado (sin avance esta semana)",
+            "posible_reasignacion": "Puede haberse pasado a otra persona",
+            "sin_avance_esta_semana": "Sin gramos esta semana",
+        }.get(h or "", h or "Revisar")
+
+    fi_rows = ""
+    for x in folio_inact:
+        pid = x.get("prod_id") or ""
+        hint = _hint_label(str(x.get("hint") or ""))
+        prev = x.get("prev") or {}
+        prev_txt = "—"
+        if prev:
+            prev_txt = f"{_esc(prev.get('nombre'))} · {_esc(prev.get('gramos'))} g · sem {_esc(prev.get('semana'))}"
+        actions = (
+            f"<form method='post' action='/dev/folio-accion' style='display:flex;gap:0.35rem;flex-wrap:wrap'>"
+            f"<input type='hidden' name='prod_id' value='{_esc(pid)}'/>"
+            f"<input type='hidden' name='accion' value='terminar'/>"
+            f"<button type='submit' class='btn btn-secondary' style='padding:0.2rem 0.5rem;font-size:0.78rem'"
+            f" title='Marca el trabajo como terminado'>Marcar terminado</button>"
+            f"<a class='btn btn-secondary' style='padding:0.2rem 0.5rem;font-size:0.78rem' "
+            f"href='/produccion?semana_id={_esc(x.get('semana_id'))}'>Abrir en Plata</a>"
+            f"</form>"
         )
-        for x in folio_inact
-    ) or '<tr><td colspan="4" class="muted">Ningún folio inactivo detectado.</td></tr>'
+        fi_rows += (
+            f"<tr><td><code>{_esc(x.get('folio'))}</code></td>"
+            f"<td>{_esc(x.get('nombre'))}<br><span class='muted'>ubic {_esc(x.get('ubic'))}</span></td>"
+            f"<td>{_esc(hint)}</td>"
+            f"<td class='muted' style='font-size:0.85rem'>{prev_txt}</td>"
+            f"<td>{actions}</td></tr>"
+        )
+    if not fi_rows:
+        fi_rows = '<tr><td colspan="5" class="muted">Ningún folio inactivo detectado.</td></tr>'
+
+    reasig_rows = ""
+    for x in reasig:
+        reasig_rows += (
+            f"<tr><td><code>{_esc(x.get('folio'))}</code></td>"
+            f"<td>{_esc((x.get('de') or {}).get('nombre'))} "
+            f"<span class='muted'>(ubic {_esc((x.get('de') or {}).get('ubic'))})</span></td>"
+            f"<td>→</td>"
+            f"<td>{_esc((x.get('a') or {}).get('nombre'))} "
+            f"<span class='muted'>(ubic {_esc((x.get('a') or {}).get('ubic'))})</span></td>"
+            f"<td><a class='btn btn-secondary' style='padding:0.2rem 0.5rem;font-size:0.78rem' "
+            f"href='/produccion?semana_id={_esc(x.get('semana_id'))}'>Ver en Plata</a></td></tr>"
+        )
+    if not reasig_rows:
+        reasig_rows = '<tr><td colspan="5" class="muted">No se detectaron cambios de persona en folios.</td></tr>'
+
     cand_rows = ""
     for c in cands:
         det = c.get("detalle") or []
-        opts = "".join(
-            '<option value="' + _esc(d["id"]) + '">' + _esc(d["id"]) + " · ubic " + _esc(d["ubic"])
-            + " · " + ("act" if d.get("activo") else "baja") + "</option>"
-            for d in det
+        if len(det) < 2:
+            continue
+        # Tarjetas claras: elegir A (se queda) vs B (se da de baja)
+        cards = ""
+        for i, d in enumerate(det):
+            cards += (
+                f"<label class='merge-card'>"
+                f"<input type='radio' name='pick_{_esc(c.get('nombre'))}' value='{_esc(d['id'])}' "
+                f"{'checked' if i==0 else ''} form='merge-{_esc(det[0]['id'])}'/>"
+                f"<strong>ID {_esc(d['id'])}</strong><br>"
+                f"Ubicación <b>{_esc(d['ubic'])}</b><br>"
+                f"<span class='muted'>{'Activo' if d.get('activo') else 'Ya de baja'} · {_esc(d.get('tipo'))}</span>"
+                f"</label>"
+            )
+        # Form with two selects labeled clearly, default different
+        opts_keep = "".join(
+            f"<option value='{_esc(d['id'])}'{' selected' if i==0 else ''}>"
+            f"ID {_esc(d['id'])} — ubic {_esc(d['ubic'])} ({'activo' if d.get('activo') else 'baja'})</option>"
+            for i, d in enumerate(det)
         )
-        ids = c.get("ids") or []
+        opts_merge = "".join(
+            f"<option value='{_esc(d['id'])}'{' selected' if i==1 else ''}>"
+            f"ID {_esc(d['id'])} — ubic {_esc(d['ubic'])} ({'activo' if d.get('activo') else 'baja'})</option>"
+            for i, d in enumerate(det)
+        )
         cand_rows += (
-            "<tr><td>" + _esc(c.get("nombre")) + "</td><td>" + _esc(c.get("n")) + "</td>"
-            "<td>" + _esc(", ".join(str(i) for i in ids)) + "</td>"
-            "<td><form method='post' action='/dev/merge-trabajadores' "
-            "style='display:flex;gap:0.35rem;flex-wrap:wrap;align-items:center' "
-            "onsubmit=\"return confirm('Fusionar: el secundario se da de baja y sus lineas pasan al principal.');\">"
-            "<select name='id_keep' required>" + opts + "</select>"
-            "<span class='muted'>keep</span>"
-            "<select name='id_merge' required>" + opts + "</select>"
-            "<button type='submit' class='btn btn-secondary' style='padding:0.2rem 0.5rem;font-size:0.8rem'>Fusionar</button>"
-            "</form></td></tr>"
+            f"<tr><td colspan='4' style='padding:0.75rem 1rem'>"
+            f"<div style='margin-bottom:0.4rem'><strong style='text-transform:capitalize'>{_esc(c.get('nombre'))}</strong> "
+            f"<span class='muted'>— {len(det)} fichas con el mismo nombre</span></div>"
+            f"<form method='post' action='/dev/merge-trabajadores' id='merge-{_esc(det[0]['id'])}' "
+            f"style='display:grid;gap:0.5rem;max-width:640px' "
+            f"onsubmit=\"return confirm('Se quedará la ficha PRINCIPAL. La otra pasará a baja y todas sus líneas de nómina se moverán a la principal. ¿Continuar?');\">"
+            f"<div style='display:grid;grid-template-columns:1fr 1fr;gap:0.75rem'>"
+            f"<div><label class='muted' style='font-size:0.8rem'>1. Ficha que SE QUEDA (principal)</label>"
+            f"<select name='id_keep' required style='width:100%'>{opts_keep}</select></div>"
+            f"<div><label class='muted' style='font-size:0.8rem'>2. Ficha que se ELIMINA (baja + mover datos)</label>"
+            f"<select name='id_merge' required style='width:100%'>{opts_merge}</select></div>"
+            f"</div>"
+            f"<button type='submit' class='btn' style='justify-self:start'>Unir fichas</button>"
+            f"</form></td></tr>"
         )
     if not cand_rows:
         cand_rows = '<tr><td colspan="4" class="muted">No hay nombres repetidos en el catálogo.</td></tr>'
     apr_note = ""
     if apr and not apr.get("tabla_ok", True):
-        apr_note = '<p class="flash err">Ejecuta <code>db/schema/004_aprendizaje_merge.sql</code> en HeidiSQL.</p>'
-
+        apr_note = '<p class="flash err">Para guardar el historial de aprendizaje, ejecuta en HeidiSQL: <code>db/schema/004_aprendizaje_merge.sql</code></p>'
 
     html = f"""<!DOCTYPE html>
 <html lang="es" data-theme="oscuro">
@@ -301,19 +366,28 @@ def render_debug_page(
     </section>
 
     <section class="dev-section">
-      <h2>Folios sin avance (posible fin / reasignación)</h2>
-      <p class="dev-hint">0 g esta semana; con historial previo sugiere finalizado o reasignado.</p>
+      <h2 id="folios">Folios sin avance</h2>
+      <p class="dev-hint">Sin gramos esta semana. Puedes marcar como terminado o abrir Plata para corregir.</p>
       <div class="table-wrap"><table>
-        <thead><tr><th>Folio</th><th>Ahora</th><th>Sugerencia</th><th>Semana previa</th></tr></thead>
+        <thead><tr><th>Folio</th><th>Quién lo tiene ahora</th><th>Qué parece</th><th>Semana pasada</th><th>Qué hacer</th></tr></thead>
         <tbody>{fi_rows}</tbody>
       </table></div>
     </section>
 
     <section class="dev-section">
-      <h2>Posibles trabajadores duplicados</h2>
-      <p class="dev-hint">Mismo nombre, varias fichas. Conservar uno y fusionar el otro en toda la BD.</p>
+      <h2>Folios que cambiaron de persona</h2>
+      <p class="dev-hint">La semana pasada tenía gramos una persona; esta semana otra. Revisa si es reasignación real.</p>
       <div class="table-wrap"><table>
-        <thead><tr><th>Nombre</th><th>Nº</th><th>IDs</th><th>Fusionar</th></tr></thead>
+        <thead><tr><th>Folio</th><th>Antes</th><th></th><th>Ahora</th><th></th></tr></thead>
+        <tbody>{reasig_rows}</tbody>
+      </table></div>
+    </section>
+
+    <section class="dev-section">
+      <h2 id="dup">Personas con el mismo nombre (posibles duplicados)</h2>
+      <p class="dev-hint">Elige la ficha <strong>principal</strong> (se queda) y la que se da de baja.
+      Todas las nóminas del secundario pasan a la principal.</p>
+      <div class="table-wrap"><table>
         <tbody>{cand_rows}</tbody>
       </table></div>
     </section>
