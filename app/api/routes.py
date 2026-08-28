@@ -178,6 +178,12 @@ async def api_linea_terminar(prod_id: int):
     return AprendizajeService().marcar_folio_terminado(prod_id=prod_id)
 
 
+@router.post("/api/produccion/linea/{prod_id}/reactivar")
+async def api_linea_reactivar(prod_id: int):
+    from app.services.aprendizaje_service import AprendizajeService
+    return AprendizajeService().reactivar_folio(prod_id=prod_id)
+
+
 @router.get("/api/aprendizaje/resumen")
 async def api_aprendizaje_resumen():
     from app.services.aprendizaje_service import AprendizajeService
@@ -420,6 +426,17 @@ async def page_produccion(
         actual = encontrar_semana_actual(semanas_raw, today())
         semana_id = actual["id"] if actual else semanas[0]["id"]
     lineas = prod_repo.listar_por_semana(semana_id) if semana_id else []
+    terminados_semana: list = []
+    if semana_id:
+        try:
+            terminados_semana = prod_repo.listar_terminados_semana(semana_id)
+        except Exception:
+            terminados_semana = []
+        try:
+            from app.services.aprendizaje_service import AprendizajeService
+            AprendizajeService().purgar_terminados(dias=7)
+        except Exception:
+            pass
     totales = prod_repo.totales_semana(semana_id) if semana_id else {}
     trabajadores = trab_repo.listar(solo_plt=False, solo_activos=True)
     folios_dup_set: set = set()
@@ -461,6 +478,7 @@ async def page_produccion(
             folio_inactivos=folio_inactivos,
             reasignaciones=reasignaciones,
             folio_inact_ids=folio_inact_ids,
+            terminados_semana=terminados_semana,
         ),
     )
 
@@ -902,7 +920,7 @@ async def api_suministro(fecha: str | None = None):
     actual = encontrar_semana_actual(semanas, d)
     lineas = []
     if actual:
-        prod = ProduccionRepo().listar_por_semana(actual["id"])
+        prod = ProduccionRepo().listar_por_semana(actual["id"], incluir_terminados=True)
         for r in prod:
             gr = r.get(col)
             try:
@@ -1238,7 +1256,7 @@ async def api_crear_semana(
 @router.get("/api/produccion/{semana_id}")
 async def api_produccion(semana_id: int, repo: ProduccionRepo = Depends(get_produccion_repo)):
     return {
-        "lineas": repo.listar_por_semana(semana_id),
+        "lineas": repo.listar_por_semana(semana_id, incluir_terminados=True),
         "totales": repo.totales_semana(semana_id),
     }
 
@@ -1344,7 +1362,7 @@ async def api_add_un_dia(
     except Exception:
         existing = None
     if existing is None and trabajo_id:
-        for row in repo.listar_por_semana(semana_id):
+        for row in repo.listar_por_semana(semana_id, incluir_terminados=True):
             if row.get("trabajo_id") == trabajo_id:
                 existing = row
                 break
@@ -1414,7 +1432,7 @@ async def api_export_captura_manual(
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
     # Todas las líneas de la semana (también sin gramos) — es la nómina a capturar
-    lineas = prod_repo.listar_por_semana(semana_id)
+    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=True)
     content, media_type, filename = export_svc.export_captura_manual(
         lineas,
         codigo_semana=str(semana.get("codigo") or ""),
@@ -1470,7 +1488,7 @@ async def api_export(
     if not semana:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    lineas = prod_repo.listar_por_semana(semana_id)
+    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=True)
     # Formal (y siempre limpio): solo filas con gramos en al menos un día
     lineas = [r for r in lineas if linea_tiene_gramos(r)]
     if formal:
@@ -1527,7 +1545,7 @@ async def page_nomina_taller(
     if semana_id is None and semanas:
         actual = next((s for s in semanas if s.get("es_actual")), None)
         semana_id = (actual or semanas[0]).get("id")
-    lineas = repo.listar_por_semana(semana_id) if semana_id else []
+    lineas = repo.listar_por_semana(semana_id, incluir_terminados=True) if semana_id else []
     totales = repo.totales(semana_id) if semana_id else {}
     trabajadores = [t for t in trab_repo.listar(solo_activos=True) if "TLL" in str(t.get("tipo") or "").upper() or "Mixto" in str(t.get("tipo") or "")]
     return templates.TemplateResponse(
@@ -1553,7 +1571,7 @@ async def page_nomina_pita(
     if semana_id is None and semanas:
         actual = next((s for s in semanas if s.get("es_actual")), None)
         semana_id = (actual or semanas[0]).get("id")
-    lineas = repo.listar_por_semana(semana_id) if semana_id else []
+    lineas = repo.listar_por_semana(semana_id, incluir_terminados=True) if semana_id else []
     totales = repo.totales(semana_id) if semana_id else {}
     trabajadores = [t for t in trab_repo.listar(solo_activos=True) if "PIT" in str(t.get("tipo") or "").upper() or "Mixto" in str(t.get("tipo") or "")]
     return templates.TemplateResponse(

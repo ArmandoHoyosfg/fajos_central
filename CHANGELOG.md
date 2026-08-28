@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.4] — 2026-08-28
+
+### Folios terminados: ocultar, purgar y reactivar
+- Al marcar terminado se oculta de la captura (se conservan gramos para el pago)
+- Lista colapsable de terminados con **Reactivar**
+- Purga automática a los 7 días sin actividad (historial de nómina intacto)
+
 ## [3.18.3] — 2026-08-28
 
 ### Plata: menos ruido, captura a mano

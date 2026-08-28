@@ -330,6 +330,78 @@ class AprendizajeService:
         return {"ok": True, "trabajo_id": tid, "folio": folio, "prod_id": prod_id}
 
 
+
+    def reactivar_folio(self, prod_id: int | None = None, trabajo_id: int | None = None) -> dict:
+        """Reabre un folio terminado (activo=1, limpia marca en notas)."""
+        with self.db.cursor() as cur:
+            tid = trabajo_id
+            folio = None
+            if prod_id:
+                cur.execute(
+                    "SELECT trabajo_id, folio, notas FROM produccion_plata WHERE id=%s",
+                    (prod_id,),
+                )
+                row = cur.fetchone() or {}
+                if not tid:
+                    tid = row.get("trabajo_id")
+                folio = row.get("folio")
+                notas = str(row.get("notas") or "").replace("[terminado]", "").strip()
+                cur.execute(
+                    "UPDATE produccion_plata SET notas = %s WHERE id = %s",
+                    (notas or None, prod_id),
+                )
+            if not tid:
+                return {"ok": False, "error": "No se encontró el trabajo para reactivar."}
+            try:
+                cur.execute(
+                    "UPDATE trabajos SET activo = 1, terminado_en = NULL WHERE id = %s",
+                    (tid,),
+                )
+            except Exception:
+                cur.execute("UPDATE trabajos SET activo = 1 WHERE id = %s", (tid,))
+            try:
+                self.db.connect().commit()
+            except Exception:
+                pass
+        self.registrar(
+            "folio_reactivado",
+            entidad="trabajo",
+            entidad_id=int(tid),
+            payload={"prod_id": prod_id, "folio": folio},
+        )
+        return {"ok": True, "trabajo_id": tid, "folio": folio, "prod_id": prod_id}
+
+    def purgar_terminados(self, dias: int = 7) -> dict:
+        """Elimina trabajos terminados tras N días. Historial de nómina se conserva."""
+        dias = max(1, min(int(dias or 7), 90))
+        deleted = 0
+        with self.db.cursor() as cur:
+            try:
+                cur.execute(
+                    """
+                    DELETE FROM trabajos
+                     WHERE activo = 0
+                       AND terminado_en IS NOT NULL
+                       AND terminado_en < (NOW() - INTERVAL %s DAY)
+                    """,
+                    (dias,),
+                )
+                deleted = max(0, cur.rowcount or 0)
+            except Exception as e:
+                logger.warning("purgar_terminados: %s", e)
+                return {"ok": False, "error": str(e), "eliminados": 0, "dias": dias}
+            try:
+                self.db.connect().commit()
+            except Exception:
+                pass
+        if deleted:
+            self.registrar(
+                "purga_terminados",
+                entidad="app",
+                payload={"eliminados": deleted, "dias": dias},
+            )
+        return {"ok": True, "eliminados": deleted, "dias": dias}
+
     def candidatos_duplicados_trabajadores(self) -> list[dict]:
         """
         Posibles duplicados:

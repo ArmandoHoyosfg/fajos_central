@@ -114,6 +114,29 @@
 </details>
 {% endif %}
 
+{% if terminados_semana and terminados_semana|length %}
+<details class="folio-hints-compact terminados-panel">
+  <summary>
+    <span>{{ terminados_semana|length }} folio(s) terminado(s)</span>
+    <span class="muted"> — ocultos de la captura · se eliminan tras 7 días sin uso · se pueden reactivar</span>
+  </summary>
+  <div class="folio-hint-block">
+    <ul class="folio-hint-list">
+      {% for x in terminados_semana %}
+      <li>
+        <code>{{ x.folio or '—' }}</code>
+        <span>{{ x.nombre }} · {{ x.ubic }}</span>
+        {% if x.total_gramos %}<span class="muted">{{ x.total_gramos }} g</span>{% endif %}
+        <button type="button" class="btn btn-secondary btn-xs"
+                onclick="reactivarFolio({{ x.id }}, {{ (x.folio or '')|tojson }})">Reactivar</button>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</details>
+{% endif %}
+
+
 <div class="filter-row" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin:0.75rem 0;">
   <input type="search" id="flt-texto" placeholder="Filtrar nombre, folio, material…" style="min-width:200px;">
   <label><input type="checkbox" id="flt-sin-firma"> Solo sin firmar</label>
@@ -602,7 +625,7 @@ async function delLinea(id) {
 }
 async function marcarTerminado(prodId, folio) {
   const label = folio ? ('folio ' + folio) : 'esta línea';
-  if (!confirm('¿Marcar ' + label + ' como terminado?\nNo se borran los gramos de esta semana. El trabajo deja de considerarse activo para la siguiente.')) return;
+  if (!confirm('¿Marcar ' + label + ' como terminado?\n\n• Se oculta de la captura\n• Los gramos de esta semana se conservan para el pago\n• Tras 7 días sin uso se elimina el trabajo (puedes reactivarlo antes)')) return;
   try {
     const res = await fetch('/api/produccion/linea/' + prodId + '/terminar', { method: 'POST' });
     const d = await res.json().catch(() => ({}));
@@ -616,7 +639,24 @@ async function marcarTerminado(prodId, folio) {
     showToast('Error de red', true);
   }
 }
+async function reactivarFolio(prodId, folio) {
+  const label = folio ? ('folio ' + folio) : 'esta línea';
+  if (!confirm('¿Reactivar ' + label + ' para seguir capturando?')) return;
+  try {
+    const res = await fetch('/api/produccion/linea/' + prodId + '/reactivar', { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showToast(d.error || d.user_message || d.message || 'No se pudo reactivar', true);
+      return;
+    }
+    showToast('Folio reactivado' + (d.folio ? (': ' + d.folio) : ''));
+    setTimeout(() => location.reload(), 400);
+  } catch (e) {
+    showToast('Error de red', true);
+  }
+}
 async function toggleFirmado(id, checked) {
+
   const fd = new FormData();
   fd.append('firmado', checked ? '1' : '0');
   const res = await fetch('/api/produccion/linea/' + id + '/firmado', { method: 'PATCH', body: fd });

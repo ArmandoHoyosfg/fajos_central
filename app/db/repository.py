@@ -782,8 +782,8 @@ class ProduccionRepo(BaseRepo):
             cur.execute("SELECT * FROM produccion_plata WHERE id = %s", (prod_id,))
             return cur.fetchone()
 
-    def listar_por_semana(self, semana_id: int) -> list[dict]:
-        """Lista producción; nombre/ubic preferidos del catálogo si hay trabajador_id."""
+    def listar_por_semana(self, semana_id: int, *, incluir_terminados: bool = False) -> list[dict]:
+        """Lista producción; por defecto oculta folios marcados terminados (trabajo inactivo)."""
         sql = """
             SELECT p.id, p.semana_id, p.trabajador_id, p.trabajo_id,
                    COALESCE(tr.nombre_mostrar, p.nombre) AS nombre,
@@ -792,17 +792,31 @@ class ProduccionRepo(BaseRepo):
                    p.gm_sab, p.gm_dom, p.gm_lun, p.gm_mar, p.gm_mie, p.gm_jue, p.gm_vie,
                    p.total_gramos, p.efectivo, p.firmado, p.notas,
                    p.nombre AS nombre_guardado, p.ubic AS ubic_guardada,
-                   tr.nombre_mostrar AS cat_nombre, tr.ubic AS cat_ubic
+                   tr.nombre_mostrar AS cat_nombre, tr.ubic AS cat_ubic,
+                   COALESCE(tj.activo, 1) AS trabajo_activo,
+                   tj.terminado_en
             FROM produccion_plata p
             LEFT JOIN trabajadores tr ON tr.id = p.trabajador_id
+            LEFT JOIN trabajos tj ON tj.id = p.trabajo_id
             WHERE p.semana_id = %s
+        """
+        if not incluir_terminados:
+            sql += """
+              AND (p.trabajo_id IS NULL OR tj.id IS NULL OR COALESCE(tj.activo, 1) = 1)
+              AND (p.notas IS NULL OR p.notas NOT LIKE %s)
+            """
+            params: tuple = (semana_id, "%[terminado]%")
+        else:
+            params = (semana_id,)
+        sql += """
             ORDER BY COALESCE(tr.nombre_mostrar, p.nombre), COALESCE(tr.ubic, p.ubic), p.id
         """
         with self.db.cursor() as cur:
             try:
-                cur.execute(sql, (semana_id,))
+                cur.execute(sql, params)
                 return list(cur.fetchall() or [])
             except Exception:
+                # Fallback sin join trabajos / sin filtro
                 cur.execute(
                     """
                     SELECT id, semana_id, trabajador_id, trabajo_id, nombre, ubic, folio, modelo,
@@ -815,7 +829,39 @@ class ProduccionRepo(BaseRepo):
                     """,
                     (semana_id,),
                 )
+                rows = list(cur.fetchall() or [])
+                if not incluir_terminados:
+                    rows = [
+                        r for r in rows
+                        if "[terminado]" not in str(r.get("notas") or "")
+                    ]
+                return rows
+
+    def listar_terminados_semana(self, semana_id: int) -> list[dict]:
+        """Líneas de la semana ligadas a trabajo terminado o marcadas [terminado]."""
+        sql = """
+            SELECT p.id, p.semana_id, p.trabajador_id, p.trabajo_id,
+                   COALESCE(tr.nombre_mostrar, p.nombre) AS nombre,
+                   COALESCE(tr.ubic, p.ubic) AS ubic,
+                   p.folio, p.modelo, p.material, p.total_gramos, p.efectivo, p.notas,
+                   COALESCE(tj.activo, 1) AS trabajo_activo,
+                   tj.terminado_en
+            FROM produccion_plata p
+            LEFT JOIN trabajadores tr ON tr.id = p.trabajador_id
+            LEFT JOIN trabajos tj ON tj.id = p.trabajo_id
+            WHERE p.semana_id = %s
+              AND (
+                    (p.trabajo_id IS NOT NULL AND COALESCE(tj.activo, 1) = 0)
+                 OR (p.notas IS NOT NULL AND p.notas LIKE %s)
+              )
+            ORDER BY COALESCE(tr.nombre_mostrar, p.nombre), p.id
+        """
+        with self.db.cursor() as cur:
+            try:
+                cur.execute(sql, (semana_id, "%[terminado]%"))
                 return list(cur.fetchall() or [])
+            except Exception:
+                return []
 
     def insertar(self, semana_id: int, data: dict) -> int:
         from app.services.audit_service import AuditService
