@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.3] — 2026-08-28
+
+### Plata: menos ruido, captura a mano
+- Avisos de folios colapsados en una sola línea (expandir solo si hace falta)
+- Barra ＋ Un día / Fila / Cerrar… fija junto a la tabla al hacer scroll
+
 ## [3.18.2] — 2026-08-28
 
 ### Unir fichas y marcar terminado en la UI diaria
