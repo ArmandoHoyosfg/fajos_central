@@ -251,26 +251,53 @@ class AprendizajeService:
         return out
 
     def marcar_folio_terminado(self, prod_id: int | None = None, trabajo_id: int | None = None) -> dict:
-        """Marca trabajo terminado (terminado_en) si hay trabajo_id; si no, intenta por prod."""
-        from datetime import datetime
+        """Marca el trabajo como terminado. Si la línea no tiene trabajo_id, lo busca por folio."""
+        folio = None
         with self.db.cursor() as cur:
             tid = trabajo_id
+            trab_id = None
             if not tid and prod_id:
-                cur.execute("SELECT trabajo_id, folio FROM produccion_plata WHERE id=%s", (prod_id,))
+                cur.execute(
+                    "SELECT trabajo_id, folio, trabajador_id FROM produccion_plata WHERE id=%s",
+                    (prod_id,),
+                )
                 row = cur.fetchone() or {}
                 tid = row.get("trabajo_id")
                 folio = row.get("folio")
-            else:
-                folio = None
+                trab_id = row.get("trabajador_id")
+                if not tid and folio and trab_id:
+                    try:
+                        cur.execute(
+                            """
+                            SELECT id FROM trabajos
+                             WHERE trabajador_id=%s AND folio=%s
+                             ORDER BY id DESC LIMIT 1
+                            """,
+                            (trab_id, folio),
+                        )
+                        tw = cur.fetchone()
+                        if tw:
+                            tid = tw["id"]
+                            cur.execute(
+                                "UPDATE produccion_plata SET trabajo_id=%s WHERE id=%s",
+                                (tid, prod_id),
+                            )
+                    except Exception:
+                        tid = None
             if not tid:
-                return {"ok": False, "error": "No hay trabajo ligado a esta línea. Puedes dejar de capturar o editar el folio en Plata."}
+                return {
+                    "ok": False,
+                    "error": (
+                        "Esta línea no tiene un trabajo ligado. "
+                        "Edita el folio en Plata o márcalo desde Folios."
+                    ),
+                }
             try:
                 cur.execute(
                     "UPDATE trabajos SET terminado_en = COALESCE(terminado_en, NOW()), activo = 0 WHERE id = %s",
                     (tid,),
                 )
-            except Exception as e:
-                # sin columna activo
+            except Exception:
                 try:
                     cur.execute(
                         "UPDATE trabajos SET terminado_en = COALESCE(terminado_en, NOW()) WHERE id = %s",
@@ -278,12 +305,30 @@ class AprendizajeService:
                     )
                 except Exception as e2:
                     return {"ok": False, "error": str(e2)}
+            if prod_id:
+                try:
+                    cur.execute(
+                        """
+                        UPDATE produccion_plata
+                           SET notas = TRIM(CONCAT(COALESCE(notas,''), ' [terminado]'))
+                         WHERE id = %s AND (notas IS NULL OR notas NOT LIKE %s)
+                        """,
+                        (prod_id, "%[terminado]%"),
+                    )
+                except Exception:
+                    pass
             try:
                 self.db.connect().commit()
             except Exception:
                 pass
-        self.registrar("folio_terminado", entidad="trabajo", entidad_id=int(tid), payload={"prod_id": prod_id, "folio": folio})
-        return {"ok": True, "trabajo_id": tid}
+        self.registrar(
+            "folio_terminado",
+            entidad="trabajo",
+            entidad_id=int(tid),
+            payload={"prod_id": prod_id, "folio": folio},
+        )
+        return {"ok": True, "trabajo_id": tid, "folio": folio, "prod_id": prod_id}
+
 
     def candidatos_duplicados_trabajadores(self) -> list[dict]:
         """

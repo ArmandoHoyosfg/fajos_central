@@ -22,7 +22,7 @@ def to_template_value(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, dict):
         return {str(k): to_template_value(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple, set, frozenset)):
         return [to_template_value(v) for v in value]
     if isinstance(value, bytes):
         try:

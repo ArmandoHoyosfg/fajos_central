@@ -35,6 +35,44 @@
 </div>
 <div id="toast" class="toast-web" hidden></div>
 
+{% if (folio_inactivos and folio_inactivos|length) or (reasignaciones and reasignaciones|length) %}
+<section class="folio-hints">
+  {% if folio_inactivos %}
+  <div class="folio-hint-block">
+    <strong>Folios sin avance esta semana</strong>
+    <p class="muted">Pueden estar terminados. Márcalos o corrige los gramos en la tabla.</p>
+    <ul class="folio-hint-list">
+      {% for x in folio_inactivos[:8] %}
+      <li>
+        <code>{{ x.folio }}</code>
+        <span>{{ x.nombre }} · ubic {{ x.ubic }}</span>
+        <span class="muted">{{ 'Parece terminado' if x.hint == 'posible_finalizado' else ('Cambió de persona' if x.hint == 'posible_reasignacion' else 'Sin gramos') }}</span>
+        {% if not semana_cerrada and x.prod_id %}
+        <button type="button" class="btn btn-secondary" style="padding:0.15rem 0.45rem;font-size:0.78rem"
+                onclick="marcarTerminado({{ x.prod_id }}, {{ (x.folio or '')|tojson }})">Marcar terminado</button>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if reasignaciones %}
+  <div class="folio-hint-block">
+    <strong>Folios que cambiaron de persona</strong>
+    <p class="muted">La semana pasada tenía gramos otra persona. Revisa si es reasignación o un error.</p>
+    <ul class="folio-hint-list">
+      {% for x in reasignaciones[:6] %}
+      <li>
+        <code>{{ x.folio }}</code>
+        <span>{{ (x.de.nombre if x.de else '?') }} → {{ (x.a.nombre if x.a else '?') }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
 <div class="page-head">
   <div>
     <h1>Producción semanal (Plata)</h1>
@@ -106,7 +144,7 @@
   </thead>
   <tbody>
     {% for r in lineas %}
-    <tr class="mat-{{ (r.material or '')|lower }}{% if r.folio and folios_dup_set and (r.folio|string) in folios_dup_set %} folio-dup{% endif %}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
+    <tr class="mat-{{ (r.material or '')|lower }}{% if r.folio and folios_dup_set and (r.folio|string) in folios_dup_set %} folio-dup{% endif %}{% if folio_inact_ids and r.id in folio_inact_ids %} folio-inact{% endif %}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
       {% set row_data = {
             "nombre": r.nombre,
             "ubic": r.ubic,
@@ -130,6 +168,9 @@
             onclick="event.preventDefault();event.stopPropagation();(window.FajosRowMenu||{toggle:function(){alert('Recarga la página (Ctrl+F5)')}}).toggle(this,event)">⋯</button>
           <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
             <button type="button" onclick='openEditPlt({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
+            {% if r.folio %}
+            <button type="button" onclick="marcarTerminado({{ r.id }}, {{ (r.folio or '')|tojson }}); FajosRowMenu.closeAll()">Marcar folio terminado</button>
+            {% endif %}
             <button type="button" class="danger" onclick="delLinea({{ r.id }}); FajosRowMenu.closeAll()">Eliminar</button>
           </div>
         </div>
@@ -550,6 +591,22 @@ async function delLinea(id) {
   const res = await fetch('/api/produccion/linea/' + id, { method: 'DELETE' });
   if (res.ok) location.reload();
   else showToast('Error al eliminar', true);
+}
+async function marcarTerminado(prodId, folio) {
+  const label = folio ? ('folio ' + folio) : 'esta línea';
+  if (!confirm('¿Marcar ' + label + ' como terminado?\nNo se borran los gramos de esta semana. El trabajo deja de considerarse activo para la siguiente.')) return;
+  try {
+    const res = await fetch('/api/produccion/linea/' + prodId + '/terminar', { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showToast(d.error || d.user_message || d.message || 'No se pudo marcar', true);
+      return;
+    }
+    showToast('Folio marcado como terminado' + (d.folio ? (': ' + d.folio) : ''));
+    setTimeout(() => location.reload(), 450);
+  } catch (e) {
+    showToast('Error de red', true);
+  }
 }
 async function toggleFirmado(id, checked) {
   const fd = new FormData();

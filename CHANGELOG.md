@@ -5,6 +5,29 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.2] — 2026-08-28
+
+### Unir fichas y marcar terminado en la UI diaria
+- **Trabajadores**: panel «Unir fichas duplicadas» (principal vs baja) sin pasar por Dev
+- **Plata**: avisos de folios sin avance / reasignación + «Marcar folio terminado» en el menú de fila
+- API: `POST /api/produccion/linea/{id}/terminar`, `GET /api/trabajadores/duplicados`
+
+## [3.18.1] — 2026-08-28
+
+### UX fusión, reasignaciones y asistente
+- Fusión de duplicados con labels claros (principal vs baja)
+- Folios sin avance con botón «Marcar terminado» y enlace a Plata
+- Detección de reasignaciones (folio con avance que cambió de persona)
+- Página `/asistente` (wizard) + badge **Ayuda**
+
+## [3.18.0] — 2026-08-28
+
+### Inteligencia operativa + fusión + aprendizaje
+- Folio compartido: sin rayas/fondo rosa; solo subrayado del folio
+- Folios sin avance (posible fin o reasignación)
+- Fusión de trabajadores duplicados en toda la BD
+- Script `db/schema/004_aprendizaje_merge.sql`
+
 ## [3.17.10] — 2026-08-26
 
 ### Fix visual tablas Plata

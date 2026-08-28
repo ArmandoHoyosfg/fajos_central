@@ -18,6 +18,9 @@
     <button type="button" class="btn btn-secondary" onclick="syncTodos()" title="Propaga nombre y ubicación del catálogo a Plata, Pita y Taller">Sincronizar nóminas</button>
     <a class="btn btn-secondary" href="/api/export/trabajadores" title="Descargar catálogo en Excel">Excel</a>
     <a class="btn btn-secondary" href="/api/export/trabajadores?activos=1" title="Solo activos">Excel activos</a>
+    {% if duplicados %}
+    <a class="btn btn-secondary" href="#unir-fichas">Unir fichas ({{ duplicados|length }})</a>
+    {% endif %}
   </div>
 </div>
 
@@ -31,6 +34,42 @@
   <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.8rem" data-sort-reset="table.sortable">Reset orden</button>
 </div>
 <div id="toast" class="toast-web" hidden></div>
+
+{% if duplicados %}
+<section class="merge-panel" id="unir-fichas">
+  <h2>Unir fichas duplicadas</h2>
+  <p class="muted">La misma persona aparece más de una vez. Elige <strong>cuál se queda</strong> y <strong>cuál se da de baja</strong>.
+  Las nóminas (Plata, Pita, Taller y folios) de la ficha que se da de baja pasan a la principal. No se borra historial.</p>
+  {% for c in duplicados %}
+  <form class="merge-form" onsubmit="return unirFichas(event)">
+    <p class="merge-name">{{ c.nombre }} <span class="muted">· {{ c.n }} fichas</span></p>
+    <div class="merge-grid">
+      <label>
+        <span>Se queda (principal)</span>
+        <select name="id_keep" required>
+          {% for d in c.detalle %}
+          <option value="{{ d.id }}" {% if loop.first %}selected{% endif %}>
+            ID {{ d.id }} · ubic {{ d.ubic }} · {{ 'activo' if d.activo else 'baja' }}{% if d.tipo %} · {{ d.tipo }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Se da de baja (mover datos)</span>
+        <select name="id_merge" required>
+          {% for d in c.detalle %}
+          <option value="{{ d.id }}" {% if loop.index == 2 %}selected{% endif %}>
+            ID {{ d.id }} · ubic {{ d.ubic }} · {{ 'activo' if d.activo else 'baja' }}{% if d.tipo %} · {{ d.tipo }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <button type="submit" class="btn">Unir estas fichas</button>
+  </form>
+  {% endfor %}
+</section>
+{% endif %}
 
 <div class="table-wrap no-sticky-col">
 <table class="sortable" data-sortable="1">
@@ -330,6 +369,36 @@ async function guardarSueldoBase(id, inp) {
     return;
   }
   showToast('Sueldo base actualizado');
+}
+
+async function unirFichas(e) {
+  e.preventDefault();
+  const form = e.target;
+  const keep = form.querySelector('[name="id_keep"]').value;
+  const merge = form.querySelector('[name="id_merge"]').value;
+  if (!keep || !merge) { showToast('Elige las dos fichas', true); return false; }
+  if (keep === merge) {
+    showToast('Elige dos fichas distintas: una se queda y la otra se da de baja', true);
+    return false;
+  }
+  if (!confirm('Se quedará la ficha ID ' + keep + '.\nLa ficha ID ' + merge + ' pasará a baja y todas sus nóminas se moverán a la principal.\n\n¿Continuar?')) return false;
+  const fd = new FormData();
+  fd.set('id_keep', keep);
+  fd.set('id_merge', merge);
+  try {
+    const res = await fetch('/api/trabajadores/merge', { method: 'POST', body: fd });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showToast(d.error || d.user_message || d.message || 'No se pudo unir', true);
+      return false;
+    }
+    const c = d.counts || {};
+    showToast('Unido. Movidas: Plata ' + (c.plata||0) + ', Pita ' + (c.pita||0) + ', Taller ' + (c.taller||0));
+    setTimeout(() => location.reload(), 500);
+  } catch (err) {
+    showToast('Error de red', true);
+  }
+  return false;
 }
 
 async function syncTodos() {

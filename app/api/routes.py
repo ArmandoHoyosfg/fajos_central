@@ -166,6 +166,18 @@ async def api_merge_trabajadores(
     return AprendizajeService().fusionar_trabajadores(id_keep, id_merge)
 
 
+@router.get("/api/trabajadores/duplicados")
+async def api_trabajadores_duplicados():
+    from app.services.aprendizaje_service import AprendizajeService
+    return {"ok": True, "items": AprendizajeService().candidatos_duplicados_trabajadores()}
+
+
+@router.post("/api/produccion/linea/{prod_id}/terminar")
+async def api_linea_terminar(prod_id: int):
+    from app.services.aprendizaje_service import AprendizajeService
+    return AprendizajeService().marcar_folio_terminado(prod_id=prod_id)
+
+
 @router.get("/api/aprendizaje/resumen")
 async def api_aprendizaje_resumen():
     from app.services.aprendizaje_service import AprendizajeService
@@ -364,10 +376,16 @@ async def page_trabajadores(
         from app.core.logging_config import get_logger
         get_logger(__name__).exception("page_trabajadores")
         trabajadores = []
+    duplicados: list = []
+    try:
+        from app.services.aprendizaje_service import AprendizajeService
+        duplicados = AprendizajeService().candidatos_duplicados_trabajadores()
+    except Exception:
+        duplicados = []
     return templates.TemplateResponse(
         request,
         "trabajadores.html",
-        _ctx(request, trabajadores=trabajadores, q=q),
+        _ctx(request, trabajadores=trabajadores, q=q, duplicados=duplicados),
     )
 
 
@@ -411,6 +429,19 @@ async def page_produccion(
                 folios_dup_set.add(str(d["folio"]).strip())
     except Exception:
         pass
+    folio_inactivos: list = []
+    reasignaciones: list = []
+    folio_inact_ids: set = set()
+    try:
+        from app.services.aprendizaje_service import AprendizajeService
+        apr = AprendizajeService()
+        folio_inactivos = apr.detectar_folios_inactivos(semana_id)
+        reasignaciones = apr.detectar_reasignaciones(semana_id)
+        for x in folio_inactivos:
+            if x.get("prod_id"):
+                folio_inact_ids.add(int(x["prod_id"]))
+    except Exception:
+        pass
     return templates.TemplateResponse(
         request,
         "produccion.html",
@@ -427,6 +458,9 @@ async def page_produccion(
             col_hoy=__import__("app.core.dias", fromlist=["col_hoy"]).col_hoy(),
             day_cols=["gm_sab","gm_dom","gm_lun","gm_mar","gm_mie","gm_jue","gm_vie"],
             folios_dup_set=folios_dup_set,
+            folio_inactivos=folio_inactivos,
+            reasignaciones=reasignaciones,
+            folio_inact_ids=folio_inact_ids,
         ),
     )
 
