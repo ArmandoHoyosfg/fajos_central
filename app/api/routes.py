@@ -1662,9 +1662,10 @@ async def api_export_taller(
     if not sem:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
+    # Misma lista que la tabla UI (incluye sueldo 0 / variable en blanco)
     lineas = [
         r for r in repo.listar_por_semana(semana_id)
-        if float(r.get("total") or 0) > 0 or float(r.get("sueldo") or 0) > 0 or float(r.get("extras") or 0) > 0
+        if (str(r.get("nombre") or "").strip())
     ]
     resumen = None
     if include_resumen:
@@ -1699,9 +1700,11 @@ async def api_export_pita(
     if not sem:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
+    # Misma lista que la tabla UI (no filtrar por efectivo=0: muchas filas se llenan después)
+    solo_monto = False  # reserved
     lineas = [
         r for r in repo.listar_por_semana(semana_id)
-        if float(r.get("efectivo") or 0) > 0
+        if (str(r.get("nombre") or "").strip())
     ]
     codigo = sem.get("codigo") or str(semana_id)
     data, media, fname = export_svc.export_nomina_pita(

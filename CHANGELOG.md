@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.6] — 2026-08-28
+
+### Export Pita/Taller = tabla en pantalla
+- Pita ya no exige efectivo > 0 (exportaba vacío con montos en 0)
+- Taller exporta todas las filas con nombre (igual que la UI)
+
 ## [3.18.5] — 2026-08-28
 
 ### Fix Pita/Taller
