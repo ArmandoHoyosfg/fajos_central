@@ -29,6 +29,7 @@ def render_debug_page(
     sync_result: dict | None = None,
     action_result: dict | None = None,
     error: str | None = None,
+    aprendizaje: dict | None = None,
 ) -> HTMLResponse:
     meta = meta or {}
     counts = counts or {}
@@ -135,6 +136,47 @@ def render_debug_page(
     )
     err_html = f'<p class="flash err">{_esc(error)}</p>' if error else ""
     status_color = "#a6e3a1" if db_ok else "#f38ba8"
+
+    apr = aprendizaje or {}
+    folio_inact = apr.get("folios_inactivos") or []
+    cands = apr.get("candidatos_dup") or []
+    fi_rows = "".join(
+        (
+            "<tr><td><code>" + _esc(x.get("folio")) + "</code></td>"
+            "<td>" + _esc(x.get("nombre")) + " / " + _esc(x.get("ubic")) + "</td>"
+            "<td>" + _esc(x.get("hint")) + "</td>"
+            "<td>" + _esc((x.get("prev") or {}).get("nombre"))
+            + " (" + _esc((x.get("prev") or {}).get("gramos")) + " g)</td></tr>"
+        )
+        for x in folio_inact
+    ) or '<tr><td colspan="4" class="muted">Ningún folio inactivo detectado.</td></tr>'
+    cand_rows = ""
+    for c in cands:
+        det = c.get("detalle") or []
+        opts = "".join(
+            '<option value="' + _esc(d["id"]) + '">' + _esc(d["id"]) + " · ubic " + _esc(d["ubic"])
+            + " · " + ("act" if d.get("activo") else "baja") + "</option>"
+            for d in det
+        )
+        ids = c.get("ids") or []
+        cand_rows += (
+            "<tr><td>" + _esc(c.get("nombre")) + "</td><td>" + _esc(c.get("n")) + "</td>"
+            "<td>" + _esc(", ".join(str(i) for i in ids)) + "</td>"
+            "<td><form method='post' action='/dev/merge-trabajadores' "
+            "style='display:flex;gap:0.35rem;flex-wrap:wrap;align-items:center' "
+            "onsubmit=\"return confirm('Fusionar: el secundario se da de baja y sus lineas pasan al principal.');\">"
+            "<select name='id_keep' required>" + opts + "</select>"
+            "<span class='muted'>keep</span>"
+            "<select name='id_merge' required>" + opts + "</select>"
+            "<button type='submit' class='btn btn-secondary' style='padding:0.2rem 0.5rem;font-size:0.8rem'>Fusionar</button>"
+            "</form></td></tr>"
+        )
+    if not cand_rows:
+        cand_rows = '<tr><td colspan="4" class="muted">No hay nombres repetidos en el catálogo.</td></tr>'
+    apr_note = ""
+    if apr and not apr.get("tabla_ok", True):
+        apr_note = '<p class="flash err">Ejecuta <code>db/schema/004_aprendizaje_merge.sql</code> en HeidiSQL.</p>'
+
 
     html = f"""<!DOCTYPE html>
 <html lang="es" data-theme="oscuro">
@@ -249,6 +291,30 @@ def render_debug_page(
       <div class="table-wrap"><table>
         <thead><tr><th>Origen</th><th>ID</th><th>Nombre</th><th>Ubic</th><th>trab_id</th><th>Extra</th></tr></thead>
         <tbody>{rows_vela()}</tbody>
+      </table></div>
+    </section>
+
+    <section class="dev-section">
+      <h2>Aprendizaje ligero</h2>
+      {apr_note}
+      <p class="dev-hint">Eventos 7 días: <strong>{_esc(apr.get('eventos_7d', 0))}</strong>.</p>
+    </section>
+
+    <section class="dev-section">
+      <h2>Folios sin avance (posible fin / reasignación)</h2>
+      <p class="dev-hint">0 g esta semana; con historial previo sugiere finalizado o reasignado.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Folio</th><th>Ahora</th><th>Sugerencia</th><th>Semana previa</th></tr></thead>
+        <tbody>{fi_rows}</tbody>
+      </table></div>
+    </section>
+
+    <section class="dev-section">
+      <h2>Posibles trabajadores duplicados</h2>
+      <p class="dev-hint">Mismo nombre, varias fichas. Conservar uno y fusionar el otro en toda la BD.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Nombre</th><th>Nº</th><th>IDs</th><th>Fusionar</th></tr></thead>
+        <tbody>{cand_rows}</tbody>
       </table></div>
     </section>
 

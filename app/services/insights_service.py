@@ -268,6 +268,28 @@ class InsightsService:
                 "accion": "Ir a Plata",
             })
 
+
+        try:
+            from app.services.aprendizaje_service import AprendizajeService
+            for fx in AprendizajeService(self.db).detectar_folios_inactivos(sid)[:8]:
+                hint = fx.get("hint") or ""
+                if hint == "posible_reasignacion":
+                    tit = "Folio posiblemente reasignado"
+                elif hint == "posible_finalizado":
+                    tit = "Folio posiblemente terminado"
+                else:
+                    tit = "Folio sin avance"
+                avisos.append({
+                    "nivel": "info",
+                    "codigo": "folio_inactivo",
+                    "titulo": f"{tit}: {fx.get('folio')}",
+                    "detalle": f"{fx.get('nombre')} (ubic {fx.get('ubic')})",
+                    "href": f"/produccion?semana_id={sid}",
+                    "accion": "Ver Plata",
+                })
+        except Exception:
+            pass
+
         return {
             "fecha": ref.isoformat(),
             "col_hoy": col,

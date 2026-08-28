@@ -1735,17 +1735,24 @@ td.col-actions,
 th[data-sort-col] { user-select: none; }
 th[data-sort-col]:hover { color: var(--accent, #f9e2af); }
 th .sort-mark { font-size: 0.7em; opacity: 0.85; }
-/* Folio duplicado: una sola marca de fila, sin rayas en cada celda */
-tr.folio-dup > td:first-child {
-  box-shadow: inset 3px 0 0 #f38ba8;
-}
+/* Folio compartido entre personas: solo el texto del folio, sin rayar la fila */
 tr.folio-dup {
-  background: color-mix(in srgb, #f38ba8 7%, transparent);
+  background: transparent !important;
+}
+tr.folio-dup > td:first-child {
+  box-shadow: none !important;
 }
 tr.folio-dup td.col-folio,
 tr.folio-dup [data-field="folio"] {
-  color: #f38ba8;
+  color: var(--peach, #fab387);
   font-weight: 600;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+tr.folio-dup td.col-folio::after {
+  content: " ⧉";
+  font-size: 0.75em;
+  opacity: 0.85;
 }
 
 /* Plata: sin sticky lateral (evita columna fantasma / desalineación) */

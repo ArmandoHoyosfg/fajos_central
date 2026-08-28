@@ -73,6 +73,12 @@ def _dev_page_payload(repo: TrabajadoresRepo, *, action_result=None, sync_result
         lan = f"{urls.get('ip')}:{port}"
     except Exception:
         pass
+    apr = {}
+    try:
+        from app.services.aprendizaje_service import AprendizajeService
+        apr = AprendizajeService().resumen_aprendizaje()
+    except Exception as e:
+        apr = {"tabla_ok": False, "error": str(e), "folios_inactivos": [], "candidatos_dup": []}
     return render_debug_page(
         db_ok=check_db(),
         columns=data.get("columns") or [],
@@ -84,6 +90,7 @@ def _dev_page_payload(repo: TrabajadoresRepo, *, action_result=None, sync_result
         migrations=data.get("migrations") or [],
         folios_dup=data.get("folios_duplicados") or [],
         semana_actual=data.get("semana_actual") or {},
+        aprendizaje=apr,
         sync_result=sync_result,
         action_result=action_result,
         error=error,
@@ -124,6 +131,45 @@ async def page_dashboard(
         ),
     )
 
+
+
+
+@router.post("/dev/merge-trabajadores", response_class=HTMLResponse)
+async def page_dev_merge_trabajadores(
+    request: Request,
+    repo: TrabajadoresRepo = Depends(get_trabajadores_repo),
+):
+    form = await request.form()
+    try:
+        id_keep = int(form.get("id_keep") or 0)
+        id_merge = int(form.get("id_merge") or 0)
+    except (TypeError, ValueError):
+        return _dev_page_payload(repo, error="IDs invalidos para fusion")
+    from app.services.aprendizaje_service import AprendizajeService
+    result = None
+    error = None
+    try:
+        result = AprendizajeService().fusionar_trabajadores(id_keep, id_merge)
+        if not result.get("ok"):
+            error = result.get("error") or "No se pudo fusionar"
+    except Exception as e:
+        error = str(e)
+    return _dev_page_payload(repo, action_result=result, error=error)
+
+
+@router.post("/api/trabajadores/merge")
+async def api_merge_trabajadores(
+    id_keep: int = Form(...),
+    id_merge: int = Form(...),
+):
+    from app.services.aprendizaje_service import AprendizajeService
+    return AprendizajeService().fusionar_trabajadores(id_keep, id_merge)
+
+
+@router.get("/api/aprendizaje/resumen")
+async def api_aprendizaje_resumen():
+    from app.services.aprendizaje_service import AprendizajeService
+    return AprendizajeService().resumen_aprendizaje()
 
 
 @router.get("/dev", response_class=HTMLResponse)
