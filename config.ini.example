@@ -16,3 +16,10 @@ debug = true
 force_https = true
 ssl_certfile = certs/cert.pem
 ssl_keyfile = certs/key.pem
+
+
+[launcher]
+# true = al minimizar va a la bandeja del sistema
+tray_on_minimize = true
+# no cambiar a mano; el launcher lo marca tras el primer aviso
+tray_notified = false

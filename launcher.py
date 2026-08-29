@@ -201,6 +201,44 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 
+
+
+def _launcher_prefs() -> dict:
+    """Preferencias del launcher en config.ini [launcher]."""
+    d = {
+        "tray_on_minimize": True,
+        "tray_notified": False,
+    }
+    if not CONFIG_INI.exists():
+        return d
+    cp = configparser.ConfigParser()
+    try:
+        cp.read(CONFIG_INI, encoding="utf-8")
+        if cp.has_section("launcher"):
+            sec = cp["launcher"]
+            d["tray_on_minimize"] = sec.getboolean("tray_on_minimize", fallback=True)
+            d["tray_notified"] = sec.getboolean("tray_notified", fallback=False)
+    except Exception:
+        pass
+    return d
+
+
+def _save_launcher_prefs(**kwargs) -> None:
+    cp = configparser.ConfigParser()
+    if CONFIG_INI.exists():
+        try:
+            cp.read(CONFIG_INI, encoding="utf-8")
+        except Exception:
+            pass
+    if not cp.has_section("launcher"):
+        cp.add_section("launcher")
+    cur = _launcher_prefs()
+    cur.update({k: v for k, v in kwargs.items() if v is not None})
+    cp.set("launcher", "tray_on_minimize", "true" if cur.get("tray_on_minimize") else "false")
+    cp.set("launcher", "tray_notified", "true" if cur.get("tray_notified") else "false")
+    with CONFIG_INI.open("w", encoding="utf-8") as f:
+        cp.write(f)
+
 class LauncherApp(tk.Tk):
     def __init__(self) -> None:
         # Windows: desagrupar de python.exe e ícono propio en la barra de tareas
@@ -228,6 +266,8 @@ class LauncherApp(tk.Tk):
         self._apply_style()
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.bind("<Unmap>", self._on_unmap)
+        self.bind("<Map>", self._on_map)
 
         # Tamaño exacto al contenido (sin scroll ni ventana sobrada)
         self.update_idletasks()
@@ -276,64 +316,151 @@ class LauncherApp(tk.Tk):
         return img
 
     def _start_tray(self) -> None:
-        self._hide_to_tray()
+        self._hide_to_tray(from_minimize=False)
 
-    def _start_tray(self) -> None:
-        self._hide_to_tray()
+    def _save_tray_pref(self) -> None:
+        try:
+            _save_launcher_prefs(tray_on_minimize=bool(self.var_tray_minimize.get()))
+        except Exception:
+            pass
 
-    def _hide_to_tray(self) -> None:
-        """Oculta el launcher; queda el icono en la bandeja del sistema."""
+    def _on_map(self, event=None) -> None:
+        if event is not None and event.widget is not self:
+            return
+        self._minimizing = False
+
+    def _on_unmap(self, event=None) -> None:
+        """Si el usuario minimiza y tiene la opción activa → bandeja."""
+        if event is not None and event.widget is not self:
+            return
+        try:
+            if self.state() != "iconic":
+                return
+        except Exception:
+            return
+        if getattr(self, "_force_iconic", False):
+            return
+        if not getattr(self, "var_tray_minimize", None):
+            return
+        if not self.var_tray_minimize.get():
+            return
+        # Evitar reentrada
+        if getattr(self, "_minimizing", False):
+            return
+        self._minimizing = True
+        self.after(80, lambda: self._hide_to_tray(from_minimize=True))
+
+    def _ensure_tray_icon(self) -> bool:
+        """Crea el icono de bandeja con menú amplio. True si ok."""
         try:
             import pystray
             from pystray import MenuItem as Item
+            from pystray import Menu
         except ImportError:
             messagebox.showinfo(
                 "Bandeja del sistema",
                 "Falta el paquete pystray.\n\n"
-                "En PowerShell, en la carpeta del proyecto:\n"
+                "En PowerShell:\n"
                 "  .venv\\Scripts\\pip install pystray\n\n"
-                "Mientras tanto se minimizará a la barra de tareas.",
+                "Mientras tanto se minimiza a la barra de tareas.",
             )
+            return False
+
+        if self._tray is not None:
+            return True
+
+        def show(icon=None, item=None):
+            self.after(0, self._show_from_tray)
+
+        def start_srv(icon=None, item=None):
+            self.after(0, self._start_server)
+
+        def stop_srv(icon=None, item=None):
+            self.after(0, self._stop_server)
+
+        def open_web(icon=None, item=None):
+            self.after(0, self._open_browser)
+
+        def open_api(icon=None, item=None):
+            self.after(0, self._open_api_docs)
+
+        def do_backup(icon=None, item=None):
+            self.after(0, self._backup_now)
+
+        def open_folder(icon=None, item=None):
+            self.after(0, self._open_folder)
+
+        def quit_app(icon=None, item=None):
+            self.after(0, self._quit_from_tray)
+
+        menu = Menu(
+            Item("Mostrar centro de control", show, default=True),
+            Menu.SEPARATOR,
+            Item("Iniciar servidor web", start_srv),
+            Item("Detener servidor web", stop_srv),
+            Item("Abrir en el navegador", open_web),
+            Item("Documentación API", open_api),
+            Menu.SEPARATOR,
+            Item("Backup ahora", do_backup),
+            Item("Abrir carpeta del proyecto", open_folder),
+            Menu.SEPARATOR,
+            Item("Salir", quit_app),
+        )
+        icon = pystray.Icon(
+            "fajos_central",
+            self._tray_image(),
+            "Fajos Central v%s" % APP_VERSION,
+            menu,
+        )
+        self._tray = icon
+
+        def run_tray():
+            try:
+                icon.run()
+            except Exception:
+                pass
+
+        self._tray_thread = threading.Thread(target=run_tray, daemon=True)
+        self._tray_thread.start()
+        return True
+
+    def _hide_to_tray(self, from_minimize: bool = False) -> None:
+        """Oculta el launcher en la bandeja del sistema."""
+        if not self._ensure_tray_icon():
+            if from_minimize:
+                # Preferencia activa pero sin pystray: dejar minimizado en barra
+                return
             self.iconify()
             return
 
-        if self._tray is None:
-            def show(icon=None, item=None):
-                self.after(0, self._show_from_tray)
+        # Aviso la primera vez
+        prefs = _launcher_prefs()
+        if not prefs.get("tray_notified"):
+            try:
+                messagebox.showinfo(
+                    "Fajos Central — Bandeja",
+                    "La ventana quedará en el área de notificación "
+                    "(flecha ^ junto al reloj).\n\n"
+                    "• Clic en el icono o clic derecho → menú\n"
+                    "• «Mostrar centro de control» para volver\n\n"
+                    "Si prefieres que al minimizar siga en la barra de tareas,\n"
+                    "desmarca la opción en Sistema.",
+                )
+                _save_launcher_prefs(tray_notified=True)
+            except Exception:
+                pass
 
-            def stop_server(icon=None, item=None):
-                self.after(0, self._stop_server)
-
-            def quit_app(icon=None, item=None):
-                self.after(0, self._quit_from_tray)
-
-            menu = pystray.Menu(
-                Item("Mostrar Fajos Central", show, default=True),
-                Item("Detener servidor web", stop_server),
-                Item("Salir", quit_app),
-            )
-            icon = pystray.Icon(
-                "fajos_central",
-                self._tray_image(),
-                "Fajos Central v%s" % APP_VERSION,
-                menu,
-            )
-            self._tray = icon
-
-            def run_tray():
-                try:
-                    icon.run()
-                except Exception:
-                    pass
-
-            self._tray_thread = threading.Thread(target=run_tray, daemon=True)
-            self._tray_thread.start()
         self.withdraw()
 
     def _show_from_tray(self) -> None:
+        self._minimizing = False
         self.deiconify()
         self.lift()
         self.focus_force()
+        try:
+            self.state("normal")
+        except Exception:
+            pass
 
     def _quit_from_tray(self) -> None:
         try:
@@ -423,8 +550,10 @@ class LauncherApp(tk.Tk):
         # Sistema (compacto)
         sysf = ttk.LabelFrame(main, text=" Sistema ", padding=10)
         sysf.pack(fill=tk.X, pady=4)
+        prefs = _launcher_prefs()
         self.var_backup = tk.BooleanVar(value=True)
         self.var_startup = tk.BooleanVar(value=self._startup_enabled())
+        self.var_tray_minimize = tk.BooleanVar(value=bool(prefs.get("tray_on_minimize", True)))
         ttk.Checkbutton(
             sysf,
             text="Backup al cerrar (Excel Master + config)",
@@ -435,6 +564,12 @@ class LauncherApp(tk.Tk):
             text="Iniciar con Windows",
             variable=self.var_startup,
             command=self._toggle_startup,
+        ).pack(anchor=tk.W, pady=(4, 0))
+        ttk.Checkbutton(
+            sysf,
+            text="Al minimizar → bandeja (desmarca para dejar en la barra de tareas)",
+            variable=self.var_tray_minimize,
+            command=self._save_tray_pref,
         ).pack(anchor=tk.W, pady=(4, 0))
 
         sys_btns = ttk.Frame(sysf)
