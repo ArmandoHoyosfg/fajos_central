@@ -5,6 +5,11 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.12] — 2026-08-29
+
+### Fix
+- `dashboard.html`: `{% endif %}` faltante en banner de consistencia (TemplateSyntaxError)
+
 ## [3.18.11] — 2026-08-29
 
 ### Dashboard: totales vivos + motor de consistencia
