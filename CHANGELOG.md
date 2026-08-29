@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.0] — 2026-08-29
+
+### Fase A (cimiento hacia 4.0)
+- Migraciones versionadas al arranque (`schema_migrations` + `db/schema/001+`)
+- Tests: export en ceros, migrate parser, umbral consistencia
+- Arranque silencioso: `start.bat` + `start_silent.vbs` (sin consola); `start_dev.bat` con consola
+- Paquete de íconos SVG en `/static/icons/`
+- Dev: **Reparación inteligente** + comandos útiles (migrar, sync, huérfanos, APIs)
+
 ## [3.18.14] — 2026-08-29
 
 ### Dashboard compacto + deep links

@@ -326,6 +326,53 @@ async def page_asistente(request: Request):
 
 
 
+@router.post("/dev/migrar", response_class=HTMLResponse)
+async def page_dev_migrar(repo: TrabajadoresRepo = Depends(get_trabajadores_repo)):
+    from app.db.migrate import MigrationRunner
+    try:
+        result = MigrationRunner().apply_pending()
+        return _dev_page_payload(repo, action_result={"accion": "migrar", **result})
+    except Exception as e:
+        return _dev_page_payload(repo, error=str(e))
+
+
+@router.post("/dev/reparar-inteligente", response_class=HTMLResponse)
+async def page_dev_reparar_inteligente(repo: TrabajadoresRepo = Depends(get_trabajadores_repo)):
+    """Pipeline: migraciones → resumen → consistencia → huérfanos → sync denorm."""
+    steps = []
+    try:
+        from app.db.migrate import MigrationRunner
+        m = MigrationRunner().apply_pending()
+        steps.append({"paso": "migraciones", **m})
+    except Exception as e:
+        steps.append({"paso": "migraciones", "ok": False, "error": str(e)})
+    try:
+        from app.db.repository import ResumenRepo
+        r = ResumenRepo().recalcular_todas(52)
+        steps.append({"paso": "resumen_totales", **r})
+    except Exception as e:
+        steps.append({"paso": "resumen_totales", "ok": False, "error": str(e)})
+    try:
+        from app.services.consistency_service import ConsistencyService
+        c = ConsistencyService().revisar(auto_repair=True, limit_semanas=16)
+        steps.append({"paso": "consistencia", "reparados": c.get("reparados"), "n_avisos": c.get("n_avisos")})
+    except Exception as e:
+        steps.append({"paso": "consistencia", "ok": False, "error": str(e)})
+    try:
+        # huérfanos + sync
+        h = repo.reparar_huerfanos() if hasattr(repo, "reparar_huerfanos") else {"skipped": True}
+        steps.append({"paso": "huerfanos", **(h if isinstance(h, dict) else {"result": h})})
+    except Exception as e:
+        steps.append({"paso": "huerfanos", "ok": False, "error": str(e)})
+    try:
+        s = repo.sincronizar_todos_denormalizados()
+        steps.append({"paso": "sync_denorm", **s})
+    except Exception as e:
+        steps.append({"paso": "sync_denorm", "ok": False, "error": str(e)})
+    ok = all(x.get("ok", True) and not x.get("error") for x in steps)
+    return _dev_page_payload(repo, action_result={"accion": "reparar_inteligente", "ok": ok, "steps": steps})
+
+
 @router.get("/dev", response_class=HTMLResponse)
 async def page_dev(
     request: Request,

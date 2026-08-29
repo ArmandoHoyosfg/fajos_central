@@ -150,3 +150,16 @@ db/schema/003_taller_fijo_folio_qr.sql
 ```
 
 Marca sueldo fijo/variable en Trabajadores (área Taller). Luego: `pip install qrcode[pil]`.
+
+
+## Arranque (Windows)
+
+| Archivo | Uso |
+|---------|-----|
+| `start.bat` | Diario — **sin ventana de consola** |
+| `start_dev.bat` | Diagnóstico — consola visible |
+| `launcher.py` | Centro de control (también desde el acceso directo) |
+
+Panel **Dev** en la web (`/dev`): reparación inteligente, migraciones y comandos.
+
+Ver `docs/FASE_A_HACIA_4.0.md`.

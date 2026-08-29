@@ -264,6 +264,37 @@ def render_debug_page(
   </style>
 </head>
 <body>
+<section class="card" style="margin:1rem 0;padding:1rem;border:1px solid var(--border,#333);border-radius:10px;">
+  <h2 style="margin:0 0 0.5rem;display:flex;align-items:center;gap:0.4rem;">
+    <img src="/static/icons/repair.svg" width="20" height="20" alt=""/> Reparación inteligente
+  </h2>
+  <p class="muted" style="font-size:0.9rem">Ejecuta en orden: migraciones → totales → consistencia → huérfanos → sync catálogo.</p>
+  <form method="post" action="/dev/reparar-inteligente" style="display:inline">
+    <button type="submit" class="btn">Ejecutar reparación completa</button>
+  </form>
+  <form method="post" action="/dev/migrar" style="display:inline;margin-left:0.4rem">
+    <button type="submit" class="btn btn-secondary">Solo migraciones</button>
+  </form>
+</section>
+<section class="card" style="margin:1rem 0;padding:1rem;border:1px solid var(--border,#333);border-radius:10px;">
+  <h2 style="margin:0 0 0.5rem;display:flex;align-items:center;gap:0.4rem;">
+    <img src="/static/icons/dev.svg" width="20" height="20" alt=""/> Comandos útiles
+  </h2>
+  <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">
+    <form method="post" action="/dev/sync"><button class="btn btn-secondary" type="submit">Sync nóminas</button></form>
+    <form method="post" action="/dev/reparar-huerfanos"><button class="btn btn-secondary" type="submit">Reparar huérfanos</button></form>
+    <form method="post" action="/dev/crear-semana-actual"><button class="btn btn-secondary" type="submit">Crear semana actual</button></form>
+    <a class="btn btn-secondary" href="/api/consistencia">API consistencia</a>
+    <a class="btn btn-secondary" href="/api/consistencia/reparar" onclick="event.preventDefault();fetch(this.href.replace('/api','/api'),{method:'POST'}).then(r=>r.json()).then(d=>alert(JSON.stringify(d))).catch(e=>alert(e))">API reparar</a>
+    <a class="btn btn-secondary" href="/docs" target="_blank">OpenAPI /docs</a>
+    <a class="btn btn-secondary" href="/api/export/master">Master Excel</a>
+    <a class="btn btn-secondary" href="/">Dashboard</a>
+  </div>
+  <p class="muted" style="margin-top:0.6rem;font-size:0.82rem">
+    Consola visible solo con <code>start_dev.bat</code>. Uso diario: <code>start.bat</code> (sin ventana negra).
+  </p>
+</section>
+
   <header class="topbar">
     <a class="brand" href="/"><span>Fajos Piteados Central</span></a>
     <span class="version-badge">v{_esc(meta.get('version', '?'))}</span>

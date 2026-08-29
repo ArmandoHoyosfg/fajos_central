@@ -34,6 +34,21 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(router)
 
 
+@app.on_event("startup")
+async def _startup_migrations() -> None:
+    """Aplica migraciones pendientes de db/schema/ al iniciar el servidor."""
+    try:
+        from app.db.migrate import run_migrations_on_startup
+        result = run_migrations_on_startup()
+        if result.get("applied"):
+            logger.info("Migraciones nuevas: %s", result["applied"])
+        if result.get("errors"):
+            logger.warning("Migraciones con error: %s", result["errors"])
+    except Exception as e:
+        logger.warning("Startup migrations: %s", e)
+
+
+
 def _wants_html(request: Request) -> bool:
     accept = request.headers.get("accept", "")
     return "text/html" in accept and "application/json" not in accept.split(",")[0]
