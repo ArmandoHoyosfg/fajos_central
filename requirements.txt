@@ -32,3 +32,6 @@ Pillow>=10.0.0
 # Certificados SSL locales
 cryptography>=42.0.0
 qrcode[pil]>=7.4.0
+
+# Bandeja del sistema (launcher)
+pystray>=0.19.0

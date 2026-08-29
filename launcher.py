@@ -47,6 +47,7 @@ if str(ROOT) not in sys.path:
 
 CONFIG_INI = ROOT / "config.ini"
 LOGO_PATH = ROOT / "app" / "web" / "static" / "logo.png"
+ICON_ICO = ROOT / "app" / "web" / "static" / "logo.ico"
 
 
 def _load_dotenv() -> None:
@@ -206,6 +207,9 @@ class LauncherApp(tk.Tk):
         self.title(f"Fajos Piteados Central — Centro de control  ·  v{APP_VERSION}")
         self.configure(bg="#1e1e2e")
         self.resizable(False, False)
+        self._tray = None
+        self._tray_thread = None
+        self._set_window_icon()
 
         self._server_proc: subprocess.Popen | None = None
         self._server_log = None
@@ -227,6 +231,98 @@ class LauncherApp(tk.Tk):
         _center(self, w, h)
         self._update_status()
 
+
+
+    def _set_window_icon(self) -> None:
+        """Ícono de ventana y barra de tareas (Windows .ico)."""
+        ico = ICON_ICO if ICON_ICO.exists() else None
+        if ico is None and LOGO_PATH.exists():
+            ico = LOGO_PATH
+        if not ico:
+            return
+        try:
+            if str(ico).lower().endswith(".ico"):
+                self.iconbitmap(default=str(ico))
+                self.wm_iconbitmap(str(ico))
+            else:
+                from PIL import Image, ImageTk
+                img = Image.open(ico).resize((32, 32))
+                self._icon_photo = ImageTk.PhotoImage(img)
+                self.iconphoto(True, self._icon_photo)
+        except Exception:
+            pass
+
+    def _tray_image(self):
+        from PIL import Image
+        if ICON_ICO.exists():
+            return Image.open(ICON_ICO).resize((64, 64))
+        if LOGO_PATH.exists():
+            return Image.open(LOGO_PATH).resize((64, 64))
+        # fallback generated
+        img = Image.new("RGBA", (64, 64), (30, 41, 59, 255))
+        return img
+
+    def _start_tray(self) -> None:
+        """Icono en la bandeja del sistema (ocultar launcher)."""
+        if self._tray is not None:
+            return
+        try:
+            import pystray
+            from pystray import MenuItem as Item
+        except ImportError:
+            messagebox.showinfo(
+                "Bandeja",
+                "Para ocultar en la bandeja instala:\n  pip install pystray\n\n"
+                "Mientras tanto usa minimizar en la barra de tareas.",
+            )
+            self.iconify()
+            return
+
+        def show(icon=None, item=None):
+            self.after(0, self._show_from_tray)
+
+        def stop_server(icon=None, item=None):
+            self.after(0, self._stop_server)
+
+        def quit_app(icon=None, item=None):
+            self.after(0, self._quit_from_tray)
+
+        menu = pystray.Menu(
+            Item("Mostrar centro de control", show, default=True),
+            Item("Detener servidor", stop_server),
+            Item("Salir", quit_app),
+        )
+        icon = pystray.Icon(
+            "fajos_central",
+            self._tray_image(),
+            f"Fajos Central v{APP_VERSION}",
+            menu,
+        )
+        self._tray = icon
+
+        def run_tray():
+            try:
+                icon.run()
+            except Exception:
+                pass
+
+        self._tray_thread = threading.Thread(target=run_tray, daemon=True)
+        self._tray_thread.start()
+        self.withdraw()
+
+    def _show_from_tray(self) -> None:
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    def _quit_from_tray(self) -> None:
+        try:
+            if self._tray is not None:
+                self._tray.stop()
+        except Exception:
+            pass
+        self._tray = None
+        self._on_close()
 
     def _apply_style(self) -> None:
         style = ttk.Style(self)
