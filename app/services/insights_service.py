@@ -182,7 +182,7 @@ class InsightsService:
                 "codigo": "sin_gramos_hoy",
                 "titulo": f"{len(sin_hoy)} línea(s) sin gramos de {label}",
                 "detalle": "Captura con «＋ Un día» o edita la celda del día.",
-                "href": f"/produccion?semana_id={sid}",
+                "href": f"/produccion?semana_id={sid}&filtro=sin_hoy",
                 "accion": "Capturar hoy",
                 "count": len(sin_hoy),
             })
@@ -193,7 +193,7 @@ class InsightsService:
                 "codigo": "sin_firma",
                 "titulo": f"{len(sin_firma)} línea(s) Plata sin firmar",
                 "detalle": "Marca firma cuando el trabajador cobró / firmó papel.",
-                "href": f"/produccion?semana_id={sid}",
+                "href": f"/produccion?semana_id={sid}&filtro=sin_firma",
                 "accion": "Ver firmas",
                 "count": len(sin_firma),
             })
@@ -218,7 +218,7 @@ class InsightsService:
                 "codigo": "plt_sin_linea",
                 "titulo": f"{len(faltan)} trabajador(es) PLT sin línea esta semana",
                 "detalle": "Pueden no trabajar esta semana o faltan por agregar.",
-                "href": f"/produccion?semana_id={sid}",
+                "href": f"/produccion?semana_id={sid}&filtro=todos",
                 "accion": "Revisar Plata",
                 "count": len(faltan),
             })
@@ -279,13 +279,15 @@ class InsightsService:
                     tit = "Folio posiblemente terminado"
                 else:
                     tit = "Folio sin avance"
+                folio_q = str(fx.get("folio") or "").strip()
+                from urllib.parse import quote
                 avisos.append({
                     "nivel": "info",
                     "codigo": "folio_inactivo",
                     "titulo": f"{tit}: {fx.get('folio')}",
                     "detalle": f"{fx.get('nombre')} (ubic {fx.get('ubic')})",
-                    "href": f"/produccion?semana_id={sid}",
-                    "accion": "Ver Plata",
+                    "href": f"/produccion?semana_id={sid}&q={quote(folio_q)}&highlight=folio",
+                    "accion": "Ver folio",
                 })
         except Exception:
             pass

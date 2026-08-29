@@ -736,3 +736,44 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 {% endblock %}
+
+
+<script>
+(function applyDashboardDeepLink(){
+  const params = new URLSearchParams(location.search);
+  const q = params.get('q');
+  const filtro = params.get('filtro');
+  const highlight = params.get('highlight');
+  function run() {
+    const txt = document.getElementById('flt-texto');
+    const sinFirma = document.getElementById('flt-sin-firma');
+    const sinHoy = document.getElementById('flt-sin-hoy');
+    if (q && txt) { txt.value = q; }
+    if (filtro === 'sin_firma' && sinFirma) sinFirma.checked = true;
+    if (filtro === 'sin_hoy' && sinHoy) sinHoy.checked = true;
+    if (typeof filterRows === 'function') filterRows();
+    else if (typeof aplicarFiltros === 'function') aplicarFiltros();
+    // resaltar filas visibles que coincidan
+    if (highlight || q) {
+      const needle = (q || '').toLowerCase();
+      document.querySelectorAll('table.sortable tbody tr').forEach(tr => {
+        if (tr.style.display === 'none') return;
+        const text = (tr.textContent || '').toLowerCase();
+        if (needle && text.includes(needle)) {
+          tr.classList.add('row-highlight-deep');
+          tr.style.outline = '2px solid var(--accent, #c9a227)';
+          tr.style.outlineOffset = '-2px';
+          tr.style.background = 'rgba(201,162,39,0.12)';
+        }
+      });
+      const first = document.querySelector('tr.row-highlight-deep');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(run, 50));
+  } else {
+    setTimeout(run, 50);
+  }
+})();
+</script>

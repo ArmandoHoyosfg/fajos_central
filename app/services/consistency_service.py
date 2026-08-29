@@ -155,6 +155,8 @@ class ConsistencyService:
                     for row in cur.fetchall() or []:
                         sid = int(row["semana_id"])
                         codigo = codigo_by_id.get(sid, str(sid))
+                        from urllib.parse import quote
+                        folio_q = str(row.get("folio") or "").strip()
                         avisos.append({
                             "nivel": "alerta",
                             "codigo": "folio_duplicado",
@@ -162,6 +164,8 @@ class ConsistencyService:
                             "detalle": "Requiere revisión manual en Plata (no se borra al recalcular).",
                             "semana_id": sid,
                             "reparable": False,
+                            "href": f"/produccion?semana_id={sid}&q={quote(folio_q)}&highlight=folio",
+                            "accion": "Ver folio",
                         })
             except Exception as e:
                 logger.warning("consistency folios: %s", e)

@@ -1916,3 +1916,10 @@ tr.folio-inact td.col-nombre::after {
   padding: 0.2rem 0.35rem;
 }
 .trab-actions-bar { margin-bottom: 0.65rem; }
+
+.insights-list-compact .insight-warn,
+.insights-list-compact .insight-alerta { border-left: 3px solid #e6a23c; padding-left: 0.4rem; }
+.insights-list-compact .insight-ok { border-left: 3px solid #67c23a; padding-left: 0.4rem; }
+.insights-list-compact .insight-info { border-left: 3px solid #409eff; padding-left: 0.4rem; }
+.btn-xs { padding: 0.15rem 0.45rem; font-size: 0.75rem; }
+tr.row-highlight-deep { transition: background 0.3s; }

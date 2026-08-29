@@ -3,27 +3,66 @@
 {% block content %}
 
 {% if consistencia and consistencia.n_avisos %}
-<section class="consistency-banner" style="margin:0.75rem 0;padding:0.75rem 1rem;border-radius:10px;background:rgba(255,180,50,0.12);border:1px solid rgba(255,180,50,0.35);">
-  <strong>Revisión de datos:</strong> {{ consistencia.n_avisos }} aviso(s)
-  {% if consistencia.n_reparables %}
-    · <span class="muted">{{ consistencia.n_reparables }} se corrigen al recalcular</span>
-  {% endif %}
-  {% if consistencia.n_manuales %}
-    · <span class="muted">{{ consistencia.n_manuales }} requieren revisión manual</span>
-  {% endif %}
-  <ul style="margin:0.4rem 0 0.5rem;padding-left:1.2rem;font-size:0.9rem;">
-  {% for a in consistencia.avisos[:8] %}
-    <li>
-      {% if a.reparable %}<span title="Se corrige al recalcular">🔧</span>{% else %}<span title="Revisión manual">👁</span>{% endif %}
-      <strong>{{ a.titulo }}</strong>{% if a.detalle %} — {{ a.detalle }}{% endif %}
-    </li>
-  {% endfor %}
-  </ul>
-  {% if consistencia.n_reparables %}
-  <button type="button" class="btn btn-secondary" style="font-size:0.85rem" onclick="repararConsistencia()">Recalcular totales</button>
-  {% else %}
-  <p class="muted" style="margin:0.35rem 0 0;font-size:0.85rem">Los avisos actuales no se eliminan al recalcular (p. ej. folios compartidos). Revísalos en Plata o Dev.</p>
-  {% endif %}
+<details class="folio-hints-compact consistency-banner" id="banner-consistencia" style="margin:0.5rem 0;">
+  <summary style="cursor:pointer;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+    <strong>Revisión de datos</strong>
+    <span class="muted">{{ consistencia.n_avisos }} aviso(s)
+      {% if consistencia.n_reparables %}· {{ consistencia.n_reparables }} reparables{% endif %}
+      {% if consistencia.n_manuales %}· {{ consistencia.n_manuales }} manuales{% endif %}
+    </span>
+  </summary>
+  <div class="folio-hint-block" style="padding-top:0.4rem;">
+    <ul style="margin:0 0 0.4rem;padding-left:1.1rem;font-size:0.85rem;max-height:9rem;overflow:auto;">
+    {% for a in consistencia.avisos[:10] %}
+      <li style="margin:0.15rem 0;">
+        {% if a.reparable %}🔧{% else %}👁{% endif %}
+        <strong>{{ a.titulo }}</strong>
+        {% if a.detalle %}<span class="muted"> — {{ a.detalle }}</span>{% endif %}
+        {% if a.href %}
+          <a class="btn btn-secondary btn-xs" href="{{ a.href }}" style="margin-left:0.25rem;">{{ a.accion or 'Ver' }}</a>
+        {% endif %}
+      </li>
+    {% endfor %}
+    </ul>
+    <div style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;">
+      {% if consistencia.n_reparables %}
+      <button type="button" class="btn btn-secondary btn-sm" onclick="repararConsistencia()">Recalcular totales</button>
+      {% endif %}
+      <button type="button" class="btn btn-secondary btn-sm" onclick="ocultarConsistencia()">Ocultar por hoy</button>
+    </div>
+  </div>
+</details>
+<script>
+(function(){
+  if (localStorage.getItem('fajos_hide_consist_' + (new Date().toISOString().slice(0,10))) === '1') {
+    const el = document.getElementById('banner-consistencia');
+    if (el) el.hidden = true;
+  }
+})();
+function ocultarConsistencia() {
+  localStorage.setItem('fajos_hide_consist_' + (new Date().toISOString().slice(0,10)), '1');
+  const el = document.getElementById('banner-consistencia');
+  if (el) el.hidden = true;
+}
+async function repararConsistencia() {
+  if (!confirm('¿Recalcular totales y enlaces desde la captura real?\n\nLos avisos de folios repetidos no se borran solos.')) return;
+  try {
+    const res = await fetch('/api/consistencia/reparar', { method: 'POST' });
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || d.message || 'Falló'); return; }
+    const rep = d.reparados || 0;
+    const rest = d.n_avisos_restantes || 0;
+    const man = d.n_manuales || 0;
+    let msg = 'Listo.\n\nCorrecciones: ' + rep;
+    if (rest === 0) msg += '\n\nYa no quedan avisos.';
+    else msg += '\n\nQuedan ' + rest + ' (manuales: ' + man + ').';
+    alert(msg);
+    location.reload();
+  } catch (e) { alert('Error de red'); }
+}
+</script>
+{% endif %}
+
 </section>
 <script>
 async function repararConsistencia() {
@@ -109,25 +148,25 @@ async function repararConsistencia() {
 
 
 {% if insights and insights.avisos %}
-<section class="insights-panel" aria-label="Qué revisar hoy">
-  <div class="insights-head">
-    <h2>Qué revisar hoy</h2>
-    <span class="muted">{{ insights.col_hoy_label or '' }}{% if insights.semana %} · Semana {{ insights.semana.codigo }}{% endif %}</span>
-  </div>
-  <ul class="insights-list">
+<details class="folio-hints-compact insights-panel" aria-label="Qué revisar hoy" open>
+  <summary style="cursor:pointer;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+    <strong>Qué revisar hoy</strong>
+    <span class="muted">{{ insights.avisos|length }} · {{ insights.col_hoy_label or '' }}{% if insights.semana %} · {{ insights.semana.codigo }}{% endif %}</span>
+  </summary>
+  <ul class="insights-list-compact" style="list-style:none;margin:0.35rem 0 0;padding:0;max-height:14rem;overflow:auto;">
     {% for a in insights.avisos %}
-    <li class="insight insight-{{ a.nivel }}">
-      <div class="insight-body">
+    <li class="insight-compact insight-{{ a.nivel }}" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.6rem;align-items:center;padding:0.28rem 0;border-bottom:1px solid var(--border);font-size:0.88rem;">
+      <span style="flex:1 1 12rem;min-width:8rem;">
         <strong>{{ a.titulo }}</strong>
-        {% if a.detalle %}<p class="muted">{{ a.detalle }}</p>{% endif %}
-      </div>
+        {% if a.detalle %}<span class="muted"> — {{ a.detalle }}</span>{% endif %}
+      </span>
       {% if a.href %}
-      <a class="btn btn-secondary btn-sm" href="{{ a.href }}">{{ a.accion or 'Ver' }}</a>
+      <a class="btn btn-secondary btn-xs" href="{{ a.href }}">{{ a.accion or 'Ver' }}</a>
       {% endif %}
     </li>
     {% endfor %}
   </ul>
-</section>
+</details>
 
 <div class="card" style="margin:0.75rem 0;padding:0.75rem 1rem;">
   <form class="inline" style="flex-wrap:wrap;align-items:center;gap:0.5rem;" onsubmit="return saveUmbral(event)">
