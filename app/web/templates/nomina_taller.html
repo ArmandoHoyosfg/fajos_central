@@ -27,7 +27,7 @@
   <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'tll')" title="Duplicar a la semana siguiente">Duplicar → sig. semana</button>
   {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;">SEMANA CERRADA</span>{% endif %}
 
-  <a class="btn" href="/api/export/nomina-taller/{{ semana_id }}">Excel formal Taller</a>
+  <button type="button" class="btn" onclick="exportFormalTaller({{ semana_id }})">Excel formal Taller</button>
   <a class="btn btn-secondary" href="/api/export/resumen/{{ semana_id }}">Resumen 3 nóminas</a>
   <div class="kpi-bar">
     <span class="kpi-item"><b id="kpi-lineas">{{ totales.lineas or 0 }}</b> líneas</span>
@@ -286,5 +286,38 @@ function tllPuestoHint() {
   const el = document.getElementById('tll-pitas');
   if (!el) return;
   el.style.outline = /torcedor/i.test(p) ? '2px solid var(--accent)' : '';
+}
+</script>
+
+<script>
+async function exportFormalTaller(semanaId) {
+  try {
+    const res = await fetch('/api/export/nomina-taller/' + semanaId + '/preview');
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || d.message || 'No se pudo revisar la exportación'); return; }
+    const omit = d.omitidas || 0;
+    const exp = d.exportables || 0;
+    const tot = d.total || 0;
+    if (exp === 0) {
+      alert(
+        'No hay filas con monto > 0 para exportar.\n\n' +
+        'Hay ' + tot + ' línea(s) en pantalla, todas en $0.\n' +
+        'Llena sueldos/extras (o pitas de torcedores) y vuelve a intentar.\n\n' +
+        'Regla: en 0 no se exporta nada.'
+      );
+      return;
+    }
+    let msg = 'Exportar nómina formal Taller\n\n' +
+      'Líneas en tabla: ' + tot + '\n' +
+      'Se exportarán (monto > 0): ' + exp + '\n';
+    if (omit > 0) {
+      msg += 'Se omitirán (en $0): ' + omit + '\n';
+    }
+    msg += '\nRegla: las filas en $0 no van al Excel.\n\n¿Descargar?';
+    if (!confirm(msg)) return;
+    window.location.href = '/api/export/nomina-taller/' + semanaId;
+  } catch (e) {
+    alert('Error al preparar la exportación');
+  }
 }
 </script>

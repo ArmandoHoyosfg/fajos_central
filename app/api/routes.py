@@ -1678,10 +1678,13 @@ async def api_export_taller(
     if not sem:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    # Misma lista que la tabla UI (incluye sueldo 0 / variable en blanco)
+    # Regla fija: no exportar filas en 0 (solo líneas con sueldo/extras/total > 0)
+    todas = list(repo.listar_por_semana(semana_id))
     lineas = [
-        r for r in repo.listar_por_semana(semana_id)
-        if (str(r.get("nombre") or "").strip())
+        r for r in todas
+        if float(r.get("total") or 0) > 0
+        or float(r.get("sueldo") or 0) > 0
+        or float(r.get("extras") or 0) > 0
     ]
     resumen = None
     if include_resumen:
@@ -1704,6 +1707,45 @@ async def api_export_taller(
     )
 
 
+@router.get("/api/export/nomina-pita/{semana_id}/preview")
+async def api_export_pita_preview(
+    semana_id: int,
+    repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+):
+    """Cuenta filas totales vs exportables (efectivo > 0)."""
+    todas = list(repo.listar_por_semana(semana_id))
+    exportables = [r for r in todas if float(r.get("efectivo") or 0) > 0]
+    return {
+        "ok": True,
+        "total": len(todas),
+        "exportables": len(exportables),
+        "omitidas": len(todas) - len(exportables),
+        "regla": "Solo filas con efectivo > 0",
+    }
+
+
+@router.get("/api/export/nomina-taller/{semana_id}/preview")
+async def api_export_taller_preview(
+    semana_id: int,
+    repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
+):
+    """Cuenta filas totales vs exportables (monto > 0)."""
+    todas = list(repo.listar_por_semana(semana_id))
+    exportables = [
+        r for r in todas
+        if float(r.get("total") or 0) > 0
+        or float(r.get("sueldo") or 0) > 0
+        or float(r.get("extras") or 0) > 0
+    ]
+    return {
+        "ok": True,
+        "total": len(todas),
+        "exportables": len(exportables),
+        "omitidas": len(todas) - len(exportables),
+        "regla": "Solo filas con sueldo/extras/total > 0",
+    }
+
+
 @router.get("/api/export/nomina-pita/{semana_id}")
 async def api_export_pita(
     semana_id: int,
@@ -1716,11 +1758,11 @@ async def api_export_pita(
     if not sem:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    # Misma lista que la tabla UI (no filtrar por efectivo=0: muchas filas se llenan después)
-    solo_monto = False  # reserved
+    # Regla fija: no exportar filas con efectivo en 0 (solo lo ya liquidado/llenado)
+    todas = list(repo.listar_por_semana(semana_id))
     lineas = [
-        r for r in repo.listar_por_semana(semana_id)
-        if (str(r.get("nombre") or "").strip())
+        r for r in todas
+        if float(r.get("efectivo") or 0) > 0
     ]
     codigo = sem.get("codigo") or str(semana_id)
     data, media, fname = export_svc.export_nomina_pita(

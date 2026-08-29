@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.10] — 2026-08-28
+
+### Export: regla fija “en 0 no se exporta”
+- **Pita:** solo filas con efectivo > 0
+- **Taller:** solo filas con sueldo/extras/total > 0
+- Aviso antes de exportar (cuántas van / cuántas se omiten; bloqueo si todas están en 0)
+
 ## [3.18.9] — 2026-08-28
 
 ### Taller: sueldo fijo desde catálogo

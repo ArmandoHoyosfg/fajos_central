@@ -27,7 +27,7 @@
   <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'pit')" title="Duplicar a la semana siguiente">Duplicar → sig. semana</button>
   {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;">SEMANA CERRADA</span>{% endif %}
 
-  <a class="btn" href="/api/export/nomina-pita/{{ semana_id }}">Excel formal Pita</a>
+  <button type="button" class="btn" onclick="exportFormalPita({{ semana_id }})">Excel formal Pita</button>
   <div class="kpi-bar" id="kpi-pita">
     <span class="kpi-item"><b id="kpi-lineas">{{ totales.lineas or 0 }}</b> líneas</span>
     <span class="kpi-item money"><b id="kpi-total">${{ '%.2f'|format((totales.total or 0)|float) }}</b> total pita</span>
@@ -263,3 +263,36 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 {% endblock %}
+
+<script>
+async function exportFormalPita(semanaId) {
+  try {
+    const res = await fetch('/api/export/nomina-pita/' + semanaId + '/preview');
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || d.message || 'No se pudo revisar la exportación'); return; }
+    const omit = d.omitidas || 0;
+    const exp = d.exportables || 0;
+    const tot = d.total || 0;
+    if (exp === 0) {
+      alert(
+        'No hay filas con efectivo > 0 para exportar.\n\n' +
+        'Hay ' + tot + ' línea(s) en pantalla, todas en $0.\n' +
+        'Llena el efectivo de las que deban pagarse y vuelve a intentar.\n\n' +
+        'Regla: en 0 no se exporta nada.'
+      );
+      return;
+    }
+    let msg = 'Exportar nómina formal Pita\n\n' +
+      'Líneas en tabla: ' + tot + '\n' +
+      'Se exportarán (efectivo > 0): ' + exp + '\n';
+    if (omit > 0) {
+      msg += 'Se omitirán (efectivo = 0): ' + omit + '\n';
+    }
+    msg += '\nRegla: las filas en $0 no van al Excel.\n\n¿Descargar?';
+    if (!confirm(msg)) return;
+    window.location.href = '/api/export/nomina-pita/' + semanaId;
+  } catch (e) {
+    alert('Error al preparar la exportación');
+  }
+}
+</script>
