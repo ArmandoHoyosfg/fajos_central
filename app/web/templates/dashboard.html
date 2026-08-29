@@ -5,21 +5,47 @@
 {% if consistencia and consistencia.n_avisos %}
 <section class="consistency-banner" style="margin:0.75rem 0;padding:0.75rem 1rem;border-radius:10px;background:rgba(255,180,50,0.12);border:1px solid rgba(255,180,50,0.35);">
   <strong>Revisión de datos:</strong> {{ consistencia.n_avisos }} aviso(s)
+  {% if consistencia.n_reparables %}
+    · <span class="muted">{{ consistencia.n_reparables }} se corrigen al recalcular</span>
+  {% endif %}
+  {% if consistencia.n_manuales %}
+    · <span class="muted">{{ consistencia.n_manuales }} requieren revisión manual</span>
+  {% endif %}
   <ul style="margin:0.4rem 0 0.5rem;padding-left:1.2rem;font-size:0.9rem;">
   {% for a in consistencia.avisos[:8] %}
-    <li><strong>{{ a.titulo }}</strong>{% if a.detalle %} — {{ a.detalle }}{% endif %}</li>
+    <li>
+      {% if a.reparable %}<span title="Se corrige al recalcular">🔧</span>{% else %}<span title="Revisión manual">👁</span>{% endif %}
+      <strong>{{ a.titulo }}</strong>{% if a.detalle %} — {{ a.detalle }}{% endif %}
+    </li>
   {% endfor %}
   </ul>
+  {% if consistencia.n_reparables %}
   <button type="button" class="btn btn-secondary" style="font-size:0.85rem" onclick="repararConsistencia()">Recalcular totales</button>
+  {% else %}
+  <p class="muted" style="margin:0.35rem 0 0;font-size:0.85rem">Los avisos actuales no se eliminan al recalcular (p. ej. folios compartidos). Revísalos en Plata o Dev.</p>
+  {% endif %}
 </section>
 <script>
 async function repararConsistencia() {
-  if (!confirm('¿Recalcular resumen de todas las semanas desde la captura real?')) return;
+  if (!confirm('¿Recalcular totales y enlaces desde la captura real?\n\nLos avisos de folios repetidos no se borran solos: hay que revisarlos a mano.')) return;
   try {
     const res = await fetch('/api/consistencia/reparar', { method: 'POST' });
     const d = await res.json();
-    if (!res.ok) { alert(d.error || 'Falló'); return; }
-    alert('Totales recalculados. Se recarga el dashboard.');
+    if (!res.ok) { alert(d.error || d.message || 'Falló'); return; }
+    const rep = d.reparados || 0;
+    const rest = d.n_avisos_restantes || 0;
+    const man = d.n_manuales || 0;
+    let msg = 'Listo.\n\nCorrecciones aplicadas: ' + rep;
+    if ((d.detalles_repair || []).length) {
+      msg += '\n- ' + (d.detalles_repair || []).slice(0, 6).join('\n- ');
+    }
+    if (rest === 0) {
+      msg += '\n\nYa no quedan avisos.';
+    } else {
+      msg += '\n\nAvisos que quedan: ' + rest + ' (manuales: ' + man + ').';
+      msg += '\nEsos no se auto-corrigen (folios en más de una persona, etc.).';
+    }
+    alert(msg);
     location.reload();
   } catch (e) { alert('Error de red'); }
 }

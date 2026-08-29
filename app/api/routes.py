@@ -997,10 +997,21 @@ async def api_consistencia(reparar: int = 0):
 async def api_consistencia_reparar():
     from app.services.consistency_service import ConsistencyService
     from app.db.repository import ResumenRepo
-    r = ConsistencyService().revisar(auto_repair=True)
+    # 1) Recalcular todos los resúmenes desde captura
     ResumenRepo().recalcular_todas(52)
-    r2 = ConsistencyService().revisar(auto_repair=False)
-    return {"ok": True, "antes": r, "despues": r2}
+    # 2) Enlaces y demás auto-reparables
+    r = ConsistencyService().revisar(auto_repair=True, limit_semanas=16)
+    # 3) Estado final (sin reparar de nuevo)
+    despues = ConsistencyService().revisar(auto_repair=False, limit_semanas=16)
+    return {
+        "ok": True,
+        "reparados": r.get("reparados", 0),
+        "detalles_repair": r.get("detalles_repair") or [],
+        "n_avisos_restantes": despues.get("n_avisos", 0),
+        "n_manuales": despues.get("n_manuales", 0),
+        "n_reparables": despues.get("n_reparables", 0),
+        "despues": despues,
+    }
 
 
 @router.get("/api/trabajadores")

@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.13] — 2026-08-29
+
+### Consistencia: recalcular sí limpia lo reparable
+- Separa avisos **reparables** (resumen, enlaces) vs **manuales** (folios en varias personas)
+- «Recalcular totales» actualiza resúmenes + enlaza trabajador_id; los folios duplicados **no** se borran solos
+- Folios solo se revisan en semanas recientes (no spam de semana histórica id=1)
+- Mensaje claro tras reparar: cuántos se corrigieron y cuántos quedan
+
 ## [3.18.12] — 2026-08-29
 
 ### Fix
