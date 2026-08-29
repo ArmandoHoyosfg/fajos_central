@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.2] — 2026-08-29
+
+### Launcher: ícono en barra de tareas + botón Bandeja
+- `AppUserModelID` propio (ya no se agrupa como Python genérico)
+- Botón **Bandeja** visible en Sistema
+- Ícono reforzado (iconbitmap + iconphoto)
+
 ## [3.19.1] — 2026-08-29
 
 ### Launcher: sin consola, bandeja e ícono
