@@ -1,6 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Inicio — Fajos Piteados Central{% endblock %}
 {% block content %}
+
+{% if consistencia and consistencia.n_avisos %}
+<section class="consistency-banner" style="margin:0.75rem 0;padding:0.75rem 1rem;border-radius:10px;background:rgba(255,180,50,0.12);border:1px solid rgba(255,180,50,0.35);">
+  <strong>Revisión de datos:</strong> {{ consistencia.n_avisos }} aviso(s)
+  <ul style="margin:0.4rem 0 0.5rem;padding-left:1.2rem;font-size:0.9rem;">
+  {% for a in consistencia.avisos[:8] %}
+    <li><strong>{{ a.titulo }}</strong>{% if a.detalle %} — {{ a.detalle }}{% endif %}</li>
+  {% endfor %}
+  </ul>
+  <button type="button" class="btn btn-secondary" style="font-size:0.85rem" onclick="repararConsistencia()">Recalcular totales</button>
+</section>
+<script>
+async function repararConsistencia() {
+  if (!confirm('¿Recalcular resumen de todas las semanas desde la captura real?')) return;
+  try {
+    const res = await fetch('/api/consistencia/reparar', { method: 'POST' });
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || 'Falló'); return; }
+    alert('Totales recalculados. Se recarga el dashboard.');
+    location.reload();
+  } catch (e) { alert('Error de red'); }
+}
+</script>
+
 <script src="/static/semana_ops.js?v=3122"></script>
 
 <div class="page-head">

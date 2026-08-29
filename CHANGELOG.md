@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.18.11] — 2026-08-29
+
+### Dashboard: totales vivos + motor de consistencia
+- PLT/PIT/TLL del dashboard se calculan desde captura real (no solo `resumen_nominas`)
+- Al **cerrar semana** se recalcula y guarda el resumen
+- Motor de consistencia: avisa desfaces resumen↔captura, folios duplicados, líneas sin enlace
+- Botón **Recalcular totales** en el dashboard
+
 ## [3.18.10] — 2026-08-28
 
 ### Export: regla fija “en 0 no se exporta”

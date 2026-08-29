@@ -1476,6 +1476,67 @@ class ResumenRepo(BaseRepo):
                 ),
             )
 
+    def totales_vivos(self, semana_id: int) -> dict:
+        """Totales reales desde tablas de captura (fuente de verdad)."""
+        with self.db.cursor() as cur:
+            cur.execute(
+                "SELECT COALESCE(SUM(efectivo),0) AS v FROM produccion_plata WHERE semana_id=%s",
+                (semana_id,),
+            )
+            plt = float((cur.fetchone() or {}).get("v") or 0)
+            try:
+                cur.execute(
+                    "SELECT COALESCE(SUM(efectivo),0) AS v FROM produccion_pita WHERE semana_id=%s",
+                    (semana_id,),
+                )
+                pit = float((cur.fetchone() or {}).get("v") or 0)
+            except Exception:
+                pit = 0.0
+            try:
+                cur.execute(
+                    "SELECT COALESCE(SUM(total),0) AS v FROM nomina_taller WHERE semana_id=%s",
+                    (semana_id,),
+                )
+                tll = float((cur.fetchone() or {}).get("v") or 0)
+            except Exception:
+                tll = 0.0
+        return {
+            "nomina_plt": plt,
+            "nomina_pit": pit,
+            "nomina_tll": tll,
+            "total_semana": plt + pit + tll,
+        }
+
+    def recalcular(self, semana_id: int, notas: str | None = None) -> dict:
+        """Sincroniza resumen_nominas con los totales vivos de la semana."""
+        vivos = self.totales_vivos(semana_id)
+        self.guardar(
+            semana_id,
+            {
+                "nomina_plt": vivos["nomina_plt"],
+                "nomina_pit": vivos["nomina_pit"],
+                "nomina_tll": vivos["nomina_tll"],
+                "notas": notas or "Recalculado desde captura",
+            },
+        )
+        return vivos
+
+    def recalcular_todas(self, limit: int = 52) -> dict:
+        with self.db.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM semanas ORDER BY fecha_inicio DESC LIMIT %s",
+                (limit,),
+            )
+            ids = [int(r["id"]) for r in (cur.fetchall() or [])]
+        ok = 0
+        for sid in ids:
+            try:
+                self.recalcular(sid)
+                ok += 1
+            except Exception:
+                pass
+        return {"ok": True, "semanas": ok}
+
 
 class DashboardRepo(BaseRepo):
     """Consultas agregadas para el dashboard."""
@@ -1527,20 +1588,53 @@ class DashboardRepo(BaseRepo):
         }
 
     def ultimas_semanas(self, limit: int = 8) -> list[dict]:
+        """Totales desde captura en vivo (no depende de resumen desactualizado)."""
         sql = """
             SELECT s.id, s.codigo, s.fecha_inicio, s.fecha_fin,
-                   COALESCE(r.nomina_plt, 0) AS nomina_plt,
-                   COALESCE(r.nomina_pit, 0) AS nomina_pit,
-                   COALESCE(r.nomina_tll, 0) AS nomina_tll,
-                   COALESCE(r.total_semana, 0) AS total_semana
+                   COALESCE(s.cerrada, 0) AS cerrada,
+                   COALESCE((
+                       SELECT SUM(p.efectivo) FROM produccion_plata p WHERE p.semana_id = s.id
+                   ), 0) AS nomina_plt,
+                   COALESCE((
+                       SELECT SUM(pi.efectivo) FROM produccion_pita pi WHERE pi.semana_id = s.id
+                   ), 0) AS nomina_pit,
+                   COALESCE((
+                       SELECT SUM(t.total) FROM nomina_taller t WHERE t.semana_id = s.id
+                   ), 0) AS nomina_tll
             FROM semanas s
-            LEFT JOIN resumen_nominas r ON r.semana_id = s.id
             ORDER BY s.fecha_inicio DESC
             LIMIT %s
         """
         with self.db.cursor() as cur:
-            cur.execute(sql, (limit,))
-            return list(cur.fetchall())
+            try:
+                cur.execute(sql, (limit,))
+                rows = list(cur.fetchall() or [])
+            except Exception:
+                # fallback sin subconsultas / sin cerrada
+                cur.execute(
+                    """
+                    SELECT s.id, s.codigo, s.fecha_inicio, s.fecha_fin,
+                           COALESCE(r.nomina_plt, 0) AS nomina_plt,
+                           COALESCE(r.nomina_pit, 0) AS nomina_pit,
+                           COALESCE(r.nomina_tll, 0) AS nomina_tll,
+                           COALESCE(r.total_semana, 0) AS total_semana
+                    FROM semanas s
+                    LEFT JOIN resumen_nominas r ON r.semana_id = s.id
+                    ORDER BY s.fecha_inicio DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+                rows = list(cur.fetchall() or [])
+            for r in rows:
+                plt = float(r.get("nomina_plt") or 0)
+                pit = float(r.get("nomina_pit") or 0)
+                tll = float(r.get("nomina_tll") or 0)
+                r["nomina_plt"] = plt
+                r["nomina_pit"] = pit
+                r["nomina_tll"] = tll
+                r["total_semana"] = plt + pit + tll
+            return rows
 
 
 

@@ -111,6 +111,17 @@ async def page_dashboard(
     data = svc.get_dashboard()
     semanas = marcar_semanas(data["ultimas_semanas"])
     try:
+        from app.services.consistency_service import ConsistencyService
+        from app.db.repository import ResumenRepo
+        # Sincroniza resumen con captura (evita $0 en dashboard tras cerrar)
+        try:
+            ResumenRepo().recalcular_todas(12)
+        except Exception:
+            pass
+        cons = ConsistencyService().revisar(auto_repair=False, limit_semanas=12)
+    except Exception:
+        cons = {"avisos": [], "n_avisos": 0}
+    try:
         avisos = insights.avisos_hoy() if data.get("db_ok", True) else {"avisos": [], "resumen": {"n": 0}}
     except Exception:
         avisos = {"avisos": [], "resumen": {"n": 0}}
@@ -124,6 +135,7 @@ async def page_dashboard(
         _ctx(
             request,
             kpis=data["kpis"],
+            consistencia=cons,
             semanas=semanas,
             insights=avisos,
             tendencias=tendencias,
@@ -876,8 +888,10 @@ async def api_cerrar_semana(
     usuario: str | None = Form(None),
     repo: SemanasRepo = Depends(get_semanas_repo),
 ):
+    from app.db.repository import ResumenRepo
     repo.cerrar(semana_id, usuario=usuario or "web")
-    return {"ok": True, "semana_id": semana_id, "cerrada": True}
+    vivos = ResumenRepo().recalcular(semana_id, notas=f"Cierre por {usuario or 'web'}")
+    return {"ok": True, "semana_id": semana_id, "cerrada": True, "totales": vivos}
 
 
 @router.post("/api/semanas/{semana_id}/reabrir")
@@ -971,6 +985,22 @@ async def health():
 @router.get("/api/dashboard")
 async def api_dashboard(svc: DashboardService = Depends(get_dashboard_service)):
     return svc.get_dashboard()
+
+
+@router.get("/api/consistencia")
+async def api_consistencia(reparar: int = 0):
+    from app.services.consistency_service import ConsistencyService
+    return ConsistencyService().revisar(auto_repair=bool(reparar))
+
+
+@router.post("/api/consistencia/reparar")
+async def api_consistencia_reparar():
+    from app.services.consistency_service import ConsistencyService
+    from app.db.repository import ResumenRepo
+    r = ConsistencyService().revisar(auto_repair=True)
+    ResumenRepo().recalcular_todas(52)
+    r2 = ConsistencyService().revisar(auto_repair=False)
+    return {"ok": True, "antes": r, "despues": r2}
 
 
 @router.get("/api/trabajadores")
