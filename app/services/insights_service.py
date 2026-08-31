@@ -152,7 +152,7 @@ class InsightsService:
                     "codigo": "dia_anterior_vacio",
                     "titulo": f"Ayer ({label_ayer}) no tiene gramos en Plata",
                     "detalle": f"Ninguna de las {len(lineas)} línea(s) tiene captura de {label_ayer}.",
-                    "href": f"/produccion?semana_id={sid}",
+                    "href": f"/produccion?semana_id={sid}&dia={col_ayer}&filtro=sin_dia",
                     "accion": "Completar ayer",
                     "count": len(lineas),
                 })
@@ -162,7 +162,7 @@ class InsightsService:
                     "codigo": "dia_anterior_parcial",
                     "titulo": f"Ayer ({label_ayer}): {con_ayer} con gramos, {sin_ayer} sin captura",
                     "detalle": "Revisa si faltó anotar a alguien.",
-                    "href": f"/produccion?semana_id={sid}",
+                    "href": f"/produccion?semana_id={sid}&dia={col_ayer}&filtro=sin_dia",
                     "accion": "Revisar",
                     "count": sin_ayer,
                 })

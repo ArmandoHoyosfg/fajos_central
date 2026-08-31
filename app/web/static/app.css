@@ -1923,3 +1923,9 @@ tr.folio-inact td.col-nombre::after {
 .insights-list-compact .insight-info { border-left: 3px solid #409eff; padding-left: 0.4rem; }
 .btn-xs { padding: 0.15rem 0.45rem; font-size: 0.75rem; }
 tr.row-highlight-deep { transition: background 0.3s; }
+
+input.cell-gm.day-unlocked-temp {
+  outline: 1px solid rgba(201, 162, 39, 0.55);
+  background: rgba(201, 162, 39, 0.06);
+}
+.session-edit-banner strong { color: var(--accent, #c9a227); }

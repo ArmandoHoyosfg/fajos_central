@@ -719,24 +719,43 @@ document.addEventListener('DOMContentLoaded', async () => {
       onSave: async (inp) => { await saveGramCell(inp); },
     });
   }
-  document.querySelectorAll('input.cell-gm').forEach(inp => {
-    const d = inp.dataset.dia;
-    if (d && d !== COL_HOY) {
-      inp.readOnly = true;
-      inp.title = 'Doble clic para editar (no es hoy)';
-      inp.addEventListener('dblclick', () => {
-        if (confirm('¿Editar día que no es hoy?')) { inp.readOnly = false; inp.focus(); }
-      });
-    }
-  });
+  // Días distintos de hoy: bloqueados salvo sesión de edición temporal (dashboard)
+  window.FAJOS_EDIT_DIAS = window.FAJOS_EDIT_DIAS || new Set();
+  if (COL_HOY) window.FAJOS_EDIT_DIAS.add(COL_HOY);
+  function applyDayLocks() {
+    document.querySelectorAll('input.cell-gm').forEach(inp => {
+      const d = inp.dataset.dia;
+      if (!d) return;
+      const free = window.FAJOS_EDIT_DIAS.has(d);
+      if (free) {
+        inp.readOnly = false;
+        inp.classList.add('day-unlocked-temp');
+        inp.title = (d === COL_HOY) ? 'Hoy — editable' : 'Edición temporal (acceso del dashboard) — solo mientras estés aquí';
+      } else {
+        inp.readOnly = true;
+        inp.classList.remove('day-unlocked-temp');
+        inp.title = 'Doble clic para editar (no es hoy)';
+        if (!inp.dataset.lockBound) {
+          inp.dataset.lockBound = '1';
+          inp.addEventListener('dblclick', () => {
+            if (confirm('¿Editar día que no es hoy?')) {
+              inp.readOnly = false;
+              inp.classList.add('day-unlocked-temp');
+              window.FAJOS_EDIT_DIAS.add(d);
+              inp.focus();
+            }
+          });
+        }
+      }
+    });
+  }
+  applyDayLocks();
   ['flt-texto', 'flt-sin-firma', 'flt-sin-hoy'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', applyTableFilters);
   });
 });
 </script>
-{% endblock %}
-
 
 <script>
 (function applyDashboardDeepLink(){
@@ -744,6 +763,51 @@ document.addEventListener('DOMContentLoaded', async () => {
   const q = params.get('q');
   const filtro = params.get('filtro');
   const highlight = params.get('highlight');
+  const dia = params.get('dia'); // gm_dom, gm_lun, ...
+  const labels = {gm_sab:'Sábado',gm_dom:'Domingo',gm_lun:'Lunes',gm_mar:'Martes',gm_mie:'Miércoles',gm_jue:'Jueves',gm_vie:'Viernes'};
+
+  function showSessionBanner(msg) {
+    if (document.getElementById('session-edit-banner')) return;
+    const bar = document.createElement('div');
+    bar.id = 'session-edit-banner';
+    bar.className = 'session-edit-banner';
+    bar.style.cssText = 'margin:0.5rem 0;padding:0.55rem 0.85rem;border-radius:8px;background:rgba(201,162,39,0.15);border:1px solid rgba(201,162,39,0.4);font-size:0.9rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;';
+    bar.innerHTML = '<strong>Edición temporal:</strong> <span></span>';
+    bar.querySelector('span').textContent = msg;
+    const host = document.querySelector('.plt-sticky-bar') || document.querySelector('.page-head') || document.querySelector('main');
+    if (host) host.insertAdjacentElement('afterend', bar);
+  }
+
+  function unlockDia(col) {
+    if (!col) return;
+    window.FAJOS_EDIT_DIAS = window.FAJOS_EDIT_DIAS || new Set();
+    window.FAJOS_EDIT_DIAS.add(col);
+    if (typeof applyDayLocks === 'function') applyDayLocks();
+    else {
+      document.querySelectorAll('input.cell-gm[data-dia="'+col+'"]').forEach(inp => {
+        inp.readOnly = false;
+        inp.classList.add('day-unlocked-temp');
+      });
+    }
+  }
+
+  function filterSinDia(col) {
+    if (!col) return;
+    document.querySelectorAll('table.sortable tbody tr').forEach(tr => {
+      const inp = tr.querySelector('input.cell-gm[data-dia="'+col+'"]');
+      if (!inp) return;
+      const v = parseFloat(inp.value || '0');
+      if (v > 0) tr.style.display = 'none';
+      else {
+        tr.style.display = '';
+        tr.classList.add('row-highlight-deep');
+        tr.style.outline = '2px solid var(--accent, #c9a227)';
+        tr.style.outlineOffset = '-2px';
+        tr.style.background = 'rgba(201,162,39,0.08)';
+      }
+    });
+  }
+
   function run() {
     const txt = document.getElementById('flt-texto');
     const sinFirma = document.getElementById('flt-sin-firma');
@@ -751,9 +815,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (q && txt) { txt.value = q; }
     if (filtro === 'sin_firma' && sinFirma) sinFirma.checked = true;
     if (filtro === 'sin_hoy' && sinHoy) sinHoy.checked = true;
-    if (typeof filterRows === 'function') filterRows();
-    else if (typeof aplicarFiltros === 'function') aplicarFiltros();
-    // resaltar filas visibles que coincidan
+
+    // Edición temporal de un día concreto (Completar ayer, etc.)
+    if (dia && /^gm_(sab|dom|lun|mar|mie|jue|vie)$/.test(dia)) {
+      unlockDia(dia);
+      showSessionBanner(
+        (labels[dia] || dia) + ' editable solo en esta visita. Al salir o recargar sin el enlace, vuelve a bloquearse.'
+      );
+      if (filtro === 'sin_dia') filterSinDia(dia);
+    } else if (filtro === 'sin_hoy') {
+      unlockDia(typeof COL_HOY !== 'undefined' ? COL_HOY : null);
+      showSessionBanner('Filtrado: líneas sin gramos de hoy. La columna de hoy ya es editable.');
+    } else if (filtro === 'sin_firma') {
+      showSessionBanner('Filtrado: líneas sin firmar. Marca la casilla Firma cuando corresponda.');
+    }
+
+    if (typeof applyTableFilters === 'function') applyTableFilters();
+    else if (typeof filterRows === 'function') filterRows();
+
     if (highlight || q) {
       const needle = (q || '').toLowerCase();
       document.querySelectorAll('table.sortable tbody tr').forEach(tr => {
@@ -769,11 +848,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       const first = document.querySelector('tr.row-highlight-deep');
       if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    // Si hay día desbloqueado, enfocar la primera celda vacía de ese día
+    if (dia) {
+      const empty = document.querySelector('tr:not([style*="display: none"]) input.cell-gm[data-dia="'+dia+'"]:not([value]), tr:not([style*="display: none"]) input.cell-gm[data-dia="'+dia+'"][value=""]');
+      const any = document.querySelector('tr:not([style*="display: none"]) input.cell-gm[data-dia="'+dia+'"]');
+      const target = empty || any;
+      if (target) { try { target.focus(); } catch(e) {} }
+    }
   }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(run, 50));
+    document.addEventListener('DOMContentLoaded', () => setTimeout(run, 80));
   } else {
-    setTimeout(run, 50);
+    setTimeout(run, 80);
   }
 })();
+</script>
+
+{% endblock %}
+
+
+<script>
+
 </script>
