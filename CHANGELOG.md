@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.6] — 2026-08-31
+
+### Fix: botón Terminar en Sin avance
+- Terminar funciona aunque la línea no tenga trabajo_id (marca [terminado] en la línea)
+- API con códigos 400/500 claros; JS valida prodId
+- Reactivar limpia la marca en producción
+
 ## [3.19.5] — 2026-08-31
 
 ### Sin avance: tiempo de inactividad

@@ -626,19 +626,26 @@ async function delLinea(id) {
   else showToast('Error al eliminar', true);
 }
 async function marcarTerminado(prodId, folio) {
-  const label = folio ? ('folio ' + folio) : 'esta línea';
-  if (!confirm('¿Marcar ' + label + ' como terminado?\n\n• Se oculta de la captura\n• Los gramos de esta semana se conservan para el pago\n• Tras 7 días sin uso se elimina el trabajo (puedes reactivarlo antes)')) return;
+  if (prodId == null || prodId === '' || Number(prodId) <= 0) {
+    showToast('No se identificó la línea (recarga la página)', true);
+    return;
+  }
+  const label = folio ? ('folio ' + folio) : ('línea #' + prodId);
+  if (!confirm('¿Marcar ' + label + ' como terminado?\n\n• Se oculta de la captura\n• Los gramos de esta semana se conservan para el pago\n• Puedes reactivarlo desde «folios terminados»')) return;
   try {
-    const res = await fetch('/api/produccion/linea/' + prodId + '/terminar', { method: 'POST' });
+    const res = await fetch('/api/produccion/linea/' + prodId + '/terminar', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+    });
     const d = await res.json().catch(() => ({}));
     if (!res.ok || d.ok === false) {
-      showToast(d.error || d.user_message || d.message || 'No se pudo marcar', true);
+      showToast(d.error || d.user_message || d.message || ('Error HTTP ' + res.status), true);
       return;
     }
-    showToast('Folio marcado como terminado' + (d.folio ? (': ' + d.folio) : ''));
-    setTimeout(() => location.reload(), 450);
+    showToast('Terminado: ' + (d.folio || label));
+    setTimeout(() => location.reload(), 400);
   } catch (e) {
-    showToast('Error de red', true);
+    showToast('Error de red al terminar folio', true);
   }
 }
 async function reactivarFolio(prodId, folio) {

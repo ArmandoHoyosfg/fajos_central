@@ -195,14 +195,28 @@ async def api_trabajadores_duplicados():
 
 @router.post("/api/produccion/linea/{prod_id}/terminar")
 async def api_linea_terminar(prod_id: int):
+    from fastapi.responses import JSONResponse
     from app.services.aprendizaje_service import AprendizajeService
-    return AprendizajeService().marcar_folio_terminado(prod_id=prod_id)
+    try:
+        result = AprendizajeService().marcar_folio_terminado(prod_id=prod_id)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    if not result.get("ok"):
+        return JSONResponse(result, status_code=400)
+    return result
 
 
 @router.post("/api/produccion/linea/{prod_id}/reactivar")
 async def api_linea_reactivar(prod_id: int):
+    from fastapi.responses import JSONResponse
     from app.services.aprendizaje_service import AprendizajeService
-    return AprendizajeService().reactivar_folio(prod_id=prod_id)
+    try:
+        result = AprendizajeService().reactivar_folio(prod_id=prod_id)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    if not result.get("ok"):
+        return JSONResponse(result, status_code=400)
+    return result
 
 
 @router.get("/api/aprendizaje/resumen")

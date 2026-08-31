@@ -338,20 +338,29 @@ class AprendizajeService:
         return out
 
     def marcar_folio_terminado(self, prod_id: int | None = None, trabajo_id: int | None = None) -> dict:
-        """Marca el trabajo como terminado. Si la línea no tiene trabajo_id, lo busca por folio."""
+        """
+        Marca folio como terminado.
+        - Siempre marca la línea de producción con [terminado] si hay prod_id
+          (así se oculta aunque no exista fila en `trabajos`).
+        - Si hay trabajo ligado (o se encuentra por folio), lo desactiva.
+        """
         folio = None
+        tid = trabajo_id
+        trab_id = None
+        marked_prod = False
         with self.db.cursor() as cur:
-            tid = trabajo_id
-            trab_id = None
             if not tid and prod_id:
                 cur.execute(
-                    "SELECT trabajo_id, folio, trabajador_id FROM produccion_plata WHERE id=%s",
+                    "SELECT trabajo_id, folio, trabajador_id, notas FROM produccion_plata WHERE id=%s",
                     (prod_id,),
                 )
                 row = cur.fetchone() or {}
+                if not row:
+                    return {"ok": False, "error": f"No existe la línea de producción #{prod_id}."}
                 tid = row.get("trabajo_id")
-                folio = row.get("folio")
+                folio = (row.get("folio") or "").strip() or None
                 trab_id = row.get("trabajador_id")
+                # Buscar trabajo por trabajador+folio
                 if not tid and folio and trab_id:
                     try:
                         cur.execute(
@@ -365,33 +374,49 @@ class AprendizajeService:
                         tw = cur.fetchone()
                         if tw:
                             tid = tw["id"]
-                            cur.execute(
-                                "UPDATE produccion_plata SET trabajo_id=%s WHERE id=%s",
-                                (tid, prod_id),
-                            )
+                            try:
+                                cur.execute(
+                                    "UPDATE produccion_plata SET trabajo_id=%s WHERE id=%s",
+                                    (tid, prod_id),
+                                )
+                            except Exception:
+                                pass
                     except Exception:
                         tid = None
-            if not tid:
-                return {
-                    "ok": False,
-                    "error": (
-                        "Esta línea no tiene un trabajo ligado. "
-                        "Edita el folio en Plata o márcalo desde Folios."
-                    ),
-                }
-            try:
-                cur.execute(
-                    "UPDATE trabajos SET terminado_en = COALESCE(terminado_en, NOW()), activo = 0 WHERE id = %s",
-                    (tid,),
-                )
-            except Exception:
+                # Fallback: solo por folio (última coincidencia)
+                if not tid and folio:
+                    try:
+                        cur.execute(
+                            """
+                            SELECT id FROM trabajos
+                             WHERE folio=%s
+                             ORDER BY id DESC LIMIT 1
+                            """,
+                            (folio,),
+                        )
+                        tw = cur.fetchone()
+                        if tw:
+                            tid = tw["id"]
+                            try:
+                                cur.execute(
+                                    "UPDATE produccion_plata SET trabajo_id=%s WHERE id=%s",
+                                    (tid, prod_id),
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+            if trabajo_id and not folio:
                 try:
-                    cur.execute(
-                        "UPDATE trabajos SET terminado_en = COALESCE(terminado_en, NOW()) WHERE id = %s",
-                        (tid,),
-                    )
-                except Exception as e2:
-                    return {"ok": False, "error": str(e2)}
+                    cur.execute("SELECT folio FROM trabajos WHERE id=%s", (trabajo_id,))
+                    tw = cur.fetchone() or {}
+                    folio = (tw.get("folio") or "").strip() or None
+                    tid = trabajo_id
+                except Exception:
+                    pass
+
+            # 1) Marcar línea de producción (siempre si hay prod_id)
             if prod_id:
                 try:
                     cur.execute(
@@ -402,61 +427,98 @@ class AprendizajeService:
                         """,
                         (prod_id, "%[terminado]%"),
                     )
+                    marked_prod = True
+                except Exception as e:
+                    return {"ok": False, "error": f"No se pudo marcar la línea: {e}"}
+
+            # 2) Desactivar trabajo si existe
+            if tid:
+                try:
+                    cur.execute(
+                        "UPDATE trabajos SET terminado_en = COALESCE(terminado_en, NOW()), activo = 0 WHERE id = %s",
+                        (tid,),
+                    )
                 except Exception:
-                    pass
-            try:
-                self.db.connect().commit()
-            except Exception:
-                pass
-        self.registrar(
-            "folio_terminado",
-            entidad="trabajo",
-            entidad_id=int(tid),
-            payload={"prod_id": prod_id, "folio": folio},
-        )
-        return {"ok": True, "trabajo_id": tid, "folio": folio, "prod_id": prod_id}
+                    try:
+                        cur.execute(
+                            "UPDATE trabajos SET terminado_en = COALESCE(terminado_en, NOW()) WHERE id = %s",
+                            (tid,),
+                        )
+                    except Exception:
+                        # No bloquear: la línea de producción ya está marcada
+                        pass
+
+            if not marked_prod and not tid:
+                return {
+                    "ok": False,
+                    "error": "Indica una línea de producción o un trabajo para terminar.",
+                }
+
+        try:
+            self.registrar(
+                "folio_terminado",
+                entidad="trabajo" if tid else "produccion_plata",
+                entidad_id=int(tid or prod_id or 0),
+                payload={"prod_id": prod_id, "folio": folio, "trabajo_id": tid},
+            )
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "trabajo_id": tid,
+            "folio": folio,
+            "prod_id": prod_id,
+            "solo_linea": bool(marked_prod and not tid),
+        }
 
 
 
     def reactivar_folio(self, prod_id: int | None = None, trabajo_id: int | None = None) -> dict:
         """Reabre un folio terminado (activo=1, limpia marca en notas)."""
+        folio = None
+        tid = trabajo_id
         with self.db.cursor() as cur:
-            tid = trabajo_id
-            folio = None
             if prod_id:
                 cur.execute(
                     "SELECT trabajo_id, folio, notas FROM produccion_plata WHERE id=%s",
                     (prod_id,),
                 )
                 row = cur.fetchone() or {}
+                if not row:
+                    return {"ok": False, "error": f"No existe la línea #{prod_id}."}
                 if not tid:
                     tid = row.get("trabajo_id")
-                folio = row.get("folio")
+                folio = (row.get("folio") or "").strip() or None
+                # Quitar marca [terminado] de notas
                 notas = str(row.get("notas") or "").replace("[terminado]", "").strip()
-                cur.execute(
-                    "UPDATE produccion_plata SET notas = %s WHERE id = %s",
-                    (notas or None, prod_id),
-                )
-            if not tid:
-                return {"ok": False, "error": "No se encontró el trabajo para reactivar."}
-            try:
-                cur.execute(
-                    "UPDATE trabajos SET activo = 1, terminado_en = NULL WHERE id = %s",
-                    (tid,),
-                )
-            except Exception:
-                cur.execute("UPDATE trabajos SET activo = 1 WHERE id = %s", (tid,))
-            try:
-                self.db.connect().commit()
-            except Exception:
-                pass
-        self.registrar(
-            "folio_reactivado",
-            entidad="trabajo",
-            entidad_id=int(tid),
-            payload={"prod_id": prod_id, "folio": folio},
-        )
+                try:
+                    cur.execute(
+                        "UPDATE produccion_plata SET notas = %s WHERE id = %s",
+                        (notas or None, prod_id),
+                    )
+                except Exception as e:
+                    return {"ok": False, "error": str(e)}
+            if tid:
+                try:
+                    cur.execute(
+                        "UPDATE trabajos SET activo = 1, terminado_en = NULL WHERE id = %s",
+                        (tid,),
+                    )
+                except Exception:
+                    pass
+            elif not prod_id:
+                return {"ok": False, "error": "Indica línea o trabajo a reactivar."}
+        try:
+            self.registrar(
+                "folio_reactivado",
+                entidad="trabajo" if tid else "produccion_plata",
+                entidad_id=int(tid or prod_id or 0),
+                payload={"prod_id": prod_id, "folio": folio},
+            )
+        except Exception:
+            pass
         return {"ok": True, "trabajo_id": tid, "folio": folio, "prod_id": prod_id}
+
 
     def purgar_terminados(self, dias: int = 7) -> dict:
         """Elimina trabajos terminados tras N días. Historial de nómina se conserva."""
