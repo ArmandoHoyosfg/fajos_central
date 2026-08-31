@@ -285,7 +285,7 @@ def render_debug_page(
     <form method="post" action="/dev/reparar-huerfanos"><button class="btn btn-secondary" type="submit">Reparar huérfanos</button></form>
     <form method="post" action="/dev/crear-semana-actual"><button class="btn btn-secondary" type="submit">Crear semana actual</button></form>
     <a class="btn btn-secondary" href="/api/consistencia">API consistencia</a>
-    <a class="btn btn-secondary" href="/api/consistencia/reparar" onclick="event.preventDefault();fetch(this.href.replace('/api','/api'),{method:'POST'}).then(r=>r.json()).then(d=>alert(JSON.stringify(d))).catch(e=>alert(e))">API reparar</a>
+    <a class="btn btn-secondary" href="/api/consistencia/reparar" onclick="event.preventDefault();fetch(this.href.replace('/api','/api'),{{method:'POST'}}).then(r=>r.json()).then(d=>alert(JSON.stringify(d))).catch(e=>alert(e))">API reparar</a>
     <a class="btn btn-secondary" href="/docs" target="_blank">OpenAPI /docs</a>
     <a class="btn btn-secondary" href="/api/export/master">Master Excel</a>
     <a class="btn btn-secondary" href="/">Dashboard</a>
