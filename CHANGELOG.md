@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.7] — 2026-08-31
+
+### Fix duro: Terminar / Reactivar
+- Nuevo `folio_actions.js` con delegación de eventos (capture)
+- Botones con `data-prod-id` / `data-action` (no dependen de onclick roto)
+- Toast siempre con fallback a `alert`
+- Clicks no se pierden por overlays del panel «Sin avance»
+
 ## [3.19.6] — 2026-08-31
 
 ### Fix: botón Terminar en Sin avance

@@ -92,8 +92,10 @@
         <span class="badge-inactive" title="{{ x.ultima_txt or '' }}">{{ x.inactivo_txt or '1 semana' }}</span>
         {% if x.ultima_txt %}<span class="muted faint" style="font-size:0.8rem">{{ x.ultima_txt }}</span>{% endif %}
         {% if not semana_cerrada and x.prod_id %}
-        <button type="button" class="btn btn-secondary btn-xs"
-                onclick="marcarTerminado({{ x.prod_id }}, {{ (x.folio or '')|tojson }})">Terminar</button>
+        <button type="button" class="btn btn-secondary btn-xs btn-folio-terminar"
+                data-action="terminar-folio"
+                data-prod-id="{{ x.prod_id }}"
+                data-folio="{{ x.folio or '' }}">Terminar</button>
         {% endif %}
       </li>
       {% endfor %}
@@ -130,7 +132,7 @@
         <span>{{ x.nombre }} · {{ x.ubic }}</span>
         {% if x.total_gramos %}<span class="muted">{{ x.total_gramos }} g</span>{% endif %}
         <button type="button" class="btn btn-secondary btn-xs"
-                onclick="reactivarFolio({{ x.id }}, {{ (x.folio or '')|tojson }})">Reactivar</button>
+                class="btn btn-secondary btn-xs btn-folio-reactivar" data-action="reactivar-folio" data-prod-id="{{ x.id }}" data-folio="{{ x.folio or '' }}">Reactivar</button>
       </li>
       {% endfor %}
     </ul>
@@ -202,7 +204,7 @@
           <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
             <button type="button" onclick='openEditPlt({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
             {% if r.folio %}
-            <button type="button" onclick="marcarTerminado({{ r.id }}, {{ (r.folio or '')|tojson }}); FajosRowMenu.closeAll()">Marcar folio terminado</button>
+            <button type="button" class="btn-folio-terminar" data-action="terminar-folio" data-prod-id="{{ r.id }}" data-folio="{{ r.folio or '' }}" onclick="if(window.FajosRowMenu)FajosRowMenu.closeAll()">Marcar folio terminado</button>
             {% endif %}
             <button type="button" class="danger" onclick="delLinea({{ r.id }}); FajosRowMenu.closeAll()">Eliminar</button>
           </div>
@@ -362,6 +364,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/folio_actions.js?v=3197"></script>
 <script src="/static/table_sort.js?v=3180"></script>
 <script src="/static/capture_guard.js?v=3130"></script>
 
@@ -483,14 +486,22 @@ const COL_HOY = "{{ col_hoy|default('gm_lun') }}";
 let CACHE_TRABAJOS = [];
 
 function showToast(msg, err) {
-  if (window.FajosLive) return FajosLive.showToast(msg, err);
+  try {
+    if (window.FajosLive && FajosLive.showToast) {
+      FajosLive.showToast(msg, err);
+      return;
+    }
+  } catch (e) {}
   const el = document.getElementById('toast');
-  if (!el) { alert(msg); return; }
-  el.hidden = false;
-  el.textContent = msg;
-  el.className = 'toast-web' + (err ? ' err' : ' ok');
-  clearTimeout(window._toastT);
-  window._toastT = setTimeout(() => { el.hidden = true; }, 3000);
+  if (el) {
+    el.hidden = false;
+    el.textContent = msg;
+    el.className = 'toast-web' + (err ? ' err' : ' ok');
+    clearTimeout(window._toastT);
+    window._toastT = setTimeout(() => { el.hidden = true; }, 3000);
+    return;
+  }
+  alert(msg);
 }
 
 function openModal(id) {
@@ -876,6 +887,3 @@ document.addEventListener('DOMContentLoaded', async () => {
 {% endblock %}
 
 
-<script>
-
-</script>

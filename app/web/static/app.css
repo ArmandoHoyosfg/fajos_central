@@ -1940,3 +1940,23 @@ input.cell-gm.day-unlocked-temp {
   color: #e6456f;
   white-space: nowrap;
 }
+
+.folio-hint-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  padding: 0.35rem 0;
+  pointer-events: auto;
+}
+.btn-folio-terminar, .btn-folio-reactivar {
+  pointer-events: auto;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+.folio-hints-compact details,
+.folio-hints-compact summary {
+  pointer-events: auto;
+}
