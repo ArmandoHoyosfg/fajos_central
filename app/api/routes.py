@@ -1,9 +1,3 @@
-
-
-def get_catalogos_repo():
-    from app.db.repository import CatalogosRepo
-    return CatalogosRepo()
-
 """
 Rutas API REST + páginas web.
 """
@@ -49,6 +43,11 @@ templates.env.policies["json.dumps_function"] = lambda obj, **kw: __import__(
 
 
 router = APIRouter()
+
+def get_catalogos_repo():
+    from app.db.repository import CatalogosRepo
+    return CatalogosRepo()
+
 
 from app.web.context import build_template_context, to_template_value
 
