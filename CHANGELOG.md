@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.21.5] — 2026-08-31
+
+### Fix: /dev NameError `method`
+- En la página Dev, `{method:'POST'}` en un f-string se interpretaba como variable Python
+- Escapado a `{{method:'POST'}}`
+
 ## [3.21.4] — 2026-08-31
 
 ### Suministro: hasta 10 avances
