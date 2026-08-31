@@ -299,7 +299,7 @@
           <label>Gramos del día <span class="muted">(varios avances se suman)</span></label>
           <div id="dia-gram-list" class="gram-multi-list">
             <div class="gram-multi-row">
-              <input type="number" class="gram-partial" step="1" min="0" placeholder="Avance 1" inputmode="decimal">
+              <input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance 1" inputmode="decimal">
               <button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button>
             </div>
           </div>
@@ -359,13 +359,13 @@
           </select>
         </div>
         <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" min="0"></div>
-        <div><label>Sáb</label><input name="gm_sab" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Dom</label><input name="gm_dom" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Lun</label><input name="gm_lun" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Mar</label><input name="gm_mar" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Mié</label><input name="gm_mie" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Jue</label><input name="gm_jue" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Vie</label><input name="gm_vie" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
         <div class="full edit-totals-bar" id="edit-plt-totals">
           <span>Total gramos: <strong id="edit-plt-tg">0</strong> g</span>
           <span>Efectivo est.: <strong id="edit-plt-te">$0.00</strong></span>
@@ -643,7 +643,7 @@ function addGramPartial() {
   const n = list.querySelectorAll('.gram-partial').length + 1;
   const row = document.createElement('div');
   row.className = 'gram-multi-row';
-  row.innerHTML = '<input type="number" class="gram-partial" step="1" min="0" placeholder="Avance ' + n + '" inputmode="decimal">' +
+  row.innerHTML = '<input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance ' + n + '" inputmode="decimal">' +
     '<button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar">×</button>';
   list.appendChild(row);
   list.querySelectorAll('.gram-rm').forEach(b => { b.hidden = list.querySelectorAll('.gram-partial').length <= 1; });
@@ -722,7 +722,7 @@ function recalcDiaGramPreview() {
 function resetDiaGramPartials() {
   const list = document.getElementById('dia-gram-list');
   if (!list) return;
-  list.innerHTML = '<div class="gram-multi-row"><input type="number" class="gram-partial" step="1" min="0" placeholder="Avance 1" inputmode="decimal"><button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button></div>';
+  list.innerHTML = '<div class="gram-multi-row"><input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance 1" inputmode="decimal"><button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button></div>';
   const inp = list.querySelector('.gram-partial');
   if (inp) inp.addEventListener('input', recalcDiaGramPreview);
   const cb = document.getElementById('dia-sumar-existente');
