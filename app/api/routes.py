@@ -564,13 +564,25 @@ async def page_produccion(
             if x.get("prod_id"):
                 folio_inact_ids.add(int(x["prod_id"]))
     except Exception:
-        pass
-        materiales = []
+        folio_inactivos = []
+        reasignaciones = []
+        folio_inact_ids = set()
+    materiales: list = []
     try:
         from app.db.repository import CatalogosRepo
-        materiales = CatalogosRepo().listar_materiales(solo_activos=True)
+        materiales = CatalogosRepo().listar_materiales(solo_activos=True) or []
     except Exception:
         materiales = []
+    # Precalcular lote (evita filtros Jinja frágiles)
+    n_lote_inactivos = 0
+    try:
+        n_lote_inactivos = sum(
+            1
+            for x in folio_inactivos
+            if int(x.get("semanas_inactivo") or 0) >= 3 and x.get("prod_id")
+        )
+    except Exception:
+        n_lote_inactivos = 0
     return templates.TemplateResponse(
         request,
         "produccion.html",
@@ -579,18 +591,20 @@ async def page_produccion(
             semanas=semanas,
             semana_id=semana_id,
             lineas=lineas,
-            totales=totales,
-            trabajadores=trabajadores,
+            totales=totales or {},
+            trabajadores=trabajadores or [],
+            materiales=materiales,
             semana_cerrada=bool(
                 next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")
             ) if semana_id else False,
             col_hoy=__import__("app.core.dias", fromlist=["col_hoy"]).col_hoy(),
-            day_cols=["gm_sab","gm_dom","gm_lun","gm_mar","gm_mie","gm_jue","gm_vie"],
-            folios_dup_set=folios_dup_set,
-            folio_inactivos=folio_inactivos,
-            reasignaciones=reasignaciones,
-            folio_inact_ids=folio_inact_ids,
-            terminados_semana=terminados_semana,
+            day_cols=["gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"],
+            folios_dup_set=list(folios_dup_set) if folios_dup_set else [],
+            folio_inactivos=folio_inactivos or [],
+            reasignaciones=reasignaciones or [],
+            folio_inact_ids=list(folio_inact_ids) if folio_inact_ids else [],
+            terminados_semana=terminados_semana or [],
+            n_lote_inactivos=n_lote_inactivos,
         ),
     )
 

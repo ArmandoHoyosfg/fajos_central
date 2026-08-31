@@ -42,7 +42,17 @@ def build_template_context(request, **kwargs) -> dict[str, Any]:
     """Une common_template_context + kwargs normalizados + request."""
     from app.api.deps import common_template_context
 
-    extra = {k: to_template_value(v) for k, v in kwargs.items()}
+    extra: dict[str, Any] = {}
+    for k, v in kwargs.items():
+        try:
+            extra[str(k)] = to_template_value(v)
+        except Exception:
+            try:
+                extra[str(k)] = str(v)
+            except Exception:
+                extra[str(k)] = None
     data = common_template_context(extra if extra else None)
+    if not isinstance(data, dict):
+        data = {}
     data["request"] = request
     return data

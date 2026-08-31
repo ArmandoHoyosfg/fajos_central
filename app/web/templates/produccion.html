@@ -84,12 +84,11 @@
   <div class="folio-hint-block">
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
       <strong>Sin avance</strong>
-      {% set n_lote = namespace(folio_inactivos|selectattr('semanas_inactivo', 'ge', 3)|list) %}
-      {% if not semana_cerrada and n_lote > 0 %}
+      {% if not semana_cerrada and n_lote_inactivos and n_lote_inactivos > 0 %}
       <button type="button" class="btn btn-secondary btn-xs" id="btn-terminar-lote"
-              onclick="terminarLoteInactivos({{ semana_id or 'null' }}, 3, {{ n_lote }})"
+              onclick="terminarLoteInactivos({{ semana_id or 'null' }}, 3, {{ n_lote_inactivos }})"
               title="Marca como terminados los folios con 3+ semanas sin gramos">
-        Terminar lote ({{ n_lote }} con 3+ semanas)
+        Terminar lote ({{ n_lote_inactivos }} con 3+ semanas)
       </button>
       {% endif %}
     </div>

@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.12] — 2026-08-31
+
+### Fix: error interno en /produccion
+- Contexto incompleto (faltaba `materiales` en TemplateResponse)
+- `n_lote_inactivos` calculado en Python (no Jinja selectattr)
+- `_ctx` más defensivo ante valores raros
+
 ## [3.19.11] — 2026-08-31
 
 ### Terminar folio en lote
