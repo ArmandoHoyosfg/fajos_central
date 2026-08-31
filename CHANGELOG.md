@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.20.1] — 2026-08-31
+
+### Una sola instancia de launcher
+- Mutex/lock: no permite dos launchers a la vez (ni dos iconos en bandeja)
+- El segundo intento muestra aviso y sale
+- El arranque del servidor sigue liberando el puerto 8000 de procesos previos
+
 ## [3.20.0] — 2026-08-31
 
 ### Suministro diario (estilo papel)

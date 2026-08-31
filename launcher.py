@@ -1341,6 +1341,27 @@ class LauncherApp(tk.Tk):
 
 
 def main() -> None:
+    from app.core.single_instance import acquire_lock
+
+    # Solo un launcher a la vez (evita dos iconos en bandeja / dos centros de control)
+    if not acquire_lock("launcher"):
+        try:
+            import tkinter as _tk
+            from tkinter import messagebox as _mb
+            root = _tk.Tk()
+            root.withdraw()
+            _mb.showinfo(
+                "Fajos Central ya está abierto",
+                "Ya hay un launcher en ejecución.\n\n"
+                "Revisa la bandeja de iconos (junto al reloj) o la barra de tareas.\n"
+                "Si no lo ves, cierra procesos huérfanos desde el Administrador de tareas\n"
+                "o reinicia el equipo.",
+            )
+            root.destroy()
+        except Exception:
+            print("Fajos Central: ya hay un launcher en ejecución.", file=sys.stderr)
+        sys.exit(0)
+
     app = LauncherApp()
     app.mainloop()
 
