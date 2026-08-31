@@ -950,34 +950,125 @@ async def api_duplicar(
 
 
 @router.get("/api/export/suministro")
-async def api_export_suministro():
+async def api_export_suministro(
+    semana_id: int | None = None,
+    extras: int = Query(2, ge=0, le=5),
+    prod_repo: ProduccionRepo = Depends(get_produccion_repo),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    """
+    Excel de suministro diario (estilo papel):
+    fecha/día impresos, folio/nombre/ubic listos, celdas vacías de avance
+    y filas extra por trabajador para folio nuevo.
+    """
     from app.services.dia_service import DiaService
-    from app.services.export_service import ExportService, linea_tiene_gramos
+    from app.services.export_service import ExportService
+    from app.core.calendar_util import encontrar_semana_actual, today
     from fastapi.responses import Response
+
     st = DiaService().estado_hoy()
-    # simple xlsx via openpyxl in export or reuse bytes
-    from openpyxl import Workbook
-    from io import BytesIO
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Suministro"
-    ws["A1"] = "SUMINISTRO DIARIO — " + st["fecha"] + " — " + st["label_dia"]
-    headers = ["#", "Nombre", "Ubic", "Folio", "Modelo", "Mat", "Gramos", "Notas"]
-    for c, h in enumerate(headers, 1):
-        ws.cell(row=3, column=c, value=h)
-    for i, r in enumerate(st.get("trabajos") or []):
-        ws.cell(row=4+i, column=1, value=i+1)
-        ws.cell(row=4+i, column=2, value=r.get("nombre"))
-        ws.cell(row=4+i, column=3, value=r.get("ubic"))
-        ws.cell(row=4+i, column=4, value=r.get("folio"))
-        ws.cell(row=4+i, column=5, value=r.get("modelo"))
-        ws.cell(row=4+i, column=6, value=r.get("material"))
-    buf = BytesIO()
-    wb.save(buf)
+    if semana_id is None:
+        semanas = sem_repo.listar()
+        actual = encontrar_semana_actual(semanas, today())
+        semana_id = int(actual["id"]) if actual else (semanas[0]["id"] if semanas else None)
+    lineas: list = []
+    codigo = ""
+    if semana_id:
+        lineas = prod_repo.listar_por_semana(int(semana_id), incluir_terminados=False) or []
+        sem = next((s for s in sem_repo.listar() if s.get("id") == semana_id), None) or {}
+        codigo = sem.get("codigo") or ""
+    # Si no hay líneas de semana, usar trabajos del día
+    if not lineas:
+        lineas = st.get("trabajos") or []
+    content, media, filename = ExportService().export_suministro_diario(
+        lineas,
+        fecha_iso=st.get("fecha") or "",
+        label_dia=st.get("label_dia") or "",
+        codigo_semana=codigo,
+        filas_extra_por_trabajador=extras,
+    )
     return Response(
-        content=buf.getvalue(),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="suministro.xlsx"'},
+        content=content,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/suministro", response_class=HTMLResponse)
+async def page_suministro(
+    request: Request,
+    semana_id: int | None = None,
+    extras: int = Query(2, ge=0, le=5),
+    prod_repo: ProduccionRepo = Depends(get_produccion_repo),
+    sem_repo: SemanasRepo = Depends(get_semanas_repo),
+):
+    """Vista imprimible del suministro del día (navegador → Imprimir)."""
+    from app.services.dia_service import DiaService
+    from app.core.calendar_util import encontrar_semana_actual, today
+    from collections import OrderedDict
+
+    st = DiaService().estado_hoy()
+    if semana_id is None:
+        semanas = sem_repo.listar()
+        actual = encontrar_semana_actual(semanas, today())
+        semana_id = int(actual["id"]) if actual else (semanas[0]["id"] if semanas else None)
+    lineas: list = []
+    codigo = ""
+    if semana_id:
+        lineas = prod_repo.listar_por_semana(int(semana_id), incluir_terminados=False) or []
+        sem = next((s for s in sem_repo.listar() if s.get("id") == semana_id), None) or {}
+        codigo = sem.get("codigo") or ""
+    if not lineas:
+        lineas = st.get("trabajos") or []
+
+    def _pk(r):
+        try:
+            u = int(float(r.get("ubic") or 0))
+        except (TypeError, ValueError):
+            u = 0
+        return (u, str(r.get("nombre") or "").upper(), str(r.get("folio") or "").upper())
+
+    lineas = sorted(lineas, key=_pk)
+    groups: OrderedDict = OrderedDict()
+    for r in lineas:
+        try:
+            u = int(float(r.get("ubic") or 0))
+        except (TypeError, ValueError):
+            u = 0
+        key = (str(r.get("nombre") or "").strip().upper(), u)
+        groups.setdefault(key, []).append(r)
+
+    rows_out = []
+    for (nk, ubic), items in groups.items():
+        nombre = items[0].get("nombre") or nk
+        for it in items:
+            rows_out.append({
+                "nombre": nombre, "ubic": ubic,
+                "folio": it.get("folio") or "",
+                "modelo": it.get("modelo") or "",
+                "material": it.get("material") or "",
+                "blank": False,
+            })
+        for _ in range(max(0, extras)):
+            rows_out.append({
+                "nombre": nombre, "ubic": ubic,
+                "folio": "", "modelo": "", "material": "",
+                "blank": True,
+            })
+
+    return templates.TemplateResponse(
+        request,
+        "suministro.html",
+        _ctx(
+            request,
+            rows=rows_out,
+            fecha=st.get("fecha"),
+            label_dia=st.get("label_dia"),
+            codigo_semana=codigo,
+            semana_id=semana_id,
+            extras=extras,
+            total_lineas=len(lineas),
+        ),
     )
 
 

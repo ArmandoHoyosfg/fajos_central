@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.20.0] — 2026-08-31
+
+### Suministro diario (estilo papel)
+- Nueva vista **/suministro** e Excel con fecha/día impresos
+- UBIC, NOMBRE, FOLIO, MODELO, MAT prellenados
+- 4 celdas de avance vacías + TOTAL (fórmula) + observaciones
+- 2 filas amarillas por trabajador para folio nuevo del día
+- Botón **Suministro día** en Plata
+
 ## [3.19.15] — 2026-08-31
 
 ### Fix: gramos de «Un día» no visibles en tabla

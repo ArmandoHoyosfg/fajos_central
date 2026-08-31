@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Suministro {{ label_dia }} — Fajos{% endblock %}
+{% block content %}
+<style>
+  .sum-actions { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem; align-items:center; }
+  .sum-sheet { background: var(--surface,#fff); border-radius:12px; padding:1rem; overflow:auto; }
+  .sum-sheet h1 { margin:0 0 0.25rem; font-size:1.25rem; }
+  .sum-meta { color: var(--muted); font-size:0.92rem; margin-bottom:0.75rem; }
+  table.sum-table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+  table.sum-table th, table.sum-table td {
+    border:1px solid #888; padding:0.35rem 0.45rem; text-align:left;
+  }
+  table.sum-table th { background:#1F4E79; color:#fff; text-align:center; }
+  table.sum-table td.av, table.sum-table td.tot { min-width:2.5rem; text-align:center; }
+  table.sum-table tr.blank-row { background:#FFFDE7; }
+  table.sum-table tr.mat-ag3 { background:#E3F2FD; }
+  table.sum-table tr.mat-ag4 { background:#E8F5E9; }
+  table.sum-table tr.mat-dol { background:#FFF8E1; }
+  table.sum-table tr.mat-dlo { background:#FCE4EC; }
+  @media print {
+    .no-print, nav, header, footer, .topbar, .nav, .dev-badge, .theme-switch { display:none !important; }
+    body { background:#fff; }
+    .sum-sheet { box-shadow:none; padding:0; }
+    table.sum-table { font-size:10pt; }
+  }
+</style>
+
+<div class="page-head no-print">
+  <h1>Suministro del día</h1>
+  <p class="muted">Formato para anotar gramos a mano — fecha y día ya van impresos. Filas amarillas = folio nuevo.</p>
+</div>
+
+<div class="sum-actions no-print">
+  <a class="btn" href="/api/export/suministro{% if semana_id %}?semana_id={{ semana_id }}&extras={{ extras }}{% else %}?extras={{ extras }}{% endif %}">Descargar Excel</a>
+  <button type="button" class="btn btn-secondary" onclick="window.print()">Imprimir</button>
+  <a class="btn btn-secondary" href="/produccion{% if semana_id %}?semana_id={{ semana_id }}{% endif %}">Volver a Plata</a>
+  <span class="muted">{{ total_lineas }} folio(s) activos · {{ extras }} fila(s) extra por trabajador</span>
+</div>
+
+<div class="sum-sheet">
+  <h1>TALLER DE FAJOS CENTRAL — SUMINISTRO DIARIO</h1>
+  <div class="sum-meta">
+    <strong>FECHA:</strong> {{ fecha }}
+    &nbsp;·&nbsp; <strong>DÍA:</strong> {{ label_dia }}
+    &nbsp;·&nbsp; <strong>SEMANA:</strong> {{ codigo_semana or '—' }}
+  </div>
+  <table class="sum-table">
+    <thead>
+      <tr>
+        <th>UBIC</th><th>NOMBRE</th><th>FOLIO</th><th>MODELO</th><th>MAT</th>
+        <th>Av1</th><th>Av2</th><th>Av3</th><th>Av4</th>
+        <th>TOTAL</th><th>OBSERVACIONES</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="{% if r.blank %}blank-row{% else %}mat-{{ (r.material or '')|lower }}{% endif %}">
+        <td>{{ r.ubic }}</td>
+        <td>{{ r.nombre }}</td>
+        <td>{{ r.folio }}</td>
+        <td>{{ r.modelo }}</td>
+        <td>{{ r.material }}</td>
+        <td class="av"></td><td class="av"></td><td class="av"></td><td class="av"></td>
+        <td class="tot"></td>
+        <td></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="muted">Sin trabajos activos en la semana.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="margin-top:0.75rem;font-size:0.85rem">
+    Capturó: ______________ &nbsp; Revisó: ______________
+  </p>
+</div>
+{% endblock %}

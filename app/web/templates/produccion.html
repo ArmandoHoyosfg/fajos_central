@@ -50,6 +50,7 @@
   <button type="button" class="btn" id="btn-formal-xlsx" onclick="checklistExport({{ semana_id }})">Formal Excel Plata</button>
   <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'plt')" title="Duplicar semana (elige áreas)">Duplicar → sig. semana</button>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}/captura-manual" title="Nómina en blanco para anotar gramos a mano">Captura manual</a>
+  <a class="btn btn-secondary" href="/suministro{% if semana_id %}?semana_id={{ semana_id }}{% endif %}" title="Hoja del día: folio/nombre listos, solo anotar gramos">Suministro día</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
   {% endif %}
