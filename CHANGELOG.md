@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.5] — 2026-08-31
+
+### Sin avance: tiempo de inactividad
+- Cada folio muestra cuántas semanas seguidas lleva sin gramos
+- Texto de última actividad (semana + gramos) cuando hay historial
+- Orden: más tiempo inactivo primero
+
 ## [3.19.4] — 2026-08-31
 
 ### Plata: edición temporal desde dashboard

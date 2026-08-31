@@ -1929,3 +1929,14 @@ input.cell-gm.day-unlocked-temp {
   background: rgba(201, 162, 39, 0.06);
 }
 .session-edit-banner strong { color: var(--accent, #c9a227); }
+
+.badge-inactive {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(243, 139, 168, 0.18);
+  color: #e6456f;
+  white-space: nowrap;
+}

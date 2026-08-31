@@ -89,6 +89,8 @@
         <code>{{ x.folio }}</code>
         <span>{{ x.nombre }} · {{ x.ubic }}</span>
         <span class="muted">{{ 'Parece terminado' if x.hint == 'posible_finalizado' else ('Cambio de persona' if x.hint == 'posible_reasignacion' else 'Sin gramos') }}</span>
+        <span class="badge-inactive" title="{{ x.ultima_txt or '' }}">{{ x.inactivo_txt or '1 semana' }}</span>
+        {% if x.ultima_txt %}<span class="muted faint" style="font-size:0.8rem">{{ x.ultima_txt }}</span>{% endif %}
         {% if not semana_cerrada and x.prod_id %}
         <button type="button" class="btn btn-secondary btn-xs"
                 onclick="marcarTerminado({{ x.prod_id }}, {{ (x.folio or '')|tojson }})">Terminar</button>

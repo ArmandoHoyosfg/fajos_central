@@ -85,13 +85,18 @@ class AprendizajeService:
 
     def detectar_folios_inactivos(self, semana_id: int | None = None) -> list[dict]:
         """
-        Folios con 0 g esta semana.
-        Si la semana previa tuvo gramos → posible_finalizado o posible_reasignacion.
+        Folios con 0 g esta semana + cuántas semanas llevan inactivos
+        y cuándo fue la última actividad.
         """
         semanas = self.semanas.listar()
+        # Orden cronológico descendente por fecha_inicio
+        def _fi(s):
+            return parse_db_date(s.get("fecha_inicio")) or today()
+
+        semanas_ord = sorted(semanas, key=_fi, reverse=True)
         actual = None
         if semana_id:
-            for s in semanas:
+            for s in semanas_ord:
                 if int(s["id"]) == int(semana_id):
                     actual = s
                     break
@@ -102,14 +107,47 @@ class AprendizajeService:
 
         sid = int(actual["id"])
         lineas = self.prod.listar_por_semana(sid)
-        prev = None
-        fi = parse_db_date(actual.get("fecha_inicio"))
-        if fi:
-            prev = encontrar_semana_actual(semanas, fi - timedelta(days=1))
+        fi_act = _fi(actual)
 
+        # Semanas estrictamente anteriores a la actual (hasta 12)
+        anteriores = [
+            s for s in semanas_ord
+            if int(s["id"]) != sid and _fi(s) < fi_act
+        ][:12]
+
+        # Cache de líneas por semana_id
+        cache_lineas: dict[int, list] = {sid: lineas}
+
+        def lineas_sem(sem_id: int) -> list:
+            if sem_id not in cache_lineas:
+                try:
+                    cache_lineas[sem_id] = self.prod.listar_por_semana(sem_id)
+                except Exception:
+                    cache_lineas[sem_id] = []
+            return cache_lineas[sem_id]
+
+        def actividad_folio(sem_id: int, folio_key: str) -> dict | None:
+            """Primera línea con gramos > 0 de ese folio en la semana."""
+            for r in lineas_sem(sem_id):
+                f = (r.get("folio") or "").strip().upper()
+                if f != folio_key:
+                    continue
+                g = self._gramos_linea(r)
+                if g > 0:
+                    return {
+                        "nombre": r.get("nombre"),
+                        "ubic": r.get("ubic"),
+                        "trabajador_id": r.get("trabajador_id"),
+                        "gramos": g,
+                        "prod_id": r.get("id"),
+                    }
+            return None
+
+        # Semana inmediatamente anterior (para hint finalizado/reasignación)
+        prev = anteriores[0] if anteriores else None
         prev_by_folio: dict[str, list[dict]] = {}
         if prev:
-            for r in self.prod.listar_por_semana(int(prev["id"])):
+            for r in lineas_sem(int(prev["id"])):
                 folio = (r.get("folio") or "").strip()
                 if not folio:
                     continue
@@ -139,7 +177,6 @@ class AprendizajeService:
             if prev_info:
                 tid_now = r.get("trabajador_id")
                 tid_prev = prev_info.get("trabajador_id")
-                same_person = False
                 if tid_now and tid_prev:
                     same_person = int(tid_now) == int(tid_prev)
                 else:
@@ -148,6 +185,50 @@ class AprendizajeService:
                         == str(r.get("nombre") or "").lower()
                     )
                 hint = "posible_finalizado" if same_person else "posible_reasignacion"
+
+            # Contar semanas consecutivas sin gramos (incluyendo la actual = al menos 1)
+            semanas_inactivo = 1
+            ultima_act = None  # dict con semana codigo, gramos, nombre
+            for s_ant in anteriores:
+                act = actividad_folio(int(s_ant["id"]), key)
+                if act is None:
+                    # ¿Había línea del folio sin gramos o no existía?
+                    # Si no hay ninguna fila del folio, dejamos de contar (no estaba asignado)
+                    tiene_fila = any(
+                        (x.get("folio") or "").strip().upper() == key
+                        for x in lineas_sem(int(s_ant["id"]))
+                    )
+                    if tiene_fila:
+                        semanas_inactivo += 1
+                        continue
+                    break
+                ultima_act = {
+                    **act,
+                    "semana": s_ant.get("codigo"),
+                    "semana_id": int(s_ant["id"]),
+                }
+                break
+            else:
+                # Se agotó el historial sin encontrar actividad
+                if semanas_inactivo > 1:
+                    pass  # ultima_act sigue None → "sin registro reciente"
+
+            # Texto legible
+            if semanas_inactivo == 1:
+                inactivo_txt = "1 semana (solo esta)"
+            else:
+                inactivo_txt = f"{semanas_inactivo} semanas seguidas"
+
+            if ultima_act:
+                g_txt = ultima_act.get("gramos")
+                try:
+                    g_txt = f"{float(g_txt):.1f}".rstrip("0").rstrip(".")
+                except Exception:
+                    g_txt = str(g_txt)
+                ultima_txt = f"Última act.: sem {ultima_act.get('semana')} · {g_txt} g"
+            else:
+                ultima_txt = "Sin actividad en historial reciente"
+
             out.append({
                 "prod_id": r.get("id"),
                 "folio": folio,
@@ -157,12 +238,18 @@ class AprendizajeService:
                 "hint": hint,
                 "prev": prev_info,
                 "semana_id": sid,
+                "semanas_inactivo": semanas_inactivo,
+                "inactivo_txt": inactivo_txt,
+                "ultima_actividad": ultima_act,
+                "ultima_txt": ultima_txt,
                 "accion_sugerida": (
                     "marcar_terminado" if hint == "posible_finalizado"
                     else "revisar_reasignacion" if hint == "posible_reasignacion"
                     else "revisar"
                 ),
             })
+        # Más inactivos primero
+        out.sort(key=lambda x: (-int(x.get("semanas_inactivo") or 0), str(x.get("folio") or "")))
         return out
 
     def detectar_reasignaciones(self, semana_id: int | None = None) -> list[dict]:
