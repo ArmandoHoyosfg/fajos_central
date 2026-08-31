@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.9] — 2026-08-31
+
+### Catálogos desde BD
+- Nueva sección **Catálogos** (materiales/tarifas + modelos)
+- Desplegables de Plata leen  activo
+- Al elegir material se sugiere $/g desde BD
+- CRUD vía UI (ya no solo HeidiSQL)
+
 ## [3.19.8] — 2026-08-31
 
 ### Varios avances en un día + totales al editar
