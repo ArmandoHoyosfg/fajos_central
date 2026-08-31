@@ -79,8 +79,8 @@
 <form id="sum-opts" class="sum-toolbar no-print" method="get" action="/suministro">
   {% if semana_id %}<input type="hidden" name="semana_id" value="{{ semana_id }}">{% endif %}
   <label>Avances
-    <select name="avances" title="Se limitan para no pasar de 10 columnas en total">
-      {% for n in [2,3,4,5,6] %}
+    <select name="avances" title="De 2 a 10 columnas de avance">
+      {% for n in range(2, 11) %}
       <option value="{{ n }}" {% if avances == n %}selected{% endif %}>{{ n }}</option>
       {% endfor %}
     </select>
@@ -135,7 +135,7 @@
 </form>
 <p class="hint no-print">
   <strong>Modo genérico:</strong> solo UBIC + NOMBRE rellenos; el resto en blanco y cada trabajador se repite N veces.
-  Columnas UBIC/Mat/Modelo compactas para dar espacio a Av1…AvN. Máx. 10 columnas.
+  Columnas UBIC/Mat/Modelo compactas para dar espacio a Av1…AvN. Hasta 10 columnas de avance (Av1–Av10).
 </p>
 
 <div class="sum-actions no-print">

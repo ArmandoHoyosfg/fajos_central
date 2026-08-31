@@ -953,7 +953,7 @@ async def api_duplicar(
 async def api_export_suministro(
     semana_id: int | None = None,
     extras: int = Query(2, ge=0, le=5),
-    avances: int = Query(4, ge=2, le=8),
+    avances: int = Query(4, ge=2, le=10),
     papel: str = Query("letter"),
     tema: str = Query("material"),
     fuente: str = Query("normal"),
@@ -969,9 +969,7 @@ async def api_export_suministro(
     """
     Excel de suministro diario (vertical). generico=1: solo ubic+nombre, N reps.
     """
-    opt_n = int(bool(folio)) + int(bool(modelo)) + int(bool(mat)) + int(bool(obs))
-    max_av = max(2, 10 - 3 - opt_n)
-    avances = max(2, min(int(avances or 4), max_av))
+    avances = max(2, min(int(avances or 4), 10))
     from app.services.dia_service import DiaService
     from app.services.export_service import ExportService
     from app.core.calendar_util import encontrar_semana_actual, today
@@ -1020,7 +1018,7 @@ async def page_suministro(
     request: Request,
     semana_id: int | None = None,
     extras: int = Query(2, ge=0, le=5),
-    avances: int = Query(4, ge=2, le=8),
+    avances: int = Query(4, ge=2, le=10),
     papel: str = Query("letter"),
     tema: str = Query("material"),
     fuente: str = Query("normal"),
@@ -1037,10 +1035,7 @@ async def page_suministro(
     from app.services.dia_service import DiaService
     from app.core.calendar_util import encontrar_semana_actual, today
     from collections import OrderedDict
-
-    opt_n = int(bool(folio)) + int(bool(modelo)) + int(bool(mat)) + int(bool(obs))
-    max_av = max(2, 10 - 3 - opt_n)
-    avances = max(2, min(int(avances or 4), max_av))
+    avances = max(2, min(int(avances or 4), 10))
     generico_b = bool(generico)
     reps = max(1, min(12, int(reps or 3)))
 

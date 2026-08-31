@@ -953,16 +953,8 @@ class ExportService:
         except Exception:
             fecha_txt = hoy.strftime("%d-%m-%y")
 
-        n_avances = max(2, min(8, int(n_avances or 4)))
-        # Máx. 10 columnas: UBIC+NOMBRE+TOTAL (+ folio/modelo/mat/obs) + avances
-        opt_count = (
-            int(bool(mostrar_folio))
-            + int(bool(mostrar_modelo))
-            + int(bool(mostrar_mat))
-            + int(bool(mostrar_obs))
-        )
-        max_av = max(2, 10 - 3 - opt_count)  # 3 = ubic, nombre, total
-        n_avances = min(n_avances, max_av)
+        # Hasta 10 columnas de avance (Av1…Av10); no se recortan por columnas opcionales
+        n_avances = max(2, min(10, int(n_avances or 4)))
         font_sizes = {
             "muy_chica": 8, "chica": 9, "normal": 11,
             "grande": 13, "muy_grande": 15,

@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.21.4] — 2026-08-31
+
+### Suministro: hasta 10 avances
+- Rango de avances **2–10** (ya no se reduce a 3 al tener Folio/Modelo/Mat/Obs)
+- Se conserva la sincronización de opciones 0/1
+
 ## [3.21.3] — 2026-08-31
 
 ### Fix: opciones de Suministro no se reflejaban
