@@ -99,6 +99,10 @@
   document.addEventListener("click", function (ev) {
     var t = ev.target;
     if (!t || !t.closest) return;
+    // No interferir con el menu de fila (...)
+    if (t.closest(".btn-row-menu") || t.closest(".row-menu") || t.closest("#fajos-row-menu-portal")) {
+      return;
+    }
     var term = t.closest("[data-action='terminar-folio'], .btn-folio-terminar");
     if (term) {
       ev.preventDefault();
@@ -112,7 +116,8 @@
       ev.stopPropagation();
       reactivar(reac.getAttribute("data-prod-id") || reac.dataset.prodId, reac.getAttribute("data-folio") || reac.dataset.folio || "");
     }
-  }, true); // capture phase: gana a otros handlers
+  }, false);
+ // capture phase: gana a otros handlers
 
   global.terminarLoteInactivos = async function (semanaId, minSemanas, countHint) {
     minSemanas = minSemanas || 3;

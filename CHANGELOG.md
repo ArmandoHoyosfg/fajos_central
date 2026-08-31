@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.13] — 2026-08-31
+
+### Fix menú ⋯ de fila + columna compacta
+- Reescrito `row_menu.js` con delegación de eventos
+- `folio_actions` ya no intercepta clics del menú de fila
+- Columna de acciones más estrecha; botón ⋮ estilizado
+- Panel del menú en portal fijo (no se recorta)
+
 ## [3.19.12] — 2026-08-31
 
 ### Fix: error interno en /produccion

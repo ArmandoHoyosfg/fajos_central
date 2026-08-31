@@ -211,8 +211,11 @@
       <td class="col-actions">
         {% if not semana_cerrada %}
         <div class="row-menu">
-          <button type="button" class="btn-row-menu" title="Menú: editar o eliminar fila" aria-label="Menú de la fila" aria-expanded="false"
-            onclick="event.preventDefault();event.stopPropagation();(window.FajosRowMenu||{toggle:function(){alert('Recarga la página (Ctrl+F5)')}}).toggle(this,event)">⋯</button>
+          <button type="button" class="btn-row-menu" data-action="row-menu-toggle"
+            title="Menú de la fila" aria-label="Menú" aria-expanded="false"
+            onclick="event.preventDefault();event.stopPropagation();if(window.FajosRowMenu)FajosRowMenu.toggle(this,event)">
+            <span class="dots" aria-hidden="true">⋮</span>
+          </button>
           <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
             <button type="button" onclick='openEditPlt({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
             {% if r.folio %}
@@ -430,14 +433,14 @@ function onMaterialChange(sel) {
 }
 </script>
 
-<script src="/static/folio_actions.js?v=31910"></script>
+<script src="/static/folio_actions.js?v=31913"></script>
 <script src="/static/table_sort.js?v=3180"></script>
 <script src="/static/capture_guard.js?v=3130"></script>
 
 <script src="/static/semana_ops.js?v=3122"></script>
 <script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "plt";</script>
 
-<script src="/static/row_menu.js?v=3113"></script>
+<script src="/static/row_menu.js?v=31913"></script>
 <script src="/static/row_edit.js?v=3112"></script>
 <script>
 function openEditPlt(id, data) {

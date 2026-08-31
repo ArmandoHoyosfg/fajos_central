@@ -1985,3 +1985,92 @@ input.cell-gm.day-unlocked-temp {
   font-size: 0.95rem;
 }
 .edit-totals-bar strong { color: var(--accent, #c9a227); }
+
+
+/* === Row menu compact (v3.19.13) === */
+th.col-actions, td.col-actions {
+  width: 2.25rem !important;
+  min-width: 2.25rem !important;
+  max-width: 2.5rem !important;
+  padding-left: 0.2rem !important;
+  padding-right: 0.2rem !important;
+  text-align: center;
+}
+.row-menu {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  width: 100%;
+}
+.btn-row-menu {
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  padding: 0 !important;
+  margin: 0 auto;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted, #6c7086);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.btn-row-menu .dots {
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+.btn-row-menu:hover,
+.row-menu.open .btn-row-menu {
+  background: rgba(201, 162, 39, 0.15);
+  border-color: rgba(201, 162, 39, 0.45);
+  color: var(--accent, #c9a227);
+}
+.btn-row-menu:focus-visible {
+  outline: 2px solid var(--accent, #c9a227);
+  outline-offset: 1px;
+}
+#fajos-row-menu-portal.row-menu-portal {
+  position: fixed;
+  z-index: 9999;
+  min-width: 11rem;
+}
+.row-menu-portal-inner {
+  background: var(--surface, #1e1e2e);
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.28);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.row-menu-portal-inner button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text, #cdd6f4);
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.row-menu-portal-inner button:hover {
+  background: rgba(201, 162, 39, 0.18);
+}
+.row-menu-portal-inner button.danger {
+  color: #f38ba8;
+}
+.row-menu-portal-inner button.danger:hover {
+  background: rgba(243, 139, 168, 0.15);
+}
+/* hide in-table panel; portal is the visible menu */
+.row-menu .row-menu-panel {
+  display: none !important;
+}
