@@ -953,6 +953,13 @@ async def api_duplicar(
 async def api_export_suministro(
     semana_id: int | None = None,
     extras: int = Query(2, ge=0, le=5),
+    avances: int = Query(4, ge=2, le=6),
+    papel: str = Query("letter"),
+    tema: str = Query("material"),
+    fuente: str = Query("normal"),
+    modelo: int = Query(1, ge=0, le=1),
+    mat: int = Query(1, ge=0, le=1),
+    obs: int = Query(1, ge=0, le=1),
     prod_repo: ProduccionRepo = Depends(get_produccion_repo),
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
 ):
@@ -986,6 +993,13 @@ async def api_export_suministro(
         label_dia=st.get("label_dia") or "",
         codigo_semana=codigo,
         filas_extra_por_trabajador=extras,
+        n_avances=avances,
+        papel=papel,
+        tema=tema,
+        fuente=fuente,
+        mostrar_modelo=bool(modelo),
+        mostrar_mat=bool(mat),
+        mostrar_obs=bool(obs),
     )
     return Response(
         content=content,
@@ -999,6 +1013,13 @@ async def page_suministro(
     request: Request,
     semana_id: int | None = None,
     extras: int = Query(2, ge=0, le=5),
+    avances: int = Query(4, ge=2, le=6),
+    papel: str = Query("letter"),
+    tema: str = Query("material"),
+    fuente: str = Query("normal"),
+    modelo: int = Query(1, ge=0, le=1),
+    mat: int = Query(1, ge=0, le=1),
+    obs: int = Query(1, ge=0, le=1),
     prod_repo: ProduccionRepo = Depends(get_produccion_repo),
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
 ):
@@ -1067,7 +1088,15 @@ async def page_suministro(
             codigo_semana=codigo,
             semana_id=semana_id,
             extras=extras,
+            avances=avances,
+            papel=papel,
+            tema=tema,
+            fuente=fuente,
+            mostrar_modelo=bool(modelo),
+            mostrar_mat=bool(mat),
+            mostrar_obs=bool(obs),
             total_lineas=len(lineas),
+            n_avances=avances,
         ),
     )
 

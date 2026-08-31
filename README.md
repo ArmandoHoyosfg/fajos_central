@@ -1,18 +1,21 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 3.16.2  
+**Versión:** 3.21.0  
+**Licencia:** [GPL-3.0-or-later](LICENSE)  
 **Entorno:** Windows + PowerShell 7 + MariaDB/HeidiSQL  
 
 Sistema de nóminas del **Taller de Fajos Central** (áreas **Plata**, **Pita** y **Taller**).
 
 ## Qué incluye
 
-- **Launcher** Windows (Tk): iniciar/detener servidor, BD, backup, acceso directo, inicio con Windows
+- **Launcher** Windows (una sola instancia): iniciar/detener servidor, BD, backup, bandeja, acceso directo
 - Interfaz **web** en red local + API REST
 - Captura diaria (gramos Plata, efectivo Pita, sueldos Taller)
-- Export formal Excel/CSV/PDF, captura manual, Excel Master
-- Gestión de **semanas** (editar, alinear a actual, eliminar vacías)
-- Panel de avisos, rarezas, temas Oscuro / Claro / Taller
+- **Suministro del día**: hoja tipo papel (fecha/día impresos, avances configurables, filas extra para folio nuevo)
+- Export formal Excel/CSV/PDF, captura manual semanal, Excel Master
+- Catálogos de materiales/tarifas y modelos desde la BD
+- Gestión de **semanas**, avisos, rarezas, temas Oscuro / Claro / Taller
+- Sección **Dev** de diagnóstico
 
 ---
 
@@ -39,127 +42,44 @@ pwsh -File .\scripts\verify_env.ps1
 python .\launcher.py
 ```
 
-En el launcher:
+> Solo puede haber **un launcher** a la vez. Si abres otro, verás un aviso y se cerrará.
 
-1. **Configurar** / **Probar** la base de datos  
-2. **▶ Iniciar** el servidor y **🌐 Abrir** el navegador  
-3. Opcional: **Iniciar con Windows**, **Backup al cerrar**
+Abre en el navegador: `http://127.0.0.1:8000` (o la IP LAN que muestra el launcher).
 
 ---
 
-## Portable (copiar a otra PC, sin instalador)
+## Suministro diario (Plata)
 
-```powershell
-pwsh -File .\scripts\make_portable.ps1
-```
+1. En **Plata** → **Suministro día** (o `/suministro`).
+2. Ajusta en la barra:
+   - **Avances** (2–6 columnas para gramos del día)
+   - **Filas extra** por trabajador (folio nuevo)
+   - **Papel**: Carta / Oficio / A4 (horizontal)
+   - **Letra**: chica / normal / grande
+   - **Colores**: por material o claro (ahorro de tóner)
+   - Mostrar u ocultar Modelo / Material / Observaciones
+3. **Imprimir** o **Descargar Excel** (mismas opciones).
 
-Genera en el Escritorio `FajosCentral_portable_v…` (sin `.venv` ni `config.ini`).
-
-**En el destino:**
-
-1. Python 3.11+ (PATH + py launcher)  
-2. MariaDB + ejecutar `db\schema\000_fajos_central_completo.sql` en HeidiSQL  
-3. `pwsh -ExecutionPolicy Bypass -File .\setup_windows.ps1`  
-4. `config.ini.example` → `config.ini`  
-5. `pwsh -File .\scripts\create_desktop_shortcut.ps1`  
-6. `python .\launcher.py`
+Los gramos se digitalizan después con **＋ Un día** o en las celdas de la tabla.
 
 ---
 
-## Scripts útiles (`scripts\`)
+## Configuración
 
-| Script | Uso |
-|--------|-----|
-| `setup_windows.ps1` (raíz) | Crea/repara `.venv` e instala dependencias |
-| `create_desktop_shortcut.ps1` | Acceso directo en el Escritorio |
-| `make_portable.ps1` | Carpeta limpia para copiar |
-| `verify_env.ps1` | Checklist venv / config / app / schema |
+- `config.ini` — conexión MariaDB y preferencias del launcher  
+- `config.ini.example` — plantilla  
 
----
+## Documentación útil
 
-## Backup
+- `docs/USO.md` — uso diario  
+- `CHANGELOG.md` — historial de versiones  
+- `LICENSE` — GNU GPL v3 o posterior  
 
-- **Backup al cerrar** (casilla en el launcher): al salir guarda en `backups\cierre_YYYYMMDD_HHMMSS\`:
-  - `config.ini`
-  - Excel **Master** de la BD (si la conexión responde)
-  - `mysqldump` si el cliente está en el PATH (opcional)
-- **Backup ahora**: mismo proceso sin salir
-- Los formales exportados también se archivan en `exports\`
+## Licencia
 
----
-
-## Inicio con Windows
-
-Casilla **Iniciar con Windows** en el launcher: crea o quita un acceso en la carpeta *Startup* del usuario (no requiere administrador). Abre el launcher al iniciar sesión; el servidor web no arranca solo hasta que pulses **Iniciar** (evita cargar la BD sin querer).
-
----
-
-## Uso diario (web)
-
-1. **Inicio** — panel *Qué revisar hoy*  
-2. **Plata / Pita / Taller** — captura y export formal  
-3. **Semanas** — alinear fechas, borrar vacías, cerrar/reabrir  
-4. **Solo hoy** — captura rápida de gramos del día  
-
----
-
-## Estructura
+Este programa es software libre: puedes redistribuirlo y/o modificarlo bajo los términos de la **GNU General Public License v3** o, a tu opción, cualquier versión posterior.  
+Ver el archivo [LICENSE](LICENSE) y <https://www.gnu.org/licenses/>.
 
 ```
-fajos_central/
-├── launcher.py          # Centro de control
-├── run.py               # Solo servidor CLI
-├── config.ini.example
-├── setup_windows.ps1
-├── scripts/             # acceso directo, portable, verify
-├── app/                 # FastAPI + web + servicios
-├── db/schema/
-├── backups/             # generadas al cerrar
-├── exports/
-└── desktop_legacy/      # GUI PySide6 (referencia)
+SPDX-License-Identifier: GPL-3.0-or-later
 ```
-
----
-
-## Arranque integrado
-
-| Forma | Cómo |
-|--------|------|
-| **Doble clic** | `start.bat` (usa `.venv` + `launcher.py`) |
-| **Acceso Escritorio** | `scripts\create_desktop_shortcut.ps1` → apunta a `start.bat` + `logo.ico` |
-| **Launcher** | Acceso directo / Iniciar con Windows / Verificar / Backup |
-| **PowerShell** | `pwsh -File .\start.ps1` o `python .\launcher.py` |
-
-Icono: `app\web\static\logo.ico` (multi-tamaño).
-
----
-
-Más detalle: [`docs/INTEGRIDAD_Y_PARIDAD.md`](docs/INTEGRIDAD_Y_PARIDAD.md) (escritorio vs web, HTTPS pendiente).
-
-## Requisitos
-
-- Python 3.10+  
-- MariaDB (`fajos_central`)  
-- `pip install -r requirements.txt` (vía `setup_windows.ps1`)
-
-
-## Migración 3.17 (HeidiSQL)
-
-```
-db/schema/003_taller_fijo_folio_qr.sql
-```
-
-Marca sueldo fijo/variable en Trabajadores (área Taller). Luego: `pip install qrcode[pil]`.
-
-
-## Arranque (Windows)
-
-| Archivo | Uso |
-|---------|-----|
-| `start.bat` | Diario — **sin ventana de consola** |
-| `start_dev.bat` | Diagnóstico — consola visible |
-| `launcher.py` | Centro de control (también desde el acceso directo) |
-
-Panel **Dev** en la web (`/dev`): reparación inteligente, migraciones y comandos.
-
-Ver `docs/FASE_A_HACIA_4.0.md`.

@@ -5,6 +5,17 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.21.0] — 2026-08-31
+
+### Suministro: ajustes de impresión
+- Barra de opciones: avances (2–6), filas extra, papel (Carta/Oficio/A4), letra, colores
+- Mostrar/ocultar Modelo, Material, Observaciones
+- Excel e impresión usan los mismos parámetros
+- Márgenes ~12 mm / 0.5" (impresoras de escritorio)
+
+### Licencia
+- Proyecto bajo **GPL-3.0-or-later** (`LICENSE`)
+
 ## [3.20.1] — 2026-08-31
 
 ### Una sola instancia de launcher

@@ -878,6 +878,13 @@ class ExportService:
         label_dia: str = "",
         codigo_semana: str = "",
         filas_extra_por_trabajador: int = 2,
+        n_avances: int = 4,
+        papel: str = "letter",
+        tema: str = "material",
+        fuente: str = "normal",
+        mostrar_modelo: bool = True,
+        mostrar_mat: bool = True,
+        mostrar_obs: bool = True,
     ) -> tuple[bytes, str, str]:
         """
         Hoja de SUMINISTRO del día (estilo papel):
@@ -892,6 +899,13 @@ class ExportService:
             label_dia=label_dia,
             codigo_semana=codigo_semana,
             filas_extra_por_trabajador=filas_extra_por_trabajador,
+            n_avances=n_avances,
+            papel=papel,
+            tema=tema,
+            fuente=fuente,
+            mostrar_modelo=mostrar_modelo,
+            mostrar_mat=mostrar_mat,
+            mostrar_obs=mostrar_obs,
         )
         stem = f"suministro_{fecha_iso or 'hoy'}"
         return (
@@ -908,11 +922,19 @@ class ExportService:
         label_dia: str,
         codigo_semana: str,
         filas_extra_por_trabajador: int = 2,
+        n_avances: int = 4,
+        papel: str = "letter",
+        tema: str = "material",
+        fuente: str = "normal",
+        mostrar_modelo: bool = True,
+        mostrar_mat: bool = True,
+        mostrar_obs: bool = True,
     ) -> bytes:
         from collections import OrderedDict
         from datetime import date, datetime
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
         from openpyxl.utils import get_column_letter
+        from io import BytesIO
 
         hoy = date.today()
         try:
@@ -924,6 +946,10 @@ class ExportService:
         except Exception:
             fecha_txt = hoy.strftime("%d-%m-%y")
 
+        n_avances = max(2, min(6, int(n_avances or 4)))
+        font_sizes = {"chica": 9, "normal": 11, "grande": 13}
+        fsize = font_sizes.get((fuente or "normal").lower(), 11)
+
         thin = Border(
             left=Side(style="thin", color="000000"),
             right=Side(style="thin", color="000000"),
@@ -931,9 +957,10 @@ class ExportService:
             bottom=Side(style="thin", color="000000"),
         )
         header_fill = PatternFill("solid", fgColor="1F4E79")
-        header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
-        title_font = Font(name="Calibri", bold=True, size=16, color="1F4E79")
-        sub_font = Font(name="Calibri", bold=True, size=12, color="1F4E79")
+        header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=fsize)
+        title_font = Font(name="Calibri", bold=True, size=fsize + 5, color="1F4E79")
+        sub_font = Font(name="Calibri", bold=True, size=fsize + 1, color="1F4E79")
+        body_font = Font(name="Calibri", size=fsize)
         blank_fill = PatternFill("solid", fgColor="FFFDE7")
         mat_fills = {
             "AG3": PatternFill("solid", fgColor="E3F2FD"),
@@ -941,6 +968,8 @@ class ExportService:
             "DOL": PatternFill("solid", fgColor="FFF8E1"),
             "DLO": PatternFill("solid", fgColor="FCE4EC"),
         }
+        use_mat_colors = (tema or "material").lower() == "material"
+        claro = (tema or "").lower() == "claro"
 
         def _pk(r):
             try:
@@ -959,15 +988,31 @@ class ExportService:
             key = (str(r.get("nombre") or "").strip().upper(), u)
             groups.setdefault(key, []).append(r)
 
+        # Column layout: UBIC NOMBRE FOLIO [MODELO] [MAT] Av… TOTAL [OBS]
+        headers = ["UBIC", "NOMBRE", "FOLIO"]
+        if mostrar_modelo:
+            headers.append("MODELO")
+        if mostrar_mat:
+            headers.append("MAT")
+        av_start = len(headers) + 1
+        for i in range(1, n_avances + 1):
+            headers.append(f"Av{i}")
+        headers.append("TOTAL")
+        tot_col = len(headers)
+        if mostrar_obs:
+            headers.append("OBSERVACIONES")
+        n_cols = len(headers)
+
         wb = Workbook()
         ws = wb.active
         ws.title = "Suministro"
 
-        ws.merge_cells("A1:K1")
+        last_letter = get_column_letter(n_cols)
+        ws.merge_cells(f"A1:{last_letter}1")
         ws["A1"] = "TALLER DE FAJOS CENTRAL — SUMINISTRO DIARIO"
         ws["A1"].font = title_font
 
-        ws.merge_cells("A2:K2")
+        ws.merge_cells(f"A2:{last_letter}2")
         ws["A2"] = (
             f"FECHA: {fecha_txt}    DÍA: {(label_dia or '').upper()}    "
             f"SEMANA: {codigo_semana or '—'}    "
@@ -975,17 +1020,13 @@ class ExportService:
         )
         ws["A2"].font = sub_font
 
-        ws.merge_cells("A3:K3")
+        ws.merge_cells(f"A3:{last_letter}3")
         ws["A3"] = (
-            "Anota solo los GRAMOS del día en las columnas Av1–Av4 (se suman). "
+            f"Anota solo los GRAMOS del día en Av1–Av{n_avances} (se suman). "
             "Las filas amarillas son para un FOLIO NUEVO del mismo trabajador."
         )
-        ws["A3"].font = Font(name="Calibri", italic=True, size=9, color="555555")
+        ws["A3"].font = Font(name="Calibri", italic=True, size=max(8, fsize - 1), color="555555")
 
-        headers = [
-            "UBIC", "NOMBRE", "FOLIO", "MODELO", "MAT",
-            "Av1", "Av2", "Av3", "Av4", "TOTAL", "OBSERVACIONES",
-        ]
         for c, h in enumerate(headers, 1):
             cell = ws.cell(row=5, column=c, value=h)
             cell.fill = header_fill
@@ -998,27 +1039,41 @@ class ExportService:
 
         def _write_row(nombre, ubic, folio, modelo, material, is_blank=False):
             nonlocal row_i
-            values = [ubic, nombre, folio or "", modelo or "", material or ""]
-            for c, v in enumerate(values, 1):
+            vals = [ubic, nombre, folio or ""]
+            if mostrar_modelo:
+                vals.append(modelo or "")
+            if mostrar_mat:
+                vals.append(material or "")
+            for c, v in enumerate(vals, 1):
                 cell = ws.cell(row=row_i, column=c, value=v if v is not None else "")
                 cell.border = thin
+                cell.font = body_font
                 cell.alignment = Alignment(vertical="center")
-            for c in range(6, 10):  # Av1-Av4 vacíos
+            for c in range(av_start, av_start + n_avances):
                 cell = ws.cell(row=row_i, column=c, value="")
                 cell.border = thin
-            # TOTAL = suma Av1:Av4 si > 0
+            av_first = get_column_letter(av_start)
+            av_last = get_column_letter(av_start + n_avances - 1)
             cell = ws.cell(
                 row=row_i,
-                column=10,
-                value=f'=IF(SUM(F{row_i}:I{row_i})=0,"",SUM(F{row_i}:I{row_i}))',
+                column=tot_col,
+                value=f'=IF(SUM({av_first}{row_i}:{av_last}{row_i})=0,"",SUM({av_first}{row_i}:{av_last}{row_i}))',
             )
             cell.border = thin
             cell.number_format = "0.0"
-            cell = ws.cell(row=row_i, column=11, value="")
-            cell.border = thin
-            fill = blank_fill if is_blank else mat_fills.get(str(material or "").upper())
+            cell.font = body_font
+            if mostrar_obs:
+                cell = ws.cell(row=row_i, column=n_cols, value="")
+                cell.border = thin
+            fill = None
+            if is_blank:
+                fill = blank_fill
+            elif use_mat_colors and not claro:
+                fill = mat_fills.get(str(material or "").upper())
+            if claro and not is_blank:
+                fill = None
             if fill:
-                for c in range(1, 12):
+                for c in range(1, n_cols + 1):
                     ws.cell(row=row_i, column=c).fill = fill
             row_i += 1
 
@@ -1037,7 +1092,6 @@ class ExportService:
                         item.get("material"),
                         is_blank=False,
                     )
-                # Filas extra para folio nuevo del mismo trabajador
                 n_extra = max(0, int(filas_extra_por_trabajador or 0))
                 for _ in range(n_extra):
                     _write_row(display_nombre, ubic, "", "", "", is_blank=True)
@@ -1045,15 +1099,15 @@ class ExportService:
         last = row_i - 1
         if last >= first_data:
             tot = last + 1
-            ws.cell(row=tot, column=5, value="TOTAL DÍA").font = Font(bold=True)
-            for col in range(6, 11):
+            ws.cell(row=tot, column=3, value="TOTAL DÍA").font = Font(bold=True, size=fsize)
+            for col in range(av_start, tot_col + 1):
                 letter = get_column_letter(col)
                 cell = ws.cell(
                     row=tot,
                     column=col,
                     value=f"=SUM({letter}{first_data}:{letter}{last})",
                 )
-                cell.font = Font(bold=True)
+                cell.font = Font(bold=True, size=fsize)
                 cell.fill = PatternFill("solid", fgColor="C8E6C9")
                 cell.number_format = "0.0"
                 cell.border = thin
@@ -1062,28 +1116,46 @@ class ExportService:
             pie = row_i + 1
 
         ws.cell(row=pie, column=1, value="Capturó: ________________")
-        ws.cell(row=pie, column=4, value="Revisó: ________________")
+        ws.cell(row=pie, column=min(4, n_cols), value="Revisó: ________________")
         ws.cell(
             row=pie + 1,
             column=1,
             value=f"Generado {datetime.now().strftime('%d/%m/%Y %H:%M')} · Fajos Central",
         ).font = Font(size=8, color="888888")
 
-        widths = [8, 22, 12, 14, 8, 7, 7, 7, 7, 9, 22]
-        for i, w in enumerate(widths, 1):
+        # widths
+        base_w = [8, 22, 12]
+        if mostrar_modelo:
+            base_w.append(14)
+        if mostrar_mat:
+            base_w.append(8)
+        base_w.extend([7] * n_avances)
+        base_w.append(9)
+        if mostrar_obs:
+            base_w.append(18)
+        for i, w in enumerate(base_w[:n_cols], 1):
             ws.column_dimensions[get_column_letter(i)].width = w
+
         ws.row_dimensions[5].height = 22
         ws.page_setup.orientation = "landscape"
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
+        # Paper: letter / legal (oficio) / A4
+        p = (papel or "letter").lower()
+        if p in ("a4",):
+            ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        elif p in ("legal", "oficio"):
+            ws.page_setup.paperSize = ws.PAPERSIZE_LEGAL
+        else:
+            ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
         ws.print_title_rows = "5:5"
-        ws.page_margins.left = 0.4
-        ws.page_margins.right = 0.4
+        # ~0.5" margins (desktop printer safe)
+        ws.page_margins.left = 0.5
+        ws.page_margins.right = 0.5
         ws.page_margins.top = 0.5
         ws.page_margins.bottom = 0.5
 
-        from io import BytesIO
         buf = BytesIO()
         wb.save(buf)
         return buf.getvalue()
