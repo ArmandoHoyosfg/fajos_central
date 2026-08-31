@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.21.3] — 2026-08-31
+
+### Fix: opciones de Suministro no se reflejaban
+- Los checkboxes desmarcados no se enviaban y el servidor los dejaba en 1
+- Ahora siempre se envía 0/1 y cualquier cambio recarga la vista sincronizada
+
 ## [3.21.2] — 2026-08-31
 
 ### Suministro genérico + columnas compactas

@@ -142,7 +142,10 @@
   <a class="btn" id="btn-xlsx" href="#">Descargar Excel</a>
   <button type="button" class="btn btn-secondary" onclick="window.print()">Imprimir</button>
   <a class="btn btn-secondary" href="/produccion{% if semana_id %}?semana_id={{ semana_id }}{% endif %}">Volver a Plata</a>
-  <span class="muted">{{ total_lineas }} folio(s) · {{ extras }} extra · {{ n_avances }} avances</span>
+  <span class="muted">
+    {% if generico %}Modo genérico · {{ reps }}× por nombre{% else %}{{ total_lineas }} folio(s) · {{ extras }} extra{% endif %}
+    · {{ n_avances }} avances
+  </span>
 </div>
 
 <div class="sum-sheet fs-{{ fuente }} tema-{{ tema }}">
@@ -190,36 +193,44 @@
 {% block scripts %}
 <script>
 (function () {
-  function qs() {
-    var f = document.getElementById('sum-opts');
-    if (!f) return '';
+  var form = document.getElementById('sum-opts');
+  if (!form) return;
+
+  function qsFromForm() {
     var p = new URLSearchParams();
     {% if semana_id %}p.set('semana_id', '{{ semana_id }}');{% endif %}
-    p.set('avances', f.avances.value);
-    p.set('extras', f.extras.value);
-    p.set('papel', f.papel.value);
-    p.set('fuente', f.fuente.value);
-    p.set('tema', f.tema.value);
-    p.set('folio', f.folio && f.folio.checked ? '1' : '0');
-    p.set('modelo', f.modelo.checked ? '1' : '0');
-    p.set('mat', f.mat.checked ? '1' : '0');
-    p.set('obs', f.obs.checked ? '1' : '0');
-    p.set('generico', f.generico && f.generico.checked ? '1' : '0');
-    if (f.reps) p.set('reps', f.reps.value);
+    // selects
+    ['avances', 'extras', 'papel', 'fuente', 'tema', 'reps'].forEach(function (name) {
+      var el = form.elements.namedItem(name);
+      if (el && el.value != null) p.set(name, el.value);
+    });
+    // checkboxes: ALWAYS send 0 or 1 (si no se envían, el servidor asume 1)
+    ['folio', 'modelo', 'mat', 'obs', 'generico'].forEach(function (name) {
+      var el = form.elements.namedItem(name);
+      p.set(name, (el && el.checked) ? '1' : '0');
+    });
     return p.toString();
   }
+
+  function applyOpts(e) {
+    if (e) e.preventDefault();
+    var q = qsFromForm();
+    window.location.href = '/suministro?' + q;
+    return false;
+  }
+
+  form.addEventListener('submit', applyOpts);
+
+  // Cualquier cambio de select o checkbox reaplica la vista
+  form.querySelectorAll('select, input[type="checkbox"]').forEach(function (el) {
+    el.addEventListener('change', applyOpts);
+  });
+
   var btn = document.getElementById('btn-xlsx');
   if (btn) {
     btn.addEventListener('click', function (e) {
       e.preventDefault();
-      window.location.href = '/api/export/suministro?' + qs();
-    });
-  }
-  // Auto-apply on change (optional UX)
-  var form = document.getElementById('sum-opts');
-  if (form) {
-    form.querySelectorAll('select').forEach(function (el) {
-      el.addEventListener('change', function () { form.submit(); });
+      window.location.href = '/api/export/suministro?' + qsFromForm();
     });
   }
 })();
