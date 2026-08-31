@@ -885,13 +885,14 @@ class ExportService:
         mostrar_modelo: bool = True,
         mostrar_mat: bool = True,
         mostrar_obs: bool = True,
+        mostrar_folio: bool = True,
+        generico: bool = False,
+        reps_por_trabajador: int = 3,
     ) -> tuple[bytes, str, str]:
         """
-        Hoja de SUMINISTRO del día (estilo papel):
-        - Fecha y día ya impresos (no se escriben a mano).
-        - UBIC, NOMBRE, FOLIO, MODELO, MAT prellenados.
-        - 4 celdas vacías de avance + TOTAL (fórmula) + observaciones.
-        - N filas en blanco por trabajador para folio nuevo ese día.
+        Hoja de SUMINISTRO del día (estilo papel, vertical).
+        - generico=True: solo UBIC+NOMBRE rellenos; resto en blanco;
+          cada trabajador se repite reps_por_trabajador veces.
         """
         data = self._to_xlsx_suministro_diario(
             lineas,
@@ -906,6 +907,9 @@ class ExportService:
             mostrar_modelo=mostrar_modelo,
             mostrar_mat=mostrar_mat,
             mostrar_obs=mostrar_obs,
+            mostrar_folio=mostrar_folio,
+            generico=generico,
+            reps_por_trabajador=reps_por_trabajador,
         )
         stem = f"suministro_{fecha_iso or 'hoy'}"
         return (
@@ -929,6 +933,9 @@ class ExportService:
         mostrar_modelo: bool = True,
         mostrar_mat: bool = True,
         mostrar_obs: bool = True,
+        mostrar_folio: bool = True,
+        generico: bool = False,
+        reps_por_trabajador: int = 3,
     ) -> bytes:
         from collections import OrderedDict
         from datetime import date, datetime
@@ -947,9 +954,14 @@ class ExportService:
             fecha_txt = hoy.strftime("%d-%m-%y")
 
         n_avances = max(2, min(8, int(n_avances or 4)))
-        # Máx. 10 columnas totales: UBIC+NOMBRE+FOLIO+TOTAL (+ opcionales) + avances
-        opt_count = int(bool(mostrar_modelo)) + int(bool(mostrar_mat)) + int(bool(mostrar_obs))
-        max_av = max(2, 10 - 4 - opt_count)  # 4 = ubic,nombre,folio,total
+        # Máx. 10 columnas: UBIC+NOMBRE+TOTAL (+ folio/modelo/mat/obs) + avances
+        opt_count = (
+            int(bool(mostrar_folio))
+            + int(bool(mostrar_modelo))
+            + int(bool(mostrar_mat))
+            + int(bool(mostrar_obs))
+        )
+        max_av = max(2, 10 - 3 - opt_count)  # 3 = ubic, nombre, total
         n_avances = min(n_avances, max_av)
         font_sizes = {
             "muy_chica": 8, "chica": 9, "normal": 11,
@@ -1004,8 +1016,18 @@ class ExportService:
             key = (str(r.get("nombre") or "").strip().upper(), u)
             groups.setdefault(key, []).append(r)
 
-        # Column layout: UBIC NOMBRE FOLIO [MODELO] [MAT] Av… TOTAL [OBS]
-        headers = ["UBIC", "NOMBRE", "FOLIO"]
+        # Modo genérico: un trabajador = N filas solo con ubic+nombre
+        generico = bool(generico)
+        reps = max(1, min(12, int(reps_por_trabajador or 3)))
+        if generico:
+            # en genérico las columnas de folio/modelo/mat se dejan en blanco
+            # (pueden mostrarse vacías para anotar a mano)
+            pass
+
+        # Column layout: UBIC NOMBRE [FOLIO] [MODELO] [MAT] Av… TOTAL [OBS]
+        headers = ["UBIC", "NOMBRE"]
+        if mostrar_folio:
+            headers.append("FOLIO")
         if mostrar_modelo:
             headers.append("MODELO")
         if mostrar_mat:
@@ -1053,13 +1075,18 @@ class ExportService:
         row_i = 6
         first_data = 6
 
-        def _write_row(nombre, ubic, folio, modelo, material, is_blank=False):
+        def _write_row(nombre, ubic, folio, modelo, material, is_blank=False, force_blank_meta=False):
             nonlocal row_i
-            vals = [ubic, nombre, folio or ""]
+            # force_blank_meta: modo genérico → folio/modelo/mat vacíos
+            if force_blank_meta:
+                folio = modelo = material = ""
+            vals = [ubic, nombre]
+            if mostrar_folio:
+                vals.append("" if force_blank_meta else (folio or ""))
             if mostrar_modelo:
-                vals.append(modelo or "")
+                vals.append("" if force_blank_meta else (modelo or ""))
             if mostrar_mat:
-                vals.append(material or "")
+                vals.append("" if force_blank_meta else (material or ""))
             for c, v in enumerate(vals, 1):
                 cell = ws.cell(row=row_i, column=c, value=v if v is not None else "")
                 cell.border = thin
@@ -1086,7 +1113,7 @@ class ExportService:
                 fill = blank_fill
             elif claro:
                 fill = None
-            elif use_mat_colors:
+            elif use_mat_colors and not force_blank_meta:
                 fill = mat_fills.get(str(material or "").upper())
             elif theme_row_fill is not None:
                 fill = theme_row_fill
@@ -1101,18 +1128,25 @@ class ExportService:
         else:
             for (nombre_key, ubic), items in groups.items():
                 display_nombre = items[0].get("nombre") or nombre_key
-                for item in items:
-                    _write_row(
-                        display_nombre,
-                        ubic,
-                        item.get("folio"),
-                        item.get("modelo"),
-                        item.get("material"),
-                        is_blank=False,
-                    )
-                n_extra = max(0, int(filas_extra_por_trabajador or 0))
-                for _ in range(n_extra):
-                    _write_row(display_nombre, ubic, "", "", "", is_blank=True)
+                if generico:
+                    for _ in range(reps):
+                        _write_row(
+                            display_nombre, ubic, "", "", "",
+                            is_blank=False, force_blank_meta=True,
+                        )
+                else:
+                    for item in items:
+                        _write_row(
+                            display_nombre,
+                            ubic,
+                            item.get("folio"),
+                            item.get("modelo"),
+                            item.get("material"),
+                            is_blank=False,
+                        )
+                    n_extra = max(0, int(filas_extra_por_trabajador or 0))
+                    for _ in range(n_extra):
+                        _write_row(display_nombre, ubic, "", "", "", is_blank=True)
 
         last = row_i - 1
         if last >= first_data:
@@ -1142,15 +1176,18 @@ class ExportService:
         ).font = Font(size=8, color="888888")
 
         # widths
-        base_w = [7, 16, 11]
+        # Estrechas: ubic / folio / modelo / mat · anchas: nombre y AvN
+        base_w = [5, 18]  # UBIC, NOMBRE
+        if mostrar_folio:
+            base_w.append(9)   # FOLIO
         if mostrar_modelo:
-            base_w.append(11)
+            base_w.append(8)   # MODELO (compacto)
         if mostrar_mat:
-            base_w.append(7)
-        base_w.extend([6] * n_avances)
-        base_w.append(8)
+            base_w.append(5)   # MAT (compacto)
+        base_w.extend([8] * n_avances)  # AvN priorizados
+        base_w.append(8)  # TOTAL
         if mostrar_obs:
-            base_w.append(14)
+            base_w.append(12)
         for i, w in enumerate(base_w[:n_cols], 1):
             ws.column_dimensions[get_column_letter(i)].width = w
 

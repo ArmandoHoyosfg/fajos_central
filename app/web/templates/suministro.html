@@ -39,7 +39,13 @@
     border:1px solid #333; padding:0.28rem 0.4rem; text-align:left;
   }
   table.sum-table th { background:#1F4E79; color:#fff; text-align:center; font-weight:600; }
-  table.sum-table td.av, table.sum-table td.tot { min-width:2.2rem; height:1.4em; text-align:center; }
+  table.sum-table td.av, table.sum-table td.tot { min-width:2.6rem; height:1.4em; text-align:center; }
+  table.sum-table th.col-ubic, table.sum-table td.col-ubic { width: 2.8rem; max-width: 3.2rem; text-align: center; }
+  table.sum-table th.col-mat, table.sum-table td.col-mat { width: 2.6rem; max-width: 3rem; text-align: center; }
+  table.sum-table th.col-mod, table.sum-table td.col-mod { width: 4.5rem; max-width: 5.5rem; }
+  table.sum-table th.col-folio, table.sum-table td.col-folio { width: 5rem; max-width: 6rem; }
+  table.sum-table th.col-av, table.sum-table td.col-av { min-width: 2.8rem; }
+  table.sum-table th.col-nom, table.sum-table td.col-nom { min-width: 7rem; }
   table.sum-table tr.blank-row { background:#FFFDE7; }
   .sum-sheet.tema-material table.sum-table tr.mat-ag3 { background:#E3F2FD; }
   .sum-sheet.tema-material table.sum-table tr.mat-ag4 { background:#E8F5E9; }
@@ -113,12 +119,24 @@
       <option value="negro" {% if tema == 'negro' %}selected{% endif %}>Gris / más negro</option>
     </select>
   </label>
+  <label class="chk"><input type="checkbox" name="folio" value="1" {% if mostrar_folio %}checked{% endif %}> Folio</label>
   <label class="chk"><input type="checkbox" name="modelo" value="1" {% if mostrar_modelo %}checked{% endif %}> Modelo</label>
   <label class="chk"><input type="checkbox" name="mat" value="1" {% if mostrar_mat %}checked{% endif %}> Material</label>
   <label class="chk"><input type="checkbox" name="obs" value="1" {% if mostrar_obs %}checked{% endif %}> Observaciones</label>
+  <label class="chk"><input type="checkbox" name="generico" value="1" {% if generico %}checked{% endif %}> Modo genérico</label>
+  <label>Repeticiones
+    <select name="reps" title="Solo en modo genérico: veces que se repite cada nombre">
+      {% for n in [1,2,3,4,5,6,8,10] %}
+      <option value="{{ n }}" {% if reps == n %}selected{% endif %}>{{ n }}× por nombre</option>
+      {% endfor %}
+    </select>
+  </label>
   <button type="submit" class="btn btn-secondary">Aplicar</button>
 </form>
-<p class="hint no-print">Vista vertical (retrato). Máximo 10 columnas en total (si activas Modelo/Mat/Obs, se reducen los avances). Márgenes ~12 mm.</p>
+<p class="hint no-print">
+  <strong>Modo genérico:</strong> solo UBIC + NOMBRE rellenos; el resto en blanco y cada trabajador se repite N veces.
+  Columnas UBIC/Mat/Modelo compactas para dar espacio a Av1…AvN. Máx. 10 columnas.
+</p>
 
 <div class="sum-actions no-print">
   <a class="btn" id="btn-xlsx" href="#">Descargar Excel</a>
@@ -137,24 +155,25 @@
   <table class="sum-table">
     <thead>
       <tr>
-        <th>UBIC</th><th>NOMBRE</th><th>FOLIO</th>
-        {% if mostrar_modelo %}<th>MODELO</th>{% endif %}
-        {% if mostrar_mat %}<th>MAT</th>{% endif %}
-        {% for i in range(1, n_avances + 1) %}<th>Av{{ i }}</th>{% endfor %}
-        <th>TOTAL</th>
+        <th class="col-ubic">UBIC</th><th class="col-nom">NOMBRE</th>
+        {% if mostrar_folio %}<th class="col-folio">FOLIO</th>{% endif %}
+        {% if mostrar_modelo %}<th class="col-mod">MODELO</th>{% endif %}
+        {% if mostrar_mat %}<th class="col-mat">MAT</th>{% endif %}
+        {% for i in range(1, n_avances + 1) %}<th class="col-av">Av{{ i }}</th>{% endfor %}
+        <th class="col-av">TOTAL</th>
         {% if mostrar_obs %}<th>OBSERVACIONES</th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for r in rows %}
       <tr class="{% if r.blank %}blank-row{% else %}mat-{{ (r.material or '')|lower }}{% endif %}">
-        <td>{{ r.ubic }}</td>
-        <td>{{ r.nombre }}</td>
-        <td>{{ r.folio }}</td>
-        {% if mostrar_modelo %}<td>{{ r.modelo }}</td>{% endif %}
-        {% if mostrar_mat %}<td>{{ r.material }}</td>{% endif %}
-        {% for i in range(1, n_avances + 1) %}<td class="av"></td>{% endfor %}
-        <td class="tot"></td>
+        <td class="col-ubic">{{ r.ubic }}</td>
+        <td class="col-nom">{{ r.nombre }}</td>
+        {% if mostrar_folio %}<td class="col-folio">{% if not generico %}{{ r.folio }}{% endif %}</td>{% endif %}
+        {% if mostrar_modelo %}<td class="col-mod">{% if not generico %}{{ r.modelo }}{% endif %}</td>{% endif %}
+        {% if mostrar_mat %}<td class="col-mat">{% if not generico %}{{ r.material }}{% endif %}</td>{% endif %}
+        {% for i in range(1, n_avances + 1) %}<td class="av col-av"></td>{% endfor %}
+        <td class="tot col-av"></td>
         {% if mostrar_obs %}<td></td>{% endif %}
       </tr>
       {% else %}
@@ -181,9 +200,12 @@
     p.set('papel', f.papel.value);
     p.set('fuente', f.fuente.value);
     p.set('tema', f.tema.value);
+    p.set('folio', f.folio && f.folio.checked ? '1' : '0');
     p.set('modelo', f.modelo.checked ? '1' : '0');
     p.set('mat', f.mat.checked ? '1' : '0');
     p.set('obs', f.obs.checked ? '1' : '0');
+    p.set('generico', f.generico && f.generico.checked ? '1' : '0');
+    if (f.reps) p.set('reps', f.reps.value);
     return p.toString();
   }
   var btn = document.getElementById('btn-xlsx');

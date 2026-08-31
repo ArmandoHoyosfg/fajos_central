@@ -960,15 +960,17 @@ async def api_export_suministro(
     modelo: int = Query(1, ge=0, le=1),
     mat: int = Query(1, ge=0, le=1),
     obs: int = Query(1, ge=0, le=1),
+    folio: int = Query(1, ge=0, le=1),
+    generico: int = Query(0, ge=0, le=1),
+    reps: int = Query(3, ge=1, le=12),
     prod_repo: ProduccionRepo = Depends(get_produccion_repo),
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
 ):
     """
-    Excel de suministro diario (estilo papel, vertical):
-    fecha/día impresos, máximo 10 columnas, filas extra para folio nuevo.
+    Excel de suministro diario (vertical). generico=1: solo ubic+nombre, N reps.
     """
-    opt_n = int(bool(modelo)) + int(bool(mat)) + int(bool(obs))
-    max_av = max(2, 10 - 4 - opt_n)
+    opt_n = int(bool(folio)) + int(bool(modelo)) + int(bool(mat)) + int(bool(obs))
+    max_av = max(2, 10 - 3 - opt_n)
     avances = max(2, min(int(avances or 4), max_av))
     from app.services.dia_service import DiaService
     from app.services.export_service import ExportService
@@ -1002,6 +1004,9 @@ async def api_export_suministro(
         mostrar_modelo=bool(modelo),
         mostrar_mat=bool(mat),
         mostrar_obs=bool(obs),
+        mostrar_folio=bool(folio),
+        generico=bool(generico),
+        reps_por_trabajador=reps,
     )
     return Response(
         content=content,
@@ -1022,6 +1027,9 @@ async def page_suministro(
     modelo: int = Query(1, ge=0, le=1),
     mat: int = Query(1, ge=0, le=1),
     obs: int = Query(1, ge=0, le=1),
+    folio: int = Query(1, ge=0, le=1),
+    generico: int = Query(0, ge=0, le=1),
+    reps: int = Query(3, ge=1, le=12),
     prod_repo: ProduccionRepo = Depends(get_produccion_repo),
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
 ):
@@ -1030,10 +1038,11 @@ async def page_suministro(
     from app.core.calendar_util import encontrar_semana_actual, today
     from collections import OrderedDict
 
-    # Máx. 10 columnas: 4 fijas + opcionales + avances
-    opt_n = int(bool(modelo)) + int(bool(mat)) + int(bool(obs))
-    max_av = max(2, 10 - 4 - opt_n)
+    opt_n = int(bool(folio)) + int(bool(modelo)) + int(bool(mat)) + int(bool(obs))
+    max_av = max(2, 10 - 3 - opt_n)
     avances = max(2, min(int(avances or 4), max_av))
+    generico_b = bool(generico)
+    reps = max(1, min(12, int(reps or 3)))
 
     st = DiaService().estado_hoy()
     if semana_id is None:
@@ -1069,20 +1078,28 @@ async def page_suministro(
     rows_out = []
     for (nk, ubic), items in groups.items():
         nombre = items[0].get("nombre") or nk
-        for it in items:
-            rows_out.append({
-                "nombre": nombre, "ubic": ubic,
-                "folio": it.get("folio") or "",
-                "modelo": it.get("modelo") or "",
-                "material": it.get("material") or "",
-                "blank": False,
-            })
-        for _ in range(max(0, extras)):
-            rows_out.append({
-                "nombre": nombre, "ubic": ubic,
-                "folio": "", "modelo": "", "material": "",
-                "blank": True,
-            })
+        if generico_b:
+            for _ in range(reps):
+                rows_out.append({
+                    "nombre": nombre, "ubic": ubic,
+                    "folio": "", "modelo": "", "material": "",
+                    "blank": False,
+                })
+        else:
+            for it in items:
+                rows_out.append({
+                    "nombre": nombre, "ubic": ubic,
+                    "folio": it.get("folio") or "",
+                    "modelo": it.get("modelo") or "",
+                    "material": it.get("material") or "",
+                    "blank": False,
+                })
+            for _ in range(max(0, extras)):
+                rows_out.append({
+                    "nombre": nombre, "ubic": ubic,
+                    "folio": "", "modelo": "", "material": "",
+                    "blank": True,
+                })
 
     return templates.TemplateResponse(
         request,
@@ -1102,6 +1119,9 @@ async def page_suministro(
             mostrar_modelo=bool(modelo),
             mostrar_mat=bool(mat),
             mostrar_obs=bool(obs),
+            mostrar_folio=bool(folio),
+            generico=generico_b,
+            reps=reps,
             total_lineas=len(lineas),
             n_avances=avances,
         ),

@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.21.2] — 2026-08-31
+
+### Suministro genérico + columnas compactas
+- **Modo genérico**: solo UBIC + NOMBRE; folio/modelo/mat en blanco; cada nombre se repite N veces
+- Checkbox Folio independiente
+- Anchos: UBIC/Mat/Modelo estrechos; más espacio para Av1…AvN
+
 ## [3.21.1] — 2026-08-31
 
 ### Suministro: vertical + tinta + tipografía
