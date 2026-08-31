@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 3.21.0  
+**Versión:** 3.21.1  
 **Licencia:** [GPL-3.0-or-later](LICENSE)  
 **Entorno:** Windows + PowerShell 7 + MariaDB/HeidiSQL  
 
@@ -54,7 +54,9 @@ Abre en el navegador: `http://127.0.0.1:8000` (o la IP LAN que muestra el launch
 2. Ajusta en la barra:
    - **Avances** (2–6 columnas para gramos del día)
    - **Filas extra** por trabajador (folio nuevo)
-   - **Papel**: Carta / Oficio / A4 (horizontal)
+   - **Papel**: Carta / Oficio / A4 (**vertical**)
+   - **Colores** orientados a tóner (cian, magenta, amarillo, etc.)
+   - Máximo 10 columnas en la hoja
    - **Letra**: chica / normal / grande
    - **Colores**: por material o claro (ahorro de tóner)
    - Mostrar u ocultar Modelo / Material / Observaciones

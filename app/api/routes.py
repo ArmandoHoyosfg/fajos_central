@@ -953,7 +953,7 @@ async def api_duplicar(
 async def api_export_suministro(
     semana_id: int | None = None,
     extras: int = Query(2, ge=0, le=5),
-    avances: int = Query(4, ge=2, le=6),
+    avances: int = Query(4, ge=2, le=8),
     papel: str = Query("letter"),
     tema: str = Query("material"),
     fuente: str = Query("normal"),
@@ -964,10 +964,12 @@ async def api_export_suministro(
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
 ):
     """
-    Excel de suministro diario (estilo papel):
-    fecha/día impresos, folio/nombre/ubic listos, celdas vacías de avance
-    y filas extra por trabajador para folio nuevo.
+    Excel de suministro diario (estilo papel, vertical):
+    fecha/día impresos, máximo 10 columnas, filas extra para folio nuevo.
     """
+    opt_n = int(bool(modelo)) + int(bool(mat)) + int(bool(obs))
+    max_av = max(2, 10 - 4 - opt_n)
+    avances = max(2, min(int(avances or 4), max_av))
     from app.services.dia_service import DiaService
     from app.services.export_service import ExportService
     from app.core.calendar_util import encontrar_semana_actual, today
@@ -1013,7 +1015,7 @@ async def page_suministro(
     request: Request,
     semana_id: int | None = None,
     extras: int = Query(2, ge=0, le=5),
-    avances: int = Query(4, ge=2, le=6),
+    avances: int = Query(4, ge=2, le=8),
     papel: str = Query("letter"),
     tema: str = Query("material"),
     fuente: str = Query("normal"),
@@ -1027,6 +1029,11 @@ async def page_suministro(
     from app.services.dia_service import DiaService
     from app.core.calendar_util import encontrar_semana_actual, today
     from collections import OrderedDict
+
+    # Máx. 10 columnas: 4 fijas + opcionales + avances
+    opt_n = int(bool(modelo)) + int(bool(mat)) + int(bool(obs))
+    max_av = max(2, 10 - 4 - opt_n)
+    avances = max(2, min(int(avances or 4), max_av))
 
     st = DiaService().estado_hoy()
     if semana_id is None:

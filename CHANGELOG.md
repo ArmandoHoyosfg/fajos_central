@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.21.1] — 2026-08-31
+
+### Suministro: vertical + tinta + tipografía
+- Orientación **vertical (retrato)** en Excel e impresión
+- Máximo **10 columnas** totales (avances se limitan según Modelo/Mat/Obs)
+- Temas de color: cian, magenta, amarillo, verde, gris/negro, claro, por material
+- Letras: muy chica → muy grande
+
 ## [3.21.0] — 2026-08-31
 
 ### Suministro: ajustes de impresión

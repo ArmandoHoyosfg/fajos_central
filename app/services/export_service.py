@@ -946,8 +946,15 @@ class ExportService:
         except Exception:
             fecha_txt = hoy.strftime("%d-%m-%y")
 
-        n_avances = max(2, min(6, int(n_avances or 4)))
-        font_sizes = {"chica": 9, "normal": 11, "grande": 13}
+        n_avances = max(2, min(8, int(n_avances or 4)))
+        # Máx. 10 columnas totales: UBIC+NOMBRE+FOLIO+TOTAL (+ opcionales) + avances
+        opt_count = int(bool(mostrar_modelo)) + int(bool(mostrar_mat)) + int(bool(mostrar_obs))
+        max_av = max(2, 10 - 4 - opt_count)  # 4 = ubic,nombre,folio,total
+        n_avances = min(n_avances, max_av)
+        font_sizes = {
+            "muy_chica": 8, "chica": 9, "normal": 11,
+            "grande": 13, "muy_grande": 15,
+        }
         fsize = font_sizes.get((fuente or "normal").lower(), 11)
 
         thin = Border(
@@ -968,8 +975,17 @@ class ExportService:
             "DOL": PatternFill("solid", fgColor="FFF8E1"),
             "DLO": PatternFill("solid", fgColor="FCE4EC"),
         }
-        use_mat_colors = (tema or "material").lower() == "material"
-        claro = (tema or "").lower() == "claro"
+        tema_l = (tema or "material").lower()
+        use_mat_colors = tema_l == "material"
+        claro = tema_l in ("claro", "ahorro", "blanco")
+        # Temas que gastan más de un color concreto (tóner/tinta)
+        theme_row_fill = {
+            "cian": PatternFill("solid", fgColor="B3E5FC"),      # más cian/azul
+            "magenta": PatternFill("solid", fgColor="F8BBD0"),   # más magenta
+            "amarillo": PatternFill("solid", fgColor="FFF59D"),  # más amarillo
+            "negro": PatternFill("solid", fgColor="E0E0E0"),     # gris (más negro al imprimir bordes/texto)
+            "verde": PatternFill("solid", fgColor="C8E6C9"),
+        }.get(tema_l)
 
         def _pk(r):
             try:
@@ -1068,10 +1084,12 @@ class ExportService:
             fill = None
             if is_blank:
                 fill = blank_fill
-            elif use_mat_colors and not claro:
-                fill = mat_fills.get(str(material or "").upper())
-            if claro and not is_blank:
+            elif claro:
                 fill = None
+            elif use_mat_colors:
+                fill = mat_fills.get(str(material or "").upper())
+            elif theme_row_fill is not None:
+                fill = theme_row_fill
             if fill:
                 for c in range(1, n_cols + 1):
                     ws.cell(row=row_i, column=c).fill = fill
@@ -1124,24 +1142,24 @@ class ExportService:
         ).font = Font(size=8, color="888888")
 
         # widths
-        base_w = [8, 22, 12]
+        base_w = [7, 16, 11]
         if mostrar_modelo:
-            base_w.append(14)
+            base_w.append(11)
         if mostrar_mat:
-            base_w.append(8)
-        base_w.extend([7] * n_avances)
-        base_w.append(9)
+            base_w.append(7)
+        base_w.extend([6] * n_avances)
+        base_w.append(8)
         if mostrar_obs:
-            base_w.append(18)
+            base_w.append(14)
         for i, w in enumerate(base_w[:n_cols], 1):
             ws.column_dimensions[get_column_letter(i)].width = w
 
         ws.row_dimensions[5].height = 22
-        ws.page_setup.orientation = "landscape"
+        # Vertical (retrato): cabe mejor en el escritorio y en el flujo del papel de suministro
+        ws.page_setup.orientation = "portrait"
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
-        # Paper: letter / legal (oficio) / A4
         p = (papel or "letter").lower()
         if p in ("a4",):
             ws.page_setup.paperSize = ws.PAPERSIZE_A4

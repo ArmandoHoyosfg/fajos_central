@@ -27,9 +27,11 @@
     background: #fff; color: #111; border-radius:12px; padding:1rem; overflow:auto;
     --sum-fs: 11pt;
   }
+  .sum-sheet.fs-muy_chica { --sum-fs: 8pt; }
   .sum-sheet.fs-chica { --sum-fs: 9pt; }
   .sum-sheet.fs-normal { --sum-fs: 11pt; }
   .sum-sheet.fs-grande { --sum-fs: 13pt; }
+  .sum-sheet.fs-muy_grande { --sum-fs: 15pt; }
   .sum-sheet h1 { margin:0 0 0.25rem; font-size: calc(var(--sum-fs) + 4pt); color: #1F4E79; }
   .sum-meta { color: #444; font-size: var(--sum-fs); margin-bottom:0.75rem; }
   table.sum-table { width:100%; border-collapse:collapse; font-size: var(--sum-fs); }
@@ -44,10 +46,15 @@
   .sum-sheet.tema-material table.sum-table tr.mat-dol { background:#FFF8E1; }
   .sum-sheet.tema-material table.sum-table tr.mat-dlo { background:#FCE4EC; }
   .sum-sheet.tema-claro table.sum-table tr:not(.blank-row) { background:#fff; }
+  .sum-sheet.tema-cian table.sum-table tr:not(.blank-row) { background:#B3E5FC; }
+  .sum-sheet.tema-magenta table.sum-table tr:not(.blank-row) { background:#F8BBD0; }
+  .sum-sheet.tema-amarillo table.sum-table tr:not(.blank-row) { background:#FFF59D; }
+  .sum-sheet.tema-verde table.sum-table tr:not(.blank-row) { background:#C8E6C9; }
+  .sum-sheet.tema-negro table.sum-table tr:not(.blank-row) { background:#E0E0E0; }
   .hint { font-size:0.82rem; color: var(--muted); margin: 0.25rem 0 0.75rem; }
 
   @page {
-    size: {% if papel == 'a4' %}A4 landscape{% elif papel in ['legal','oficio'] %}legal landscape{% else %}letter landscape{% endif %};
+    size: {% if papel == 'a4' %}A4 portrait{% elif papel in ['legal','oficio'] %}legal portrait{% else %}letter portrait{% endif %};
     margin: 12mm;
   }
   @media print {
@@ -66,9 +73,9 @@
 <form id="sum-opts" class="sum-toolbar no-print" method="get" action="/suministro">
   {% if semana_id %}<input type="hidden" name="semana_id" value="{{ semana_id }}">{% endif %}
   <label>Avances
-    <select name="avances">
+    <select name="avances" title="Se limitan para no pasar de 10 columnas en total">
       {% for n in [2,3,4,5,6] %}
-      <option value="{{ n }}" {% if avances == n %}selected{% endif %}>{{ n }} columnas</option>
+      <option value="{{ n }}" {% if avances == n %}selected{% endif %}>{{ n }}</option>
       {% endfor %}
     </select>
   </label>
@@ -88,15 +95,22 @@
   </label>
   <label>Letra
     <select name="fuente">
+      <option value="muy_chica" {% if fuente == 'muy_chica' %}selected{% endif %}>Muy chica</option>
       <option value="chica" {% if fuente == 'chica' %}selected{% endif %}>Chica</option>
       <option value="normal" {% if fuente == 'normal' %}selected{% endif %}>Normal</option>
       <option value="grande" {% if fuente == 'grande' %}selected{% endif %}>Grande</option>
+      <option value="muy_grande" {% if fuente == 'muy_grande' %}selected{% endif %}>Muy grande</option>
     </select>
   </label>
-  <label>Colores
+  <label>Colores / tóner
     <select name="tema">
       <option value="material" {% if tema == 'material' %}selected{% endif %}>Por material</option>
-      <option value="claro" {% if tema == 'claro' %}selected{% endif %}>Claro (poco tóner)</option>
+      <option value="claro" {% if tema == 'claro' %}selected{% endif %}>Claro (ahorra tinta)</option>
+      <option value="cian" {% if tema == 'cian' %}selected{% endif %}>Más cian (azul)</option>
+      <option value="magenta" {% if tema == 'magenta' %}selected{% endif %}>Más magenta</option>
+      <option value="amarillo" {% if tema == 'amarillo' %}selected{% endif %}>Más amarillo</option>
+      <option value="verde" {% if tema == 'verde' %}selected{% endif %}>Más verde</option>
+      <option value="negro" {% if tema == 'negro' %}selected{% endif %}>Gris / más negro</option>
     </select>
   </label>
   <label class="chk"><input type="checkbox" name="modelo" value="1" {% if mostrar_modelo %}checked{% endif %}> Modelo</label>
@@ -104,7 +118,7 @@
   <label class="chk"><input type="checkbox" name="obs" value="1" {% if mostrar_obs %}checked{% endif %}> Observaciones</label>
   <button type="submit" class="btn btn-secondary">Aplicar</button>
 </form>
-<p class="hint no-print">Los cambios se aplican a la vista, a la impresión y al Excel. Márgenes ~12 mm (seguros en impresoras de escritorio).</p>
+<p class="hint no-print">Vista vertical (retrato). Máximo 10 columnas en total (si activas Modelo/Mat/Obs, se reducen los avances). Márgenes ~12 mm.</p>
 
 <div class="sum-actions no-print">
   <a class="btn" id="btn-xlsx" href="#">Descargar Excel</a>
