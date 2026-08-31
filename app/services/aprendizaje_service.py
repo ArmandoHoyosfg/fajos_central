@@ -473,6 +473,59 @@ class AprendizajeService:
 
 
 
+
+    def marcar_folios_terminados_lote(
+        self,
+        semana_id: int | None = None,
+        min_semanas: int = 3,
+        prod_ids: list[int] | None = None,
+    ) -> dict:
+        """
+        Termina en lote folios sin avance.
+        - Si prod_ids: solo esos.
+        - Si no: todos los inactivos con semanas_inactivo >= min_semanas.
+        min_semanas por defecto 3 (= más de 2 semanas).
+        """
+        min_semanas = max(1, int(min_semanas or 3))
+        inactivos = self.detectar_folios_inactivos(semana_id)
+        if prod_ids:
+            want = {int(x) for x in prod_ids if x}
+            candidatos = [x for x in inactivos if int(x.get("prod_id") or 0) in want]
+        else:
+            candidatos = [
+                x for x in inactivos
+                if int(x.get("semanas_inactivo") or 0) >= min_semanas
+                and x.get("prod_id")
+            ]
+        ok, fail = [], []
+        for x in candidatos:
+            pid = int(x["prod_id"])
+            try:
+                r = self.marcar_folio_terminado(prod_id=pid)
+                if r.get("ok"):
+                    ok.append({"prod_id": pid, "folio": x.get("folio") or r.get("folio")})
+                else:
+                    fail.append({"prod_id": pid, "folio": x.get("folio"), "error": r.get("error")})
+            except Exception as e:
+                fail.append({"prod_id": pid, "folio": x.get("folio"), "error": str(e)})
+        try:
+            self.registrar(
+                "folio_terminado_lote",
+                entidad="produccion_plata",
+                semana_id=semana_id,
+                payload={"ok": len(ok), "fail": len(fail), "min_semanas": min_semanas},
+            )
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "terminados": len(ok),
+            "fallidos": len(fail),
+            "detalle_ok": ok[:50],
+            "detalle_fail": fail[:20],
+            "min_semanas": min_semanas,
+        }
+
     def reactivar_folio(self, prod_id: int | None = None, trabajo_id: int | None = None) -> dict:
         """Reabre un folio terminado (activo=1, limpia marca en notas)."""
         folio = None

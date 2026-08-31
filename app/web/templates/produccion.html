@@ -82,7 +82,20 @@
   </summary>
   {% if folio_inactivos %}
   <div class="folio-hint-block">
-    <strong>Sin avance</strong>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+      <strong>Sin avance</strong>
+      {% set n_lote = namespace(folio_inactivos|selectattr('semanas_inactivo', 'ge', 3)|list) %}
+      {% if not semana_cerrada and n_lote > 0 %}
+      <button type="button" class="btn btn-secondary btn-xs" id="btn-terminar-lote"
+              onclick="terminarLoteInactivos({{ semana_id or 'null' }}, 3, {{ n_lote }})"
+              title="Marca como terminados los folios con 3+ semanas sin gramos">
+        Terminar lote ({{ n_lote }} con 3+ semanas)
+      </button>
+      {% endif %}
+    </div>
+    <p class="muted" style="margin:0 0 0.4rem;font-size:0.82rem">
+      El lote cierra folios con <strong>más de 2 semanas</strong> sin avance. Luego puedes reactivar uno por uno si hace falta.
+    </p>
     <ul class="folio-hint-list">
       {% for x in folio_inactivos[:12] %}
       <li>
@@ -131,8 +144,8 @@
         <code>{{ x.folio or '—' }}</code>
         <span>{{ x.nombre }} · {{ x.ubic }}</span>
         {% if x.total_gramos %}<span class="muted">{{ x.total_gramos }} g</span>{% endif %}
-        <button type="button" class="btn btn-secondary btn-xs"
-                class="btn btn-secondary btn-xs btn-folio-reactivar" data-action="reactivar-folio" data-prod-id="{{ x.id }}" data-folio="{{ x.folio or '' }}">Reactivar</button>
+        <button type="button" class="btn btn-secondary btn-xs btn-folio-reactivar"
+                data-action="reactivar-folio" data-prod-id="{{ x.id }}" data-folio="{{ x.folio or '' }}">Reactivar</button>
       </li>
       {% endfor %}
     </ul>
@@ -418,7 +431,7 @@ function onMaterialChange(sel) {
 }
 </script>
 
-<script src="/static/folio_actions.js?v=3197"></script>
+<script src="/static/folio_actions.js?v=31910"></script>
 <script src="/static/table_sort.js?v=3180"></script>
 <script src="/static/capture_guard.js?v=3130"></script>
 

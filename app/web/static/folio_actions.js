@@ -113,4 +113,39 @@
       reactivar(reac.getAttribute("data-prod-id") || reac.dataset.prodId, reac.getAttribute("data-folio") || reac.dataset.folio || "");
     }
   }, true); // capture phase: gana a otros handlers
+
+  global.terminarLoteInactivos = async function (semanaId, minSemanas, countHint) {
+    minSemanas = minSemanas || 3;
+    var n = countHint || "?";
+    if (!window.confirm(
+      "¿Terminar en lote " + n + " folio(s) con " + minSemanas + "+ semanas sin avance?\n\n" +
+      "• Desaparecen de la captura\n" +
+      "• Los gramos de la semana (si hubiera) se conservan\n" +
+      "• Puedes reactivar individualmente desde «folios terminados»"
+    )) return;
+    toast("Terminando lote…");
+    try {
+      var fd = new FormData();
+      if (semanaId) fd.set("semana_id", String(semanaId));
+      fd.set("min_semanas", String(minSemanas));
+      var res = await fetch("/api/produccion/terminar-lote", {
+        method: "POST",
+        body: fd,
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || data.ok === false) {
+        toast(data.error || ("Error HTTP " + res.status), true);
+        return;
+      }
+      toast("Lote: " + (data.terminados || 0) + " terminados" +
+        (data.fallidos ? (", " + data.fallidos + " fallidos") : ""));
+      setTimeout(function () { location.reload(); }, 600);
+    } catch (e) {
+      console.error(e);
+      toast("Error de red en lote", true);
+    }
+  };
 })(window);
+

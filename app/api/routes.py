@@ -211,6 +211,25 @@ async def api_linea_terminar(prod_id: int):
     return result
 
 
+
+
+@router.post("/api/produccion/terminar-lote")
+async def api_terminar_lote(
+    semana_id: int | None = Form(None),
+    min_semanas: int = Form(3),
+):
+    """Termina todos los folios sin avance con N+ semanas inactivas."""
+    from fastapi.responses import JSONResponse
+    from app.services.aprendizaje_service import AprendizajeService
+    try:
+        result = AprendizajeService().marcar_folios_terminados_lote(
+            semana_id=semana_id,
+            min_semanas=min_semanas,
+        )
+        return result
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
 @router.post("/api/produccion/linea/{prod_id}/reactivar")
 async def api_linea_reactivar(prod_id: int):
     from fastapi.responses import JSONResponse

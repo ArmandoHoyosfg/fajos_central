@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.11] — 2026-08-31
+
+### Terminar folio en lote
+- Botón «Terminar lote (N con 3+ semanas)» en Sin avance
+- Cierra todos los inactivos con más de 2 semanas sin gramos
+- Reactivar individual sigue disponible
+
 ## [3.19.10] — 2026-08-31
 
 ### Fix fatal: arranque del servidor
