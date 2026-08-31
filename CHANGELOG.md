@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.15] — 2026-08-31
+
+### Fix: gramos de «Un día» no visibles en tabla
+- `buscar_linea` prefiere filas visibles (no terminadas / trabajo activo)
+- Al actualizar una línea terminada, se reabre para que aparezca
+- Match de gramos existentes por folio+material exactos (no parcial)
+- Toast confirma gramos guardados y total de la fila
+
 ## [3.19.14] — 2026-08-31
 
 ### Fix: gramos con un decimal (4.4, 3.1…)

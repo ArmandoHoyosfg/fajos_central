@@ -1510,20 +1510,53 @@ async def api_add_un_dia(
         from app.core.exceptions import ValidationAppError
         raise ValidationAppError(f"Día inválido: {dia}")
     nombre_c = canonical_name(nombre)
-    # buscar línea existente
     existing = None
     try:
-        existing = repo.buscar_linea(semana_id, nombre_c, int(ubic), folio)
+        existing = repo.buscar_linea(
+            semana_id,
+            nombre_c,
+            int(ubic),
+            folio=folio,
+            material=material,
+            trabajador_id=trabajador_id,
+            prefer_visibles=True,
+        )
     except Exception:
         existing = None
     if existing is None and trabajo_id:
-        for row in repo.listar_por_semana(semana_id, incluir_terminados=True):
-            if row.get("trabajo_id") == trabajo_id:
-                existing = row
-                break
+        try:
+            for row in repo.listar_por_semana(semana_id, incluir_terminados=True):
+                if row.get("trabajo_id") == trabajo_id:
+                    existing = row
+                    break
+        except Exception:
+            pass
     if existing:
-        repo.actualizar_gramos_dia(int(existing["id"]), col, gramos)
-        return {"id": existing["id"], "ok": True, "dia": dia, "gramos": gramos, "updated": True}
+        pid = int(existing["id"])
+        # Si estaba terminada/oculta, reabrir para que se vea en la tabla
+        try:
+            repo.reabrir_linea_si_terminada(pid)
+        except Exception:
+            pass
+        # Valor previo del día (para respuesta clara)
+        prev = None
+        try:
+            full = repo.obtener(pid) or existing
+            prev = full.get(col)
+        except Exception:
+            prev = existing.get(col)
+        repo.actualizar_gramos_dia(pid, col, gramos)
+        row = repo.obtener(pid) or {}
+        return {
+            "id": pid,
+            "ok": True,
+            "dia": dia,
+            "gramos": gramos,
+            "gramos_previos": float(prev) if prev not in (None, "") else 0,
+            "updated": True,
+            "total_gramos": float(row.get("total_gramos") or 0) if row else None,
+            "visible": True,
+        }
     payload = {
         "nombre": nombre_c,
         "ubic": ubic,
@@ -1538,7 +1571,16 @@ async def api_add_un_dia(
     }
     payload[col] = gramos
     new_id = repo.insertar(semana_id, payload)
-    return {"id": new_id, "ok": True, "dia": dia, "gramos": gramos, "updated": False}
+    row = repo.obtener(new_id) or {}
+    return {
+        "id": new_id,
+        "ok": True,
+        "dia": dia,
+        "gramos": gramos,
+        "updated": False,
+        "total_gramos": float(row.get("total_gramos") or 0) if row else None,
+        "visible": True,
+    }
 
 
 

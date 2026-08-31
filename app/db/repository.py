@@ -1058,20 +1058,90 @@ class ProduccionRepo(BaseRepo):
         nombre: str,
         ubic: int,
         folio: str | None = None,
+        material: str | None = None,
+        trabajador_id: int | None = None,
+        *,
+        prefer_visibles: bool = True,
     ) -> dict | None:
+        """
+        Busca línea de la semana. Prefiere filas visibles (no [terminado], trabajo activo).
+        Orden de match: trabajador_id+folio(+material) > nombre+ubic+folio(+material).
+        """
+        folio_n = (folio or "").strip() or None
+        mat_n = (material or "").strip() or None
         with self.db.cursor() as cur:
-            if folio:
-                cur.execute(
-                    "SELECT * FROM produccion_plata WHERE semana_id=%s AND nombre=%s AND ubic=%s AND folio=%s LIMIT 1",
-                    (semana_id, nombre, ubic, folio),
-                )
+            clauses = ["p.semana_id = %s"]
+            params: list = [semana_id]
+            if trabajador_id:
+                clauses.append("p.trabajador_id = %s")
+                params.append(int(trabajador_id))
             else:
+                clauses.append("p.nombre = %s")
+                params.append(nombre)
+                clauses.append("p.ubic = %s")
+                params.append(int(ubic))
+            if folio_n:
+                clauses.append("p.folio = %s")
+                params.append(folio_n)
+            else:
+                clauses.append("(p.folio IS NULL OR TRIM(p.folio) = '')")
+            if mat_n:
+                clauses.append("UPPER(TRIM(COALESCE(p.material,''))) = %s")
+                params.append(mat_n.upper())
+            sql = f"""
+                SELECT p.*,
+                       COALESCE(tj.activo, 1) AS trabajo_activo,
+                       CASE
+                         WHEN p.notas IS NOT NULL AND p.notas LIKE '%[terminado]%' THEN 1
+                         ELSE 0
+                       END AS es_terminado
+                FROM produccion_plata p
+                LEFT JOIN trabajos tj ON tj.id = p.trabajo_id
+                WHERE {' AND '.join(clauses)}
+                ORDER BY
+                  CASE WHEN p.notas IS NOT NULL AND p.notas LIKE '%[terminado]%' THEN 1 ELSE 0 END ASC,
+                  CASE WHEN COALESCE(tj.activo, 1) = 1 THEN 0 ELSE 1 END ASC,
+                  p.id DESC
+                LIMIT 5
+            """
+            cur.execute(sql, params)
+            rows = list(cur.fetchall() or [])
+        if not rows:
+            return None
+        if prefer_visibles:
+            for r in rows:
+                term = bool(r.get("es_terminado"))
+                act = int(r.get("trabajo_activo") if r.get("trabajo_activo") is not None else 1)
+                if not term and act == 1:
+                    return r
+            # si solo hay terminadas, devolver la más reciente para poder reabrirla
+        return rows[0]
+
+    def reabrir_linea_si_terminada(self, prod_id: int) -> None:
+        """Quita marca [terminado] de notas y reactiva trabajo ligado."""
+        with self.db.cursor() as cur:
+            cur.execute("SELECT trabajo_id, notas FROM produccion_plata WHERE id=%s", (prod_id,))
+            row = cur.fetchone()
+            if not row:
+                return
+            notas = row.get("notas") or ""
+            if "[terminado]" in notas:
+                nueva = " ".join(
+                    ln for ln in notas.replace("[terminado]", " ").split() if ln
+                ).strip() or None
                 cur.execute(
-                    "SELECT * FROM produccion_plata WHERE semana_id=%s AND nombre=%s AND ubic=%s "
-                    "AND (folio IS NULL OR folio='') LIMIT 1",
-                    (semana_id, nombre, ubic),
+                    "UPDATE produccion_plata SET notas=%s WHERE id=%s",
+                    (nueva, prod_id),
                 )
-            return cur.fetchone()
+            tid = row.get("trabajo_id")
+            if tid:
+                try:
+                    cur.execute(
+                        "UPDATE trabajos SET activo=1, terminado_en=NULL WHERE id=%s",
+                        (int(tid),),
+                    )
+                except Exception:
+                    pass
 
     def set_firmado(self, prod_id: int, firmado: bool) -> None:
 

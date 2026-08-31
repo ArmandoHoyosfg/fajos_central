@@ -669,26 +669,47 @@ function sumGramPartials() {
   return Math.round(s * 1000) / 1000;
 }
 function getExistingDayGrams() {
-  // Buscar en la tabla visible: mismo folio + columna del día
+  // Match exacto: folio + material + columna del día (data-dia = gm_lun, etc.)
   const form = document.getElementById('form-un-dia');
   if (!form) return 0;
-  const folio = (form.elements.namedItem('folio') || {}).value || '';
+  const folio = String((form.elements.namedItem('folio') || {}).value || '').trim();
+  const material = String((form.elements.namedItem('material') || {}).value || '').trim().toUpperCase();
   const dia = (form.elements.namedItem('dia') || {}).value || '';
   const map = {sab:'gm_sab',dom:'gm_dom',lun:'gm_lun',mar:'gm_mar',mie:'gm_mie',jue:'gm_jue',vie:'gm_vie'};
-  const col = map[dia];
-  if (!folio || !col) return 0;
-  let found = 0;
-  document.querySelectorAll('table.sortable tbody tr').forEach(tr => {
-    const tds = tr.querySelectorAll('td');
-    // folio suele estar en una celda con title o texto
-    const folioCell = tr.querySelector('td[title]') || tds[3];
-    const text = (tr.textContent || '');
-    if (folio && text.indexOf(folio) >= 0) {
-      const inp = tr.querySelector('input.cell-gm[data-dia="' + col + '"]');
-      if (inp) {
-        const v = parseFloat(inp.value || '0');
-        if (!isNaN(v)) found = v;
+  const col = map[dia] || dia;
+  if (!col) return 0;
+  // Preferir trabajo seleccionado con produccion_id
+  const tsel = document.getElementById('dia-trabajo');
+  if (tsel && tsel.value) {
+    try {
+      const t = JSON.parse(tsel.value);
+      if (t.produccion_id) {
+        const inp = document.querySelector(
+          'tr[data-prod-id="' + t.produccion_id + '"] input.cell-gm[data-dia="' + col + '"]'
+        );
+        if (inp) {
+          const v = parseFloat(inp.value || '0');
+          if (!isNaN(v) && v > 0) return v;
+        }
       }
+    } catch (e) {}
+  }
+  let found = 0;
+  document.querySelectorAll('table.sortable tbody tr[data-prod-id]').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    // orden: actions, nombre, ubic, folio, modelo, material, tarifa, días...
+    const folioCell = cells[3];
+    const matCell = cells[5];
+    const ftxt = String((folioCell && (folioCell.getAttribute('title') || folioCell.textContent)) || '')
+      .replace('—', '').trim();
+    const mtxt = String((matCell && matCell.textContent) || '').trim().toUpperCase();
+    if (folio && ftxt !== folio) return;
+    if (!folio && ftxt) return;
+    if (material && mtxt && mtxt !== material) return;
+    const inp = tr.querySelector('input.cell-gm[data-dia="' + col + '"]');
+    if (inp) {
+      const v = parseFloat(inp.value || '0');
+      if (!isNaN(v) && v > 0) found = v;
     }
   });
   return found;
@@ -784,10 +805,14 @@ async function submitUnDia(e) {
   const res = await fetch('/api/produccion/' + SEMANA_ID + '/dia', { method: 'POST', body });
   const data = await res.json().catch(() => ({}));
   if (res.ok && data.ok) {
-    showToast(data.updated ? 'Día actualizado' : 'Día registrado');
+    const g = data.gramos != null ? data.gramos : '';
+    const msg = (data.updated ? 'Día actualizado' : 'Día registrado')
+      + (g !== '' ? (': ' + g + ' g') : '')
+      + (data.total_gramos != null ? (' · total fila ' + data.total_gramos + ' g') : '');
+    showToast(msg);
     closeModal('modal-un-dia');
-    setTimeout(() => location.reload(), 400);
-  } else showToast(data.user_message || data.message || 'Error', true);
+    setTimeout(() => location.reload(), 500);
+  } else showToast(data.user_message || data.message || data.detail || 'Error al guardar día', true);
   return false;
 }
 
