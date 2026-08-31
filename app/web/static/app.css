@@ -1960,3 +1960,28 @@ input.cell-gm.day-unlocked-temp {
 .folio-hints-compact summary {
   pointer-events: auto;
 }
+
+.gram-multi-box { margin-top: 0.25rem; }
+.gram-multi-list { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.35rem 0; }
+.gram-multi-row { display: flex; gap: 0.35rem; align-items: center; }
+.gram-multi-row input.gram-partial { flex: 1; min-width: 0; }
+.gram-multi-actions { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+.gram-preview {
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(201, 162, 39, 0.12);
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  font-size: 0.92rem;
+  margin: 0.35rem 0;
+}
+.gram-preview strong { color: var(--accent, #c9a227); }
+.gram-sum-opt { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin-top: 0.25rem; }
+.edit-totals-bar {
+  display: flex; flex-wrap: wrap; gap: 1rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(201, 162, 39, 0.1);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  font-size: 0.95rem;
+}
+.edit-totals-bar strong { color: var(--accent, #c9a227); }

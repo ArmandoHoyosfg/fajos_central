@@ -280,9 +280,24 @@
             <option value="vie">Vie</option>
           </select>
         </div>
-        <div>
-          <label>Gramos</label>
-          <input name="gramos" type="number" step="0.1" min="0.01" required>
+        <div class="full gram-multi-box">
+          <label>Gramos del día <span class="muted">(varios avances se suman)</span></label>
+          <div id="dia-gram-list" class="gram-multi-list">
+            <div class="gram-multi-row">
+              <input type="number" class="gram-partial" step="1" min="0" placeholder="Avance 1" inputmode="decimal">
+              <button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button>
+            </div>
+          </div>
+          <div class="gram-multi-actions">
+            <button type="button" class="btn btn-secondary btn-xs" onclick="addGramPartial()">＋ Otro avance</button>
+            <input type="hidden" name="gramos" id="dia-gramos-total" value="">
+          </div>
+          <div id="dia-gram-preview" class="gram-preview">Total a guardar: <strong>0</strong> g</div>
+          <label class="gram-sum-opt">
+            <input type="checkbox" id="dia-sumar-existente" checked>
+            Sumar a lo ya capturado este día
+          </label>
+          <div id="dia-gram-existente" class="muted" style="font-size:0.85rem;display:none"></div>
         </div>
         <div><label>Folio</label><input name="folio" placeholder="ST-149"></div>
         <div><label>Modelo</label><input name="modelo"></div>
@@ -315,13 +330,17 @@
           </select>
         </div>
         <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" min="0"></div>
-        <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0"></div>
-        <div><label>Dom</label><input name="gm_dom" type="number" step="0.1" min="0"></div>
-        <div><label>Lun</label><input name="gm_lun" type="number" step="0.1" min="0"></div>
-        <div><label>Mar</label><input name="gm_mar" type="number" step="0.1" min="0"></div>
-        <div><label>Mié</label><input name="gm_mie" type="number" step="0.1" min="0"></div>
-        <div><label>Jue</label><input name="gm_jue" type="number" step="0.1" min="0"></div>
-        <div><label>Vie</label><input name="gm_vie" type="number" step="0.1" min="0"></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div class="full edit-totals-bar" id="edit-plt-totals">
+          <span>Total gramos: <strong id="edit-plt-tg">0</strong> g</span>
+          <span>Efectivo est.: <strong id="edit-plt-te">$0.00</strong></span>
+        </div>
         <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
       </div>
       <div class="actions">
@@ -378,6 +397,9 @@ function openEditPlt(id, data) {
   const who = document.getElementById("edit-plt-who");
   if (who) who.textContent = (data.nombre || "") + " · ubic " + (data.ubic || "");
   FajosRowEdit.open({ modalId: "modal-edit-plt", formId: "form-edit-plt", id: id, data: data });
+  bindEditPltTotals();
+  const form = document.getElementById("form-edit-plt");
+  if (form && form._recalcTotals) setTimeout(form._recalcTotals, 30);
   // material select: asegurar valor aunque no esté en options exacto
   const form = document.getElementById("form-edit-plt");
   if (form && data.material) {
@@ -512,6 +534,7 @@ function openModal(id) {
     const map = {0:'lun',1:'mar',2:'mie',3:'jue',4:'vie',5:'sab',6:'dom'};
     const sel = document.getElementById('dia-select');
     if (sel) sel.value = map[new Date().getDay()] || 'lun';
+    resetDiaGramPartials();
   }
 }
 function closeModal(id) {
@@ -562,6 +585,126 @@ function rellenarDesdeTrabajo() {
   } catch (e) {}
 }
 
+
+/* —— Varios gramajes en "Un día" —— */
+function addGramPartial() {
+  const list = document.getElementById('dia-gram-list');
+  if (!list) return;
+  const n = list.querySelectorAll('.gram-partial').length + 1;
+  const row = document.createElement('div');
+  row.className = 'gram-multi-row';
+  row.innerHTML = '<input type="number" class="gram-partial" step="1" min="0" placeholder="Avance ' + n + '" inputmode="decimal">' +
+    '<button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar">×</button>';
+  list.appendChild(row);
+  list.querySelectorAll('.gram-rm').forEach(b => { b.hidden = list.querySelectorAll('.gram-partial').length <= 1; });
+  row.querySelector('.gram-partial').addEventListener('input', recalcDiaGramPreview);
+  row.querySelector('.gram-partial').focus();
+  recalcDiaGramPreview();
+}
+function removeGramPartial(btn) {
+  const list = document.getElementById('dia-gram-list');
+  if (!list) return;
+  const rows = list.querySelectorAll('.gram-multi-row');
+  if (rows.length <= 1) return;
+  btn.closest('.gram-multi-row').remove();
+  list.querySelectorAll('.gram-rm').forEach(b => { b.hidden = list.querySelectorAll('.gram-partial').length <= 1; });
+  recalcDiaGramPreview();
+}
+function sumGramPartials() {
+  let s = 0;
+  document.querySelectorAll('#dia-gram-list .gram-partial').forEach(inp => {
+    const v = parseFloat(inp.value);
+    if (!isNaN(v) && v > 0) s += v;
+  });
+  return Math.round(s * 1000) / 1000;
+}
+function getExistingDayGrams() {
+  // Buscar en la tabla visible: mismo folio + columna del día
+  const form = document.getElementById('form-un-dia');
+  if (!form) return 0;
+  const folio = (form.elements.namedItem('folio') || {}).value || '';
+  const dia = (form.elements.namedItem('dia') || {}).value || '';
+  const map = {sab:'gm_sab',dom:'gm_dom',lun:'gm_lun',mar:'gm_mar',mie:'gm_mie',jue:'gm_jue',vie:'gm_vie'};
+  const col = map[dia];
+  if (!folio || !col) return 0;
+  let found = 0;
+  document.querySelectorAll('table.sortable tbody tr').forEach(tr => {
+    const tds = tr.querySelectorAll('td');
+    // folio suele estar en una celda con title o texto
+    const folioCell = tr.querySelector('td[title]') || tds[3];
+    const text = (tr.textContent || '');
+    if (folio && text.indexOf(folio) >= 0) {
+      const inp = tr.querySelector('input.cell-gm[data-dia="' + col + '"]');
+      if (inp) {
+        const v = parseFloat(inp.value || '0');
+        if (!isNaN(v)) found = v;
+      }
+    }
+  });
+  return found;
+}
+function recalcDiaGramPreview() {
+  const nuevos = sumGramPartials();
+  const sumar = (document.getElementById('dia-sumar-existente') || {}).checked;
+  const existente = sumar ? getExistingDayGrams() : 0;
+  const total = Math.round((existente + nuevos) * 1000) / 1000;
+  const hid = document.getElementById('dia-gramos-total');
+  if (hid) hid.value = total > 0 ? String(total) : '';
+  const prev = document.getElementById('dia-gram-preview');
+  if (prev) {
+    if (existente > 0 && sumar) {
+      prev.innerHTML = 'Ya había <strong>' + existente + '</strong> g + avances <strong>' + nuevos + '</strong> g = <strong>' + total + '</strong> g a guardar';
+    } else {
+      prev.innerHTML = 'Total a guardar: <strong>' + total + '</strong> g';
+    }
+  }
+  const ex = document.getElementById('dia-gram-existente');
+  if (ex) {
+    if (existente > 0) {
+      ex.style.display = '';
+      ex.textContent = 'Valor actual en tabla para este día/folio: ' + existente + ' g';
+    } else {
+      ex.style.display = 'none';
+    }
+  }
+  return total;
+}
+function resetDiaGramPartials() {
+  const list = document.getElementById('dia-gram-list');
+  if (!list) return;
+  list.innerHTML = '<div class="gram-multi-row"><input type="number" class="gram-partial" step="1" min="0" placeholder="Avance 1" inputmode="decimal"><button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button></div>';
+  const inp = list.querySelector('.gram-partial');
+  if (inp) inp.addEventListener('input', recalcDiaGramPreview);
+  const cb = document.getElementById('dia-sumar-existente');
+  if (cb) cb.onchange = recalcDiaGramPreview;
+  const diaSel = document.getElementById('dia-select');
+  if (diaSel) diaSel.addEventListener('change', recalcDiaGramPreview);
+  recalcDiaGramPreview();
+}
+function bindEditPltTotals() {
+  const form = document.getElementById('form-edit-plt');
+  if (!form || form.dataset.totalsBound) return;
+  form.dataset.totalsBound = '1';
+  const recalc = () => {
+    let g = 0;
+    form.querySelectorAll('.edit-gm, input[name^="gm_"]').forEach(inp => {
+      if (!(inp.name || '').startsWith('gm_')) return;
+      const v = parseFloat(inp.value);
+      if (!isNaN(v)) g += v;
+    });
+    g = Math.round(g * 1000) / 1000;
+    const tarifa = parseFloat((form.elements.namedItem('tarifa_gr') || {}).value || '0') || 0;
+    const ef = Math.round(g * tarifa * 100) / 100;
+    const tg = document.getElementById('edit-plt-tg');
+    const te = document.getElementById('edit-plt-te');
+    if (tg) tg.textContent = String(g);
+    if (te) te.textContent = '$' + ef.toFixed(2);
+  };
+  form.addEventListener('input', recalc);
+  form._recalcTotals = recalc;
+}
+
+
 async function submitUnDia(e) {
   e.preventDefault();
   if (!SEMANA_ID) { showToast('Selecciona una semana', true); return false; }
@@ -569,12 +712,14 @@ async function submitUnDia(e) {
   const fd = new FormData(form);
   const parts = String(fd.get('trabajador_sel') || '').split('|');
   if (parts.length < 2) { showToast('Elige trabajador', true); return false; }
+  const total = recalcDiaGramPreview();
+  if (!(total > 0)) { showToast('Indica al menos un avance en gramos', true); return false; }
   const body = new FormData();
   body.set('nombre', parts[0]);
   body.set('ubic', parts[1]);
   if (parts[2]) body.set('trabajador_id', parts[2]);
   body.set('dia', fd.get('dia'));
-  body.set('gramos', fd.get('gramos'));
+  body.set('gramos', String(total));
   body.set('folio', fd.get('folio') || '');
   body.set('modelo', fd.get('modelo') || '');
   body.set('material', fd.get('material') || 'AG3');

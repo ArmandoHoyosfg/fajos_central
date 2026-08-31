@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.19.8] — 2026-08-31
+
+### Varios avances en un día + totales al editar
+- Modal **＋ Un día**: varios gramajes parciales que se suman con vista previa
+- Opción «Sumar a lo ya capturado este día»
+- Editar fila: total de gramos y efectivo estimado en vivo
+
 ## [3.19.7] — 2026-08-31
 
 ### Fix duro: Terminar / Reactivar
