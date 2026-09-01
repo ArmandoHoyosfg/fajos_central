@@ -58,7 +58,7 @@ class Database:
     @contextmanager
     def cursor(self, dictionary: bool = True) -> Generator[Any, None, None]:
         conn = self.connect()
-        cur = conn.cursor(dictionary=dictionary)
+        cur = conn.cursor(dictionary=dictionary, buffered=True)
         try:
             yield cur
             if not getattr(conn, "autocommit", False):

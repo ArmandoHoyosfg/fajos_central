@@ -526,23 +526,38 @@ function onMaterialChange_legacy_unused(sel) {
 function openEditPlt(id, data) {
   const who = document.getElementById("edit-plt-who");
   if (who) who.textContent = (data.nombre || "") + " · ubic " + (data.ubic || "");
-  FajosRowEdit.open({ modalId: "modal-edit-plt", formId: "form-edit-plt", id: id, data: data });
+  if (window.FajosRowEdit) {
+    FajosRowEdit.open({ modalId: "modal-edit-plt", formId: "form-edit-plt", id: id, data: data });
+  }
   bindEditPltTotals();
   const form = document.getElementById("form-edit-plt");
-  if (form && form._recalcTotals) setTimeout(form._recalcTotals, 30);
-  // material select: asegurar valor aunque no esté en options exacto
-  const form = document.getElementById("form-edit-plt");
-  if (form && data.material) {
+  if (!form) return;
+  if (form._recalcTotals) setTimeout(form._recalcTotals, 30);
+  // material: asegurar valor aunque no esté en options / datalist
+  if (data && data.material) {
     const sel = form.elements.namedItem("material");
     if (sel) {
-      let found = false;
-      for (const o of sel.options) { if (o.value === data.material) { found = true; break; } }
-      if (!found) {
-        const opt = document.createElement("option");
-        opt.value = data.material; opt.textContent = data.material;
-        sel.appendChild(opt);
+      const val = data.material;
+      if (sel.tagName === "SELECT") {
+        let found = false;
+        for (const o of sel.options) { if (o.value === val) { found = true; break; } }
+        if (!found) {
+          const opt = document.createElement("option");
+          opt.value = val; opt.textContent = val;
+          sel.appendChild(opt);
+        }
+        sel.value = val;
+      } else {
+        sel.value = val;
       }
-      sel.value = data.material;
+      if (typeof onMaterialInput === "function") onMaterialInput(sel);
+    }
+  }
+  if (data && data.modelo) {
+    const mod = form.elements.namedItem("modelo");
+    if (mod) {
+      mod.value = data.modelo;
+      if (typeof onModeloInput === "function") onModeloInput(mod);
     }
   }
 }

@@ -97,6 +97,14 @@ class MigrationRunner:
                     for st in stmts:
                         try:
                             cur.execute(st)
+                            try:
+                                if getattr(cur, "with_rows", False):
+                                    cur.fetchall()
+                                while cur.nextset():
+                                    if getattr(cur, "with_rows", False):
+                                        cur.fetchall()
+                            except Exception:
+                                pass
                         except Exception as e:
                             # Idempotencia blanda: columna/tabla ya existe
                             msg = str(e).lower()
