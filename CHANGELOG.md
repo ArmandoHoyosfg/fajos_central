@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.21.7] — 2026-09-01
+
+### UI: barra de semana sin bloquear la vista
+- Eliminada la franja oscura a ancho completo (redundante con la fecha de la topbar)
+- Contexto de semana en una línea discreta
+- Códigos que cruzan mes: `29 ago-4 sep` (ya no `29/08-04/09`)
+
 ## [3.21.6] — 2026-09-01
 
 ### UI: barra «Hoy / Semana actual»

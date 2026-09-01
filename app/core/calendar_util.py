@@ -81,15 +81,25 @@ def rango_sab_vie(ref: date | None = None) -> tuple[date, date]:
     return sab, vie
 
 
+_MESES_CORTO = (
+    "", "ene", "feb", "mar", "abr", "may", "jun",
+    "jul", "ago", "sep", "oct", "nov", "dic",
+)
+
+
 def codigo_desde_rango(sab: date, vie: date | None = None) -> str:
     """
-    Código legible DD-DD. Si cruza de mes: DD/MM-DD/MM para evitar ambigüedad
-    (p.ej. 29-04 de ago-sep vs ene-abr).
+    Código legible de semana sáb–vie.
+    - Mismo mes: 01-07
+    - Cruza mes: 29 ago-4 sep (evita ambigüedad 29/08-04/09 → “abril”)
     """
     vie = vie or (sab + timedelta(days=6))
     if sab.month == vie.month and sab.year == vie.year:
         return f"{sab.day:02d}-{vie.day:02d}"
-    return f"{sab.day:02d}/{sab.month:02d}-{vie.day:02d}/{vie.month:02d}"
+    return (
+        f"{sab.day:02d} {_MESES_CORTO[sab.month]}-"
+        f"{vie.day} {_MESES_CORTO[vie.month]}"
+    )
 
 
 def sugerir_codigo_semana(ref: date | None = None) -> tuple[str, date, date]:

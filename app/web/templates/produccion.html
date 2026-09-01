@@ -9,23 +9,28 @@
   <button type="button" class="help-toggle" style="display:block;margin-top:0.4rem"
           onclick="this.parentElement.hidden=true">Entendido, ocultar</button>
 </div>
-<div class="semana-ctx">
-  <strong>Hoy:</strong> {{ fecha_hoy_larga }}
-  {% if semanas %}
-    {% set actual = semanas | selectattr('es_actual') | list %}
-    {% if actual %}
-      <span class="sep">·</span>
-      <span>Semana actual:</span>
-      <span class="badge-actual">{{ actual[0].codigo }}</span>
-      {% if actual[0].fecha_inicio and actual[0].fecha_fin %}
-      <span class="semana-rango">({{ actual[0].fecha_inicio }} → {{ actual[0].fecha_fin }})</span>
-      {% endif %}
-    {% else %}
-      <span class="sep">·</span>
-      <span class="muted">Ninguna semana en BD cubre hoy</span>
+{# Fecha del día ya va en la topbar; aquí solo contexto de semana (discreto) #}
+{% if semanas %}
+  {% set actual = semanas | selectattr('es_actual') | list %}
+  {% if actual %}
+  <div class="semana-ctx semana-ctx--compact">
+    <span class="semana-ctx-label">Semana de nómina</span>
+    <span class="badge-actual">{{ actual[0].codigo }}</span>
+    {% if actual[0].fecha_inicio and actual[0].fecha_fin %}
+    <span class="semana-rango">{{ actual[0].fecha_inicio }} → {{ actual[0].fecha_fin }}</span>
     {% endif %}
+    {% if semana_id and actual[0].id == semana_id %}
+    <span class="semana-ctx-ok">· viendo la actual</span>
+    {% elif semana_id %}
+    <span class="semana-ctx-warn">· estás en otra semana</span>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="semana-ctx semana-ctx--compact semana-ctx--warn">
+    <span class="muted">No hay semana en BD que cubra hoy. Usa ★ Semana actual.</span>
+  </div>
   {% endif %}
-</div>
+{% endif %}
 
 <div id="toast" class="toast-web" hidden></div>
 
