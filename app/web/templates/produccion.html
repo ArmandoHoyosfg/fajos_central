@@ -361,11 +361,20 @@
           <label>Modelo <span class="muted">(lista o libre)</span></label>
           <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
                  placeholder="Modelo…" onchange="onModeloInput(this)">
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mod-cat"
+                    title="Guarda este modelo en el catálogo">＋ Modelo al catálogo</button>
+          </div>
         </div>
         <div>
           <label>Material <span class="muted">(lista o libre)</span></label>
           <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
                  placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
+          <div class="mat-chips" aria-label="Materiales del catálogo"></div>
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
+                    title="Guarda este material y $/g en el catálogo">＋ Material al catálogo</button>
+          </div>
         </div>
         <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
       </div>
@@ -389,11 +398,20 @@
           <label>Modelo <span class="muted">(lista o libre)</span></label>
           <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
                  placeholder="Modelo…" onchange="onModeloInput(this)">
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mod-cat"
+                    title="Guarda este modelo en el catálogo">＋ Modelo al catálogo</button>
+          </div>
         </div>
         <div>
           <label>Material <span class="muted">(lista o libre)</span></label>
           <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
                  placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
+          <div class="mat-chips" aria-label="Materiales del catálogo"></div>
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
+                    title="Guarda este material y $/g en el catálogo">＋ Material al catálogo</button>
+          </div>
         </div>
         <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" min="0"></div>
         <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
@@ -436,11 +454,20 @@
           <label>Modelo <span class="muted">(lista o libre)</span></label>
           <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
                  placeholder="Modelo…" onchange="onModeloInput(this)">
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mod-cat"
+                    title="Guarda este modelo en el catálogo">＋ Modelo al catálogo</button>
+          </div>
         </div>
         <div>
           <label>Material <span class="muted">(lista o libre)</span></label>
           <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
                  placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
+          <div class="mat-chips" aria-label="Materiales del catálogo"></div>
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
+                    title="Guarda este material y $/g en el catálogo">＋ Material al catálogo</button>
+          </div>
         </div>
         <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
       </div>
@@ -456,64 +483,11 @@
 {% block scripts %}
 <script>
 
-function _catalogTarifas() {
-  try { return JSON.parse(document.getElementById('catalog-tarifas').textContent || '{}'); }
-  catch (e) { return {}; }
-}
-function _catalogModelos() {
-  try { return JSON.parse(document.getElementById('catalog-modelos').textContent || '{}'); }
-  catch (e) { return {}; }
-}
-/** Aplica tarifa del catálogo si el material coincide; si no, deja libre. */
-function onMaterialInput(el) {
-  if (!el) return;
-  const form = el.form || el.closest('form');
-  if (!form) return;
-  const key = String(el.value || '').trim();
-  const map = _catalogTarifas();
-  const t = form.elements.namedItem('tarifa_gr');
-  if (!t) return;
-  // match case-insensitive
-  let tarifa = map[key];
-  if (tarifa == null) {
-    const low = key.toLowerCase();
-    for (const k of Object.keys(map)) {
-      if (k.toLowerCase() === low) { tarifa = map[k]; break; }
-    }
-  }
-  if (tarifa != null && tarifa !== '') {
-    t.value = tarifa;
-    el.dataset.fromCatalog = '1';
-  } else {
-    el.dataset.fromCatalog = '0';
-    // no pisar tarifa manual del usuario
-  }
-}
-/** Si el modelo está en catálogo, sugiere material y tarifa (sin forzar si ya hay texto). */
-function onModeloInput(el) {
-  if (!el) return;
-  const form = el.form || el.closest('form');
-  if (!form) return;
-  const key = String(el.value || '').trim();
-  const map = _catalogModelos();
-  let info = map[key];
-  if (!info) {
-    const low = key.toLowerCase();
-    for (const k of Object.keys(map)) {
-      if (k.toLowerCase() === low) { info = map[k]; break; }
-    }
-  }
-  if (!info) return;
-  const mat = form.elements.namedItem('material');
-  const tar = form.elements.namedItem('tarifa_gr');
-  if (mat && info.material) {
-    mat.value = info.material;
-    onMaterialInput(mat);
-  }
-  if (tar && info.tarifa != null && info.tarifa !== '') {
-    tar.value = info.tarifa;
-  }
-}
+/* Catálogos: lógica en /static/catalog_assist.js (CatalogAssist) */
+function onMaterialInput(el){ if(window.CatalogAssist) CatalogAssist.onMaterialInput(el); }
+function onModeloInput(el){ if(window.CatalogAssist) CatalogAssist.onModeloInput(el); }
+function onMaterialChange(sel){ onMaterialInput(sel); }
+
 function onMaterialChange(sel) {
   // compat: selects antiguos
   if (sel && sel.tagName === 'SELECT') {
