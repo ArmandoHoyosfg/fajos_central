@@ -2109,3 +2109,44 @@ th.col-actions, td.col-actions {
 .row-menu .row-menu-panel {
   display: none !important;
 }
+
+
+/* Catálogo: sugerencias activas, valores libres permitidos */
+.cat-hint {
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+  color: var(--muted);
+}
+.cat-hint--ok { color: var(--green, #a6e3a1); }
+.cat-hint--free { color: var(--accent, #c9a227); }
+.mat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+.cat-chip {
+  border: 1px solid var(--border, #45475a);
+  background: var(--surface, #313244);
+  color: var(--text, #cdd6f4);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.cat-chip:hover {
+  border-color: var(--accent, #c9a227);
+  color: var(--accent, #c9a227);
+}
+.cat-chip-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.cat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}

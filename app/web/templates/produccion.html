@@ -47,6 +47,7 @@
           data-tarifa="{{ m.tarifa_default if m.tarifa_default is not none else '' }}"></option>
   {% endfor %}
 </datalist>
+<script src="/static/catalog_assist.js" defer></script>
 <script type="application/json" id="catalog-tarifas">{
   {
     {% for m in materiales or [] %}
@@ -66,7 +67,7 @@
 <div class="page-head">
   <div>
     <h1>Producción semanal (Plata)</h1>
-    <p class="muted">Captura diaria recomendada con ＋ Un día. Export formal desde los botones de la barra.</p>
+    <p class="muted">Captura diaria con ＋ Un día. Material/modelo: elige del <a href="/catalogos">catálogo</a> (aplica $/g) o escribe uno libre; opcionalmente guárdalo en catálogo.</p>
   </div>
 </div>
 
