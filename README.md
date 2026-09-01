@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 3.21.5  
+**Versión:** 3.22.0  
 **Licencia:** [GPL-3.0-or-later](LICENSE)  
 **Entorno:** Windows 10/11 · PowerShell 7 · Python 3.12+ · MariaDB / HeidiSQL  
 
@@ -37,7 +37,7 @@ Captura diaria, impresión de suministro, exportación formal, catálogos, seman
 | **Pita** | Modelo distinto, material tipo PITA NxN, producto, pitas, efectivo |
 | **Taller** | Sueldo fijo/variable, extras, torcedores (precio por pita), totales de gran total |
 | **Suministro** | Hoja imprimible del día (ajustes de columnas, modo genérico, temas de tóner) |
-| **Catálogos** | Materiales, tarifas y modelos desde la base de datos |
+| **Catálogos** | Materiales, tarifas y modelos: sugieren valores y tarifas; la captura admite texto libre |
 | **Semanas** | Crear, duplicar (todas las áreas), alinear, editar, eliminar vacías |
 | **Inteligencia ligera** | Folios inactivos, duplicados, rarezas, avisos de consistencia |
 | **Dev** | Diagnóstico, sync, huérfanos, migraciones, aprendizaje |

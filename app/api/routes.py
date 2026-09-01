@@ -568,11 +568,20 @@ async def page_produccion(
         reasignaciones = []
         folio_inact_ids = set()
     materiales: list = []
+    modelos: list = []
     try:
         from app.db.repository import CatalogosRepo
-        materiales = CatalogosRepo().listar_materiales(solo_activos=True) or []
+        _cat = CatalogosRepo()
+        materiales = _cat.listar_materiales(solo_activos=True) or []
+        # Modelos de Plata (PLT) + sin tipo / todos como sugerencia
+        todos_mod = _cat.listar_modelos() or []
+        modelos = [
+            m for m in todos_mod
+            if str(m.get("tipo") or "PLT").upper() in ("PLT", "PLATA", "")
+        ] or todos_mod
     except Exception:
         materiales = []
+        modelos = []
     # Precalcular lote (evita filtros Jinja frágiles)
     n_lote_inactivos = 0
     try:
@@ -594,6 +603,7 @@ async def page_produccion(
             totales=totales or {},
             trabajadores=trabajadores or [],
             materiales=materiales,
+            modelos=modelos,
             semana_cerrada=bool(
                 next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")
             ) if semana_id else False,

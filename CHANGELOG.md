@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.22.0] — 2026-09-01
+
+### Catálogos útiles, no solo adorno
+- Material y modelo en captura: **lista sugerida + texto libre**
+- Si el valor está en catálogo → aplica tarifa / material por defecto
+- Si no está → se guarda igual, sin bloquear
+- Modelos PLT cargados en formularios de Plata
+
 ## [3.21.7] — 2026-09-01
 
 ### UI: barra de semana sin bloquear la vista

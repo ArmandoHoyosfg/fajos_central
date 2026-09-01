@@ -34,6 +34,35 @@
 
 <div id="toast" class="toast-web" hidden></div>
 
+{# Catálogos: sugerencias; el usuario puede escribir valores que no estén en BD #}
+<datalist id="dl-materiales">
+  {% for m in materiales or [] %}
+  <option value="{{ m.material }}" data-tarifa="{{ m.tarifa_por_gramo }}"></option>
+  {% endfor %}
+</datalist>
+<datalist id="dl-modelos">
+  {% for m in modelos or [] %}
+  <option value="{{ m.modelo }}"
+          data-material="{{ m.material_default or '' }}"
+          data-tarifa="{{ m.tarifa_default if m.tarifa_default is not none else '' }}"></option>
+  {% endfor %}
+</datalist>
+<script type="application/json" id="catalog-tarifas">{
+  {
+    {% for m in materiales or [] %}
+    {{ (m.material or '')|tojson }}: {{ m.tarifa_por_gramo if m.tarifa_por_gramo is not none else 'null' }}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  }
+</script>
+<script type="application/json" id="catalog-modelos">{
+  {
+    {% for m in modelos or [] %}
+    {{ (m.modelo or '')|tojson }}: {"material": {{ (m.material_default or '')|tojson }}, "tarifa": {{ m.tarifa_default if m.tarifa_default is not none else 'null' }}}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  }
+</script>
+
+
 <div class="page-head">
   <div>
     <h1>Producción semanal (Plata)</h1>
@@ -327,18 +356,15 @@
           <div id="dia-gram-existente" class="muted" style="font-size:0.85rem;display:none"></div>
         </div>
         <div><label>Folio</label><input name="folio" placeholder="ST-149"></div>
-        <div><label>Modelo</label><input name="modelo"></div>
         <div>
-          <label>Material</label>
-          <select name="material" class="mat-select" onchange="onMaterialChange(this)">
-            {% if materiales %}
-              {% for m in materiales %}
-              <option value="{{ m.material }}" data-tarifa="{{ m.tarifa_por_gramo }}">{{ m.material }} ({{ m.tarifa_por_gramo }}/g)</option>
-              {% endfor %}
-            {% else %}
-              <option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option>
-            {% endif %}
-          </select>
+          <label>Modelo <span class="muted">(lista o libre)</span></label>
+          <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
+                 placeholder="Modelo…" onchange="onModeloInput(this)">
+        </div>
+        <div>
+          <label>Material <span class="muted">(lista o libre)</span></label>
+          <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                 placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
         </div>
         <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
       </div>
@@ -358,17 +384,15 @@
     <form id="form-edit-plt" onsubmit="return FajosRowEdit.submit({formId:'form-edit-plt', modalId:'modal-edit-plt', urlBase:'/api/produccion/linea/'})">
       <div class="form-grid">
         <div><label>Folio</label><input name="folio"></div>
-        <div><label>Modelo</label><input name="modelo"></div>
-        <div><label>Material</label>
-          <select name="material" class="mat-select" onchange="onMaterialChange(this)">
-            {% if materiales %}
-              {% for m in materiales %}
-              <option value="{{ m.material }}" data-tarifa="{{ m.tarifa_por_gramo }}">{{ m.material }} ({{ m.tarifa_por_gramo }}/g)</option>
-              {% endfor %}
-            {% else %}
-              <option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option>
-            {% endif %}
-          </select>
+        <div>
+          <label>Modelo <span class="muted">(lista o libre)</span></label>
+          <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
+                 placeholder="Modelo…" onchange="onModeloInput(this)">
+        </div>
+        <div>
+          <label>Material <span class="muted">(lista o libre)</span></label>
+          <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                 placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
         </div>
         <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" min="0"></div>
         <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
@@ -407,18 +431,15 @@
           </select>
         </div>
         <div><label>Folio</label><input name="folio"></div>
-        <div><label>Modelo</label><input name="modelo"></div>
         <div>
-          <label>Material</label>
-          <select name="material" class="mat-select" onchange="onMaterialChange(this)">
-            {% if materiales %}
-              {% for m in materiales %}
-              <option value="{{ m.material }}" data-tarifa="{{ m.tarifa_por_gramo }}">{{ m.material }} ({{ m.tarifa_por_gramo }}/g)</option>
-              {% endfor %}
-            {% else %}
-              <option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option>
-            {% endif %}
-          </select>
+          <label>Modelo <span class="muted">(lista o libre)</span></label>
+          <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
+                 placeholder="Modelo…" onchange="onModeloInput(this)">
+        </div>
+        <div>
+          <label>Material <span class="muted">(lista o libre)</span></label>
+          <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                 placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
         </div>
         <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
       </div>
@@ -433,7 +454,79 @@
 
 {% block scripts %}
 <script>
+
+function _catalogTarifas() {
+  try { return JSON.parse(document.getElementById('catalog-tarifas').textContent || '{}'); }
+  catch (e) { return {}; }
+}
+function _catalogModelos() {
+  try { return JSON.parse(document.getElementById('catalog-modelos').textContent || '{}'); }
+  catch (e) { return {}; }
+}
+/** Aplica tarifa del catálogo si el material coincide; si no, deja libre. */
+function onMaterialInput(el) {
+  if (!el) return;
+  const form = el.form || el.closest('form');
+  if (!form) return;
+  const key = String(el.value || '').trim();
+  const map = _catalogTarifas();
+  const t = form.elements.namedItem('tarifa_gr');
+  if (!t) return;
+  // match case-insensitive
+  let tarifa = map[key];
+  if (tarifa == null) {
+    const low = key.toLowerCase();
+    for (const k of Object.keys(map)) {
+      if (k.toLowerCase() === low) { tarifa = map[k]; break; }
+    }
+  }
+  if (tarifa != null && tarifa !== '') {
+    t.value = tarifa;
+    el.dataset.fromCatalog = '1';
+  } else {
+    el.dataset.fromCatalog = '0';
+    // no pisar tarifa manual del usuario
+  }
+}
+/** Si el modelo está en catálogo, sugiere material y tarifa (sin forzar si ya hay texto). */
+function onModeloInput(el) {
+  if (!el) return;
+  const form = el.form || el.closest('form');
+  if (!form) return;
+  const key = String(el.value || '').trim();
+  const map = _catalogModelos();
+  let info = map[key];
+  if (!info) {
+    const low = key.toLowerCase();
+    for (const k of Object.keys(map)) {
+      if (k.toLowerCase() === low) { info = map[k]; break; }
+    }
+  }
+  if (!info) return;
+  const mat = form.elements.namedItem('material');
+  const tar = form.elements.namedItem('tarifa_gr');
+  if (mat && info.material) {
+    mat.value = info.material;
+    onMaterialInput(mat);
+  }
+  if (tar && info.tarifa != null && info.tarifa !== '') {
+    tar.value = info.tarifa;
+  }
+}
 function onMaterialChange(sel) {
+  // compat: selects antiguos
+  if (sel && sel.tagName === 'SELECT') {
+    const opt = sel.options[sel.selectedIndex];
+    const tarifa = opt && opt.getAttribute('data-tarifa');
+    const form = sel.form || sel.closest('form');
+    const t = form && form.elements.namedItem('tarifa_gr');
+    if (t && tarifa != null && tarifa !== '') t.value = tarifa;
+  } else {
+    onMaterialInput(sel);
+  }
+}
+
+function onMaterialChange_legacy_unused(sel) {
   if (!sel) return;
   const opt = sel.options[sel.selectedIndex];
   const tarifa = opt && opt.getAttribute('data-tarifa');
