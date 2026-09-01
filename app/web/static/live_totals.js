@@ -47,7 +47,7 @@
       void el.offsetWidth;
       el.style.animation = "";
       clearTimeout(window._toastT);
-      window._toastT = setTimeout(() => { el.hidden = true; }, 2800);
+      window._toastT = setTimeout(() => { el.hidden = true; }, err ? 6000 : 2800);
     },
 
     /** Suma gramos/efectivo de inputs.cell-gm y filas data-tarifa */

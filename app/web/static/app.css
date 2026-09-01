@@ -2150,3 +2150,33 @@ th.col-actions, td.col-actions {
   gap: 0.35rem;
   margin-top: 0.35rem;
 }
+
+
+/* Consola Dev */
+.dev-console-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+.dev-console {
+  background: #11111b;
+  color: #cdd6f4;
+  border: 1px solid var(--border, #313244);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  max-height: 320px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dev-console .log-error { color: #f38ba8; }
+.dev-console .log-warning { color: #f9e2af; }
+.dev-console .log-success { color: #a6e3a1; }
+.dev-console .log-info { color: #89b4fa; }
+.dev-console .log-debug { color: #6c7086; }

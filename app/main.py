@@ -18,6 +18,12 @@ from app.core.logging_config import get_logger, setup_logging
 
 setup_logging()
 logger = get_logger(__name__)
+try:
+    from app.core.event_log import push as _elog
+    _elog("info", "Servidor iniciando…", source="boot")
+except Exception:
+    pass
+
 
 # Se activa en run() si hay certificados SSL
 _FORCE_HTTPS_RUNTIME = False
@@ -94,6 +100,11 @@ async def https_and_slash_middleware(request: Request, call_next):
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
     logger.warning("AppError %s: %s", exc.code, exc.message)
+    try:
+        from app.core.event_log import push as log_push
+        log_push("warning", f"AppError {exc.code}: {exc.message}", source="api", path=str(request.url.path))
+    except Exception:
+        pass
     if _wants_html(request):
         from fastapi.responses import HTMLResponse
 
@@ -113,6 +124,18 @@ async def app_error_handler(request: Request, exc: AppError):
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
     logger.exception("Error no controlado en %s", request.url.path)
+    try:
+        from app.core.event_log import push as log_push
+        import traceback
+        log_push(
+            "error",
+            f"{type(exc).__name__}: {exc}",
+            source="api",
+            path=str(request.url.path),
+            detail="".join(traceback.format_exception(type(exc), exc, exc.__traceback__))[-3000:],
+        )
+    except Exception:
+        pass
     payload = {
         "error": True,
         "code": "INTERNAL_ERROR",

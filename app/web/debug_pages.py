@@ -341,6 +341,73 @@ def render_debug_page(
       <a class="btn btn-secondary" href="/docs" target="_blank" rel="noopener">API</a>
     </div>
 
+    
+    <section class="dev-section" id="dev-console-section">
+      <h2>Consola en vivo <span class="muted" style="font-weight:400;font-size:0.85rem">(solo lectura)</span></h2>
+      <p class="dev-hint">Eventos del servidor y del navegador. Útil cuando un botón “no hace nada”: aquí suele verse el error.</p>
+      <div class="dev-console-toolbar">
+        <label><input type="checkbox" id="dev-log-autoscroll" checked> Auto-scroll</label>
+        <label><input type="checkbox" id="dev-log-pause"> Pausar</label>
+        <button type="button" class="btn btn-secondary btn-xs" id="dev-log-clear">Limpiar</button>
+        <span class="muted" id="dev-log-status">conectando…</span>
+      </div>
+      <pre id="dev-console" class="dev-console" aria-live="polite"></pre>
+    </section>
+    <script>
+    (function(){
+      var pre = document.getElementById('dev-console');
+      var status = document.getElementById('dev-log-status');
+      var lastId = 0;
+      var timer = null;
+      function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+      function line(ev){
+        var cls = 'log-' + (ev.level||'info');
+        var src = ev.source || '';
+        var path = ev.path ? ' ['+ev.path+']' : '';
+        var extra = ev.detail ? '\n  └ '+String(ev.detail).split('\n')[0].slice(0,200) : '';
+        return '<div class="'+cls+'">'+esc(ev.ts)+' · '+esc((ev.level||'').toUpperCase())+' · '+esc(src)+path+'\n  '+esc(ev.message)+esc(extra)+'</div>';
+      }
+      async function tick(){
+        if (document.getElementById('dev-log-pause').checked) {
+          status.textContent = 'pausado';
+          return;
+        }
+        try {
+          var res = await fetch('/api/dev/logs?after_id='+lastId+'&limit=100');
+          var data = await res.json();
+          var events = data.events || [];
+          if (events.length) {
+            var html = events.map(line).join('');
+            pre.insertAdjacentHTML('beforeend', html);
+            lastId = events[events.length-1].id;
+            if (document.getElementById('dev-log-autoscroll').checked) {
+              pre.scrollTop = pre.scrollHeight;
+            }
+          }
+          status.textContent = 'en vivo · #'+lastId;
+        } catch (e) {
+          status.textContent = 'sin conexión';
+        }
+      }
+      document.getElementById('dev-log-clear').addEventListener('click', async function(){
+        try { await fetch('/api/dev/logs/clear', {method:'POST'}); } catch(e){}
+        pre.innerHTML = '';
+        lastId = 0;
+        status.textContent = 'limpiado';
+      });
+      tick();
+      timer = setInterval(tick, 2000);
+      // carga inicial completa
+      fetch('/api/dev/logs?after_id=0&limit=120').then(r=>r.json()).then(function(data){
+        var events = data.events||[];
+        pre.innerHTML = events.map(line).join('');
+        if (events.length) lastId = events[events.length-1].id;
+        if (document.getElementById('dev-log-autoscroll').checked) pre.scrollTop = pre.scrollHeight;
+        status.textContent = 'en vivo · #'+lastId;
+      }).catch(function(){ status.textContent = 'sin conexión'; });
+    })();
+    </script>
+
     <section class="dev-section">
       <h2>Semana actual (calendario sáb–vie)</h2>
       <p class="dev-hint">Lo que el sistema considera esta semana de pago según la fecha de hoy.</p>

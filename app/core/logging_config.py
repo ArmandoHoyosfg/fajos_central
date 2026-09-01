@@ -35,6 +35,13 @@ def setup_logging() -> None:
     root.handlers.clear()
     root.addHandler(sh)
     root.addHandler(fh)
+    try:
+        from app.core.event_log import MemoryLogHandler
+        mh = MemoryLogHandler()
+        mh.setLevel(logging.INFO)
+        root.addHandler(mh)  # type: ignore[arg-type]
+    except Exception:
+        pass
 
 
 def get_logger(name: str) -> logging.Logger:

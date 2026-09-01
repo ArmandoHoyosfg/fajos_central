@@ -411,6 +411,39 @@ async def page_dev_reparar_inteligente(repo: TrabajadoresRepo = Depends(get_trab
     return _dev_page_payload(repo, action_result={"accion": "reparar_inteligente", "ok": ok, "steps": steps})
 
 
+
+@router.get("/api/dev/logs")
+async def api_dev_logs(after_id: int = 0, limit: int = 150):
+    """Eventos recientes para la consola Dev (solo lectura)."""
+    from app.core.event_log import list_since, push
+    items = list_since(after_id=after_id, limit=limit)
+    return {"ok": True, "events": items, "server_time": __import__("datetime").datetime.now().isoformat(timespec="seconds")}
+
+
+@router.post("/api/dev/client-log")
+async def api_dev_client_log(request: Request):
+    """Recibe errores del navegador para la consola Dev."""
+    from app.core.event_log import push
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    level = str(body.get("level") or "error")
+    msg = str(body.get("message") or "error cliente")[:1500]
+    detail = body.get("detail")
+    path = body.get("path") or body.get("url")
+    push(level, msg, source="client", detail=str(detail)[:3000] if detail else None, path=str(path) if path else None)
+    return {"ok": True}
+
+
+@router.post("/api/dev/logs/clear")
+async def api_dev_logs_clear():
+    from app.core.event_log import clear, push
+    clear()
+    push("info", "Consola Dev limpiada", source="dev")
+    return {"ok": True}
+
+
 @router.get("/dev", response_class=HTMLResponse)
 async def page_dev(
     request: Request,

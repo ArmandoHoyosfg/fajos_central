@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.22.1] — 2026-09-01
+
+### Errores visibles + consola Dev
+- Toast de advertencia en errores de script, promesas y fallos de red/5xx
+- Botones deshabilitados muestran el motivo al hacer clic
+- Consola de solo lectura en `/dev` con eventos en vivo (servidor + navegador)
+- API `/api/dev/logs` y `/api/dev/client-log`
+
 ## [3.22.0] — 2026-09-01
 
 ### Catálogos útiles, no solo adorno
