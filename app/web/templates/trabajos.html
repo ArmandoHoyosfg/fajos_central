@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Catálogo de trabajos — Fajos Central{% endblock %}
+{% block content %}
+<div class="help-panel">
+  <strong>Trabajos = folios activos</strong> ligados a cada persona (catálogo).
+  La captura de gramos por día está en <a href="/solo-hoy">Solo hoy</a> o <a href="/produccion">Plata</a>.
+  Aquí administras folio/modelo/material y das de baja trabajos terminados.
+</div>
+
+<div class="page-head">
+  <div>
+    <h1>Catálogo de trabajos</h1>
+    <p class="muted">Folios y modelos activos · no es la captura semanal</p>
+  </div>
+  <div class="actions" style="display:flex;flex-wrap:wrap;gap:0.4rem;">
+    <a class="btn" href="/solo-hoy">Capturar hoy</a>
+    <a class="btn btn-secondary" href="/produccion">Plata (semana)</a>
+    <button type="button" class="btn btn-secondary" onclick="cerrarHoy()">Cerrar hoy</button>
+    <a class="btn btn-secondary" href="/api/export/suministro">Suministro</a>
+  </div>
+</div>
+
+{% if recordatorio %}
+<div class="flash" style="border-left:3px solid var(--peach);">{{ recordatorio }}</div>
+{% endif %}
+
+<div class="toolbar" style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin:0.75rem 0;">
+  <input type="search" id="flt-trab" placeholder="Filtrar nombre, folio, modelo…" style="min-width:12rem;">
+  <label><input type="checkbox" id="flt-solo-activos" checked> Solo activos</label>
+  <label><input type="checkbox" id="flt-sin-hoy"> Sin gramos hoy</label>
+  <span class="kpi-bar" style="margin:0;">
+    <span class="kpi-item"><b id="kpi-n">{{ trabajos|length }}</b> listados</span>
+    <span class="kpi-item"><b>{{ sin_hoy_count|default(0) }}</b> sin hoy</span>
+  </span>
+</div>
+
+<div class="table-wrap table-compact no-sticky-col">
+<table>
+  <thead>
+    <tr>
+      <th></th>
+      <th>Trabajador</th><th>Ubic</th><th>Folio</th><th>Modelo</th>
+      <th>Mat</th><th>$/g</th><th>Hoy ({{ col_hoy_label }})</th><th>Estado</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in trabajos %}
+    <tr data-activo="{{ 1 if r.trabajo_activo else 0 }}"
+        data-sin-hoy="{{ 1 if r.sin_hoy else 0 }}"
+        data-txt="{{ (r.nombre or '')|lower }} {{ (r.folio or '')|lower }} {{ (r.modelo or '')|lower }}">
+{% set row_data = {
+            "folio": r.folio or "",
+            "modelo": r.modelo or "",
+            "material": r.material or "AG3",
+            "tarifa_gr": r.tarifa_gr if r.tarifa_gr is not none else 12,
+            "nombre": r.nombre,
+            "ubic": r.ubic
+          } %}
+      <td class="col-actions">
+        <div class="row-menu">
+          <button type="button" class="btn-row-menu" title="Menú: editar o eliminar fila" aria-label="Menú de la fila" aria-expanded="false" onclick="event.preventDefault();event.stopPropagation();(window.FajosRowMenu||{toggle:function(){alert('Recarga la página (Ctrl+F5)')}}).toggle(this,event)">⋯</button>
+          <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
+            <button type="button" onclick='openEditTrabajo({{ r.trabajo_id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar…</button>
+            {% if r.trabajo_activo %}
+            <button type="button" onclick="terminarTrabajo({{ r.trabajo_id }}, '{{ r.folio or '' }}'); FajosRowMenu.closeAll()">¿Terminó el folio?</button>
+            <button type="button" class="danger" onclick="toggleTrabajo({{ r.trabajo_id }}, false); FajosRowMenu.closeAll()">Desactivar</button>
+            {% else %}
+            <button type="button" onclick="reabrirTrabajo({{ r.trabajo_id }}); FajosRowMenu.closeAll()">Reabrir folio</button>
+            {% endif %}
+          </div>
+        </div>
+      </td>
+      <td class="col-nombre name-edit" title="Doble clic para editar"
+          ondblclick='openEditTrabajo({{ r.trabajo_id }}, {{ row_data|tojson }})'>{{ r.nombre }}</td>
+      <td>{{ r.ubic }}</td>
+      <td>{{ r.folio or '—' }}</td>
+      <td>{{ r.modelo or '—' }}</td>
+      <td>{{ r.material or '—' }}</td>
+      <td>{{ r.tarifa_gr or '—' }}</td>
+      <td>
+        {% if r.gramos_hoy %}{{ r.gramos_hoy }}{% else %}<span class="muted">—</span>{% endif %}
+      </td>
+      <td>
+        {% if r.trabajo_activo %}
+          <span class="badge badge-ok">Activo</span>
+        {% else %}
+          <span class="badge badge-off">Baja</span>
+        {% endif %}
+        {% if r.sin_hoy and r.trabajo_activo %}
+          <span class="badge" style="margin-left:0.25rem;">Sin hoy</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">No hay trabajos. Se crean al capturar en Plata con folio/modelo.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="modal-backdrop" id="modal-edit-trabajo" hidden>
+  <div class="modal" role="dialog">
+    <h2>Editar trabajo</h2>
+    <p class="muted" id="edit-trab-who" style="margin-top:0"></p>
+    <form id="form-edit-trabajo" onsubmit="return saveTrabajo(event)">
+      <div class="form-grid">
+        <div><label>Folio</label><input name="folio"></div>
+        <div><label>Modelo</label><input name="modelo"></div>
+        <div><label>Material</label>
+          <select name="material"><option>AG3</option><option>AG4</option><option>DOL</option><option>DLO</option></select>
+        </div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-trabajo')">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function terminarTrabajo(id, folio) {
+  if (!confirm('¿El trabajador ya terminó el trabajo del folio ' + (folio || id) + '?\n\nSí = dejar de sugerirlo al duplicar semana.')) return;
+  const fd = new FormData();
+  fd.set('terminar', '1');
+  const res = await fetch('/api/trabajos/' + id + '/terminar', { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    if (window.FajosLive) FajosLive.showToast('Folio marcado terminado');
+    else alert('Folio terminado');
+    location.reload();
+  } else {
+    alert(data.message || data.user_message || 'No se pudo terminar');
+  }
+}
+async function reabrirTrabajo(id) {
+  if (!confirm('¿Reabrir este folio?')) return;
+  const fd = new FormData();
+  fd.set('terminar', '0');
+  const res = await fetch('/api/trabajos/' + id + '/terminar', { method: 'POST', body: fd });
+  if (res.ok) location.reload();
+  else alert('No se pudo reabrir');
+}
+</script>
+
+<script src="/static/row_menu.js?v=3113"></script>
+<script src="/static/row_edit.js?v=3112"></script>
+<script>
+const COL_HOY = {{ col_hoy|tojson }};
+function openEditTrabajo(id, data) {
+  const who = document.getElementById('edit-trab-who');
+  if (who) who.textContent = (data.nombre || '') + ' · ubic ' + (data.ubic || '');
+  const form = document.getElementById('form-edit-trabajo');
+  form.dataset.rowId = id;
+  FajosRowEdit.open({ modalId: 'modal-edit-trabajo', formId: 'form-edit-trabajo', id: id, data: data });
+}
+async function saveTrabajo(e) {
+  e.preventDefault();
+  const form = e.target;
+  const id = form.dataset.rowId;
+  const body = new FormData(form);
+  const res = await fetch('/api/trabajos/' + id, { method: 'PATCH', body });
+  if (!res.ok) { alert('No se pudo guardar'); return false; }
+  location.reload();
+  return false;
+}
+async function toggleTrabajo(id, activar) {
+  const msg = activar ? '¿Reactivar este trabajo?' : '¿Desactivar este folio? (dejará de aparecer en capturas nuevas)';
+  if (!confirm(msg)) return;
+  const url = '/api/trabajos/' + id + (activar ? '/activar' : '/desactivar');
+  const res = await fetch(url, { method: 'POST' });
+  if (res.ok) location.reload();
+  else alert('No se pudo cambiar estado');
+}
+async function cerrarHoy() {
+  const st = await fetch('/api/dia/estado').then(r => r.json());
+  if (!confirm(`Día ${st.label_dia}\nSin gramos: ${st.trabajos_sin_gramos}/${st.trabajos_total}\n¿Cerrar el día?`)) return;
+  const fd = new FormData(); fd.set('usuario', 'web');
+  const res = await fetch('/api/dia/cerrar', { method: 'POST', body: fd });
+  if (res.ok) alert('Día cerrado'); else alert('Error');
+}
+function applyFlt() {
+  const q = (document.getElementById('flt-trab').value || '').toLowerCase();
+  const soloA = document.getElementById('flt-solo-activos').checked;
+  const sinHoy = document.getElementById('flt-sin-hoy').checked;
+  let n = 0;
+  document.querySelectorAll('tbody tr[data-txt]').forEach(tr => {
+    const okQ = !q || (tr.dataset.txt || '').includes(q);
+    const okA = !soloA || tr.dataset.activo === '1';
+    const okH = !sinHoy || tr.dataset.sinHoy === '1';
+    const show = okQ && okA && okH;
+    tr.style.display = show ? '' : 'none';
+    if (show) n++;
+  });
+  const k = document.getElementById('kpi-n');
+  if (k) k.textContent = String(n);
+}
+['flt-trab','flt-solo-activos','flt-sin-hoy'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', applyFlt);
+});
+</script>
+{% endblock %}

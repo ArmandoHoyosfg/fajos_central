@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block title %}Inicio — Fajos Piteados Central{% endblock %}
+{% block content %}
+
+{% if consistencia and consistencia.n_avisos %}
+<details class="folio-hints-compact consistency-banner" id="banner-consistencia" style="margin:0.5rem 0;">
+  <summary style="cursor:pointer;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+    <strong>Revisión de datos</strong>
+    <span class="muted">{{ consistencia.n_avisos }} aviso(s)
+      {% if consistencia.n_reparables %}· {{ consistencia.n_reparables }} reparables{% endif %}
+      {% if consistencia.n_manuales %}· {{ consistencia.n_manuales }} manuales{% endif %}
+    </span>
+  </summary>
+  <div class="folio-hint-block" style="padding-top:0.4rem;">
+    <ul style="margin:0 0 0.4rem;padding-left:1.1rem;font-size:0.85rem;max-height:9rem;overflow:auto;">
+    {% for a in consistencia.avisos[:10] %}
+      <li style="margin:0.15rem 0;">
+        {% if a.reparable %}🔧{% else %}👁{% endif %}
+        <strong>{{ a.titulo }}</strong>
+        {% if a.detalle %}<span class="muted"> — {{ a.detalle }}</span>{% endif %}
+        {% if a.href %}
+          <a class="btn btn-secondary btn-xs" href="{{ a.href }}" style="margin-left:0.25rem;">{{ a.accion or 'Ver' }}</a>
+        {% endif %}
+      </li>
+    {% endfor %}
+    </ul>
+    <div style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;">
+      {% if consistencia.n_reparables %}
+      <button type="button" class="btn btn-secondary btn-sm" onclick="repararConsistencia()">Recalcular totales</button>
+      {% endif %}
+      <button type="button" class="btn btn-secondary btn-sm" onclick="ocultarConsistencia()">Ocultar por hoy</button>
+    </div>
+  </div>
+</details>
+<script>
+(function(){
+  if (localStorage.getItem('fajos_hide_consist_' + (new Date().toISOString().slice(0,10))) === '1') {
+    const el = document.getElementById('banner-consistencia');
+    if (el) el.hidden = true;
+  }
+})();
+function ocultarConsistencia() {
+  localStorage.setItem('fajos_hide_consist_' + (new Date().toISOString().slice(0,10)), '1');
+  const el = document.getElementById('banner-consistencia');
+  if (el) el.hidden = true;
+}
+async function repararConsistencia() {
+  if (!confirm('¿Recalcular totales y enlaces desde la captura real?\n\nLos avisos de folios repetidos no se borran solos.')) return;
+  try {
+    const res = await fetch('/api/consistencia/reparar', { method: 'POST' });
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || d.message || 'Falló'); return; }
+    const rep = d.reparados || 0;
+    const rest = d.n_avisos_restantes || 0;
+    const man = d.n_manuales || 0;
+    let msg = 'Listo.\n\nCorrecciones: ' + rep;
+    if (rest === 0) msg += '\n\nYa no quedan avisos.';
+    else msg += '\n\nQuedan ' + rest + ' (manuales: ' + man + ').';
+    alert(msg);
+    location.reload();
+  } catch (e) { alert('Error de red'); }
+}
+</script>
+{% endif %}
+
+
+
+<script src="/static/semana_ops.js?v=3122"></script>
+
+<div class="page-head">
+  <div>
+    <h1>Inicio</h1>
+    <p class="muted">{{ fecha_hoy_larga }} · Resumen del taller</p>
+  </div>
+  <form class="search-box" action="/buscar" method="get">
+    <input type="search" name="q" placeholder="Buscar trabajador o semana…" aria-label="Buscar">
+    <button type="submit" class="btn btn-secondary" type="submit">Buscar</button>
+  </form>
+</div>
+
+{% if not db_ok %}
+<div class="flash err">
+  <strong>Sin conexión a la base de datos.</strong><br>
+  Abre el <strong>launcher</strong> en la computadora del taller → Configurar conexión → Probar → reinicia el servidor.
+</div>
+{% endif %}
+
+<div class="help-guide" id="guia-inicio">
+  <h2>¿Primera vez aquí? Haz esto en orden</h2>
+  <ol>
+    <li><span class="step-num">1</span> Revisa que haya <strong>trabajadores activos</strong> (menú Trabajadores).</li>
+    <li><span class="step-num">2</span> Entra a <strong>Producción</strong> y elige o crea la <strong>semana actual</strong> (botón ★).</li>
+    <li><span class="step-num">3</span> Usa <strong>＋ Un día</strong> para anotar gramos del día (es lo más sencillo).</li>
+    <li><span class="step-num">4</span> Al terminar la semana, descarga <strong>Formal Excel</strong> para pagar e imprimir.</li>
+  </ol>
+  <p class="tip">Si algo falla: revisa la IP en la barra de arriba y que el launcher tenga el servidor <strong>Iniciado</strong>.</p>
+  <a class="btn" href="/produccion">Ir a Producción</a>
+  <a class="btn btn-secondary" href="/trabajadores">Ver trabajadores</a>
+  <a class="btn btn-secondary" href="/api/export/master" title="Excel con toda la base de datos">⬇ Master Excel</a>
+  <a class="btn btn-secondary" href="/trabajos">Trabajos activos</a>
+  <button type="button" class="help-toggle" onclick="document.getElementById('guia-inicio').hidden=true; localStorage.setItem('fajos_hide_guide','1')">Ocultar esta guía</button>
+</div>
+
+<div class="actions" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.25rem;">
+  <a class="btn" href="/solo-hoy">Solo hoy</a>
+  <a class="btn btn-secondary" href="/produccion">Plata</a>
+  <a class="btn btn-secondary" href="/nomina-pita">Pita</a>
+  <a class="btn btn-secondary" href="/nomina-taller">Taller</a>
+  <a class="btn btn-secondary" href="/trabajos">Trabajos del día</a>
+  <a class="btn btn-secondary" href="/trabajadores">Trabajadores</a>
+  <a class="btn btn-secondary" href="/buscar">Buscar</a>
+  {% if insights and insights.semana and insights.semana.id %}
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ insights.semana.id }})">
+    Duplicar a sig. semana (PLT+PIT+TLL)
+  </button>
+  {% endif %}
+</div>
+<script>
+/* use FajosSemanaOps.duplicarSemana */
+</script>
+
+
+
+{% if insights and insights.avisos %}
+<details class="folio-hints-compact insights-panel" aria-label="Qué revisar hoy" open>
+  <summary style="cursor:pointer;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+    <strong>Qué revisar hoy</strong>
+    <span class="muted">{{ insights.avisos|length }} · {{ insights.col_hoy_label or '' }}{% if insights.semana %} · {{ insights.semana.codigo }}{% endif %}</span>
+  </summary>
+  <ul class="insights-list-compact" style="list-style:none;margin:0.35rem 0 0;padding:0;max-height:14rem;overflow:auto;">
+    {% for a in insights.avisos %}
+    <li class="insight-compact insight-{{ a.nivel }}" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.6rem;align-items:center;padding:0.28rem 0;border-bottom:1px solid var(--border);font-size:0.88rem;">
+      <span style="flex:1 1 12rem;min-width:8rem;">
+        <strong>{{ a.titulo }}</strong>
+        {% if a.detalle %}<span class="muted"> — {{ a.detalle }}</span>{% endif %}
+      </span>
+      {% if a.href %}
+      <a class="btn btn-secondary btn-xs" href="{{ a.href }}">{{ a.accion or 'Ver' }}</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+
+<div class="card" style="margin:0.75rem 0;padding:0.75rem 1rem;">
+  <form class="inline" style="flex-wrap:wrap;align-items:center;gap:0.5rem;" onsubmit="return saveUmbral(event)">
+    <label class="muted">Umbral de rarezas (± %)</label>
+    <input name="anomaly_pct" type="number" min="5" max="90" step="1" value="30" id="inp-umbral" style="width:4.5rem;" title="Si un trabajador se desvía más de este % vs su promedio, se marca como rareza">
+    <button type="submit" class="btn btn-secondary">Aplicar</button>
+    <span class="muted faint" id="umbral-msg"></span>
+  </form>
+</div>
+<script>
+(async function(){
+  try {
+    const s = await fetch('/api/ops/settings').then(r => r.json());
+    const el = document.getElementById('inp-umbral');
+    if (el && s.anomaly_pct != null) el.value = Math.round(Number(s.anomaly_pct) * 100);
+  } catch (e) {}
+})();
+async function saveUmbral(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch('/api/ops/settings', { method: 'POST', body: fd });
+  const msg = document.getElementById('umbral-msg');
+  if (res.ok) {
+    const j = await res.json();
+    if (msg) msg.textContent = 'Guardado: ±' + (j.anomaly_pct_display || Math.round(j.anomaly_pct*100)) + '%';
+  } else if (msg) msg.textContent = 'No se pudo guardar';
+  return false;
+}
+</script>
+
+{% endif %}
+
+{% if insights and insights.pronostico and insights.pronostico.ok %}
+<div class="card accent pronostico-card" style="margin-bottom:1rem;">
+  <div class="label">Pronóstico cierre Plata · Semana {{ insights.pronostico.codigo }}</div>
+  <div class="value money">${{ '%.2f'|format(insights.pronostico.estimado_efectivo) }}</div>
+  <p class="muted" style="margin:0.35rem 0 0;">
+    Actual ${{ '%.2f'|format(insights.pronostico.efectivo_actual) }}
+    · ≈ {{ '%.1f'|format(insights.pronostico.estimado_gramos) }} g
+    · {{ insights.pronostico.dias_con_captura }} día(s) con captura
+    · faltan {{ insights.pronostico.dias_restantes }}
+  </p>
+</div>
+{% endif %}
+
+<div class="grid">
+  <div class="card">
+    <div class="label">Trabajadores activos</div>
+    <div class="value">{{ kpis.trabajadores_activos | default(0) }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Activos PLT</div>
+    <div class="value">{{ kpis.trabajadores_plt | default(0) }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Semanas registradas</div>
+    <div class="value">{{ kpis.total_semanas | default(0) }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Gramos (histórico)</div>
+    <div class="value">{{ kpis.total_gramos_historico | default(0) }}</div>
+  </div>
+  <div class="card accent">
+    <div class="label">Efectivo producción</div>
+    <div class="value money">${{ '%.2f'|format( (kpis.total_efectivo_historico or 0)|float ) }}</div>
+  </div>
+  <div class="card accent">
+    <div class="label">Nómina acumulada</div>
+    <div class="value money">${{ '%.2f'|format( (kpis.nomina_total_acumulada or 0)|float ) }}</div>
+  </div>
+</div>
+
+
+{% if tendencias and tendencias.comparacion and tendencias.comparacion.actual is mapping %}
+<section class="trends-panel">
+  <div class="insights-head">
+    <h2>Tendencias</h2>
+    <span class="muted">{{ tendencias.comparacion.actual_codigo }} vs {{ tendencias.comparacion.prev_codigo }}</span>
+  </div>
+  <div class="grid trends-kpis">
+    {% set c = tendencias.comparacion %}
+    <div class="card">
+      <div class="label">Plata (semana)</div>
+      <div class="value money">${{ '%.0f'|format(c.actual.plt) }}</div>
+      <div class="delta {% if c.plt_pct is not none and c.plt_pct >= 0 %}up{% elif c.plt_pct is not none %}down{% endif %}">
+        {% if c.plt_pct is not none %}{{ '▲' if c.plt_pct >= 0 else '▼' }} {{ '%.1f'|format(c.plt_pct|abs) }}%{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">Pita</div>
+      <div class="value money">${{ '%.0f'|format(c.actual.pit) }}</div>
+      <div class="delta {% if c.pit_pct is not none and c.pit_pct >= 0 %}up{% elif c.pit_pct is not none %}down{% endif %}">
+        {% if c.pit_pct is not none %}{{ '▲' if c.pit_pct >= 0 else '▼' }} {{ '%.1f'|format(c.pit_pct|abs) }}%{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">Taller</div>
+      <div class="value money">${{ '%.0f'|format(c.actual.tll) }}</div>
+      <div class="delta {% if c.tll_pct is not none and c.tll_pct >= 0 %}up{% elif c.tll_pct is not none %}down{% endif %}">
+        {% if c.tll_pct is not none %}{{ '▲' if c.tll_pct >= 0 else '▼' }} {{ '%.1f'|format(c.tll_pct|abs) }}%{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="card accent">
+      <div class="label">Total 3 nóminas</div>
+      <div class="value money">${{ '%.0f'|format(c.actual.total) }}</div>
+      <div class="delta {% if c.total_pct is not none and c.total_pct >= 0 %}up{% elif c.total_pct is not none %}down{% endif %}">
+        {% if c.total_pct is not none %}{{ '▲' if c.total_pct >= 0 else '▼' }} {{ '%.1f'|format(c.total_pct|abs) }}%{% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+  {% if tendencias.serie %}
+  <div class="spark-wrap">
+    <svg class="sparkline" id="spark-total" viewBox="0 0 320 48" preserveAspectRatio="none" aria-label="Total por semana"></svg>
+    <div class="spark-labels muted">
+      {% for p in tendencias.serie %}<span title="{{ p.codigo }}: ${{ '%.0f'|format(p.total) }}">{{ p.codigo }}</span>{% endfor %}
+    </div>
+  </div>
+  <script>
+  (function(){
+    const serie = {{ tendencias.serie|tojson }};
+    const svg = document.getElementById('spark-total');
+    if (!svg || !serie.length) return;
+    const vals = serie.map(p => Number(p.total) || 0);
+    const max = Math.max.apply(null, vals.concat([1]));
+    const min = Math.min.apply(null, vals);
+    const w = 320, h = 48, pad = 4;
+    const pts = vals.map((v, i) => {
+      const x = pad + (i * (w - 2*pad) / Math.max(vals.length - 1, 1));
+      const y = h - pad - ((v - min) / (max - min || 1)) * (h - 2*pad);
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    });
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    poly.setAttribute('points', pts.join(' '));
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', 'var(--accent, #c9a227)');
+    poly.setAttribute('stroke-width', '2.5');
+    poly.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(poly);
+  })();
+  </script>
+  {% endif %}
+  {% if tendencias.top_materiales %}
+  <h3 class="muted" style="font-size:0.9rem;margin:1rem 0 0.4rem">Materiales (semana actual)</h3>
+  <div class="mat-bars">
+    {% set max_e = tendencias.top_materiales[0].efectivo if tendencias.top_materiales else 1 %}
+    {% for m in tendencias.top_materiales %}
+    <div class="mat-bar-row">
+      <span class="mat-name">{{ m.material }}</span>
+      <div class="mat-bar-track"><div class="mat-bar-fill" style="width:{{ '%.0f'|format(100 * m.efectivo / (max_e or 1)) }}%"></div></div>
+      <span class="mat-val">${{ '%.0f'|format(m.efectivo) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+<h2 style="margin-top:1.5rem">Últimas semanas</h2>
+{% if semanas %}
+<div class="table-wrap no-sticky-col">
+<table>
+  <thead>
+    <tr>
+      <th>Semana</th><th>Del</th><th>Al</th>
+      <th>PLT</th><th>PIT</th><th>TLL</th><th>Total</th><th>Qué hacer</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in semanas %}
+    <tr>
+      <td><strong>{% if s.es_actual %}<span class="badge-actual">ACTUAL</span> {% endif %}{{ s.codigo }}</strong></td>
+      <td>{{ s.fecha_inicio }}</td>
+      <td>{{ s.fecha_fin }}</td>
+      <td>${{ '%.2f'|format( (s.nomina_plt or 0)|float ) }}</td>
+      <td>${{ '%.2f'|format( (s.nomina_pit or 0)|float ) }}</td>
+      <td>${{ '%.2f'|format( (s.nomina_tll or 0)|float ) }}</td>
+      <td><strong>${{ '%.2f'|format( (s.total_semana or 0)|float ) }}</strong></td>
+      <td style="white-space:nowrap">
+        <a class="btn btn-sm" href="/produccion?semana_id={{ s.id }}">Abrir</a>
+        <a class="btn btn-sm btn-secondary" href="/api/export/produccion/{{ s.id }}?fmt=xlsx&formal=1">Excel formal</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="big">Aún no hay semanas</div>
+  <p>Ve a Producción y pulsa <strong>★ Semana actual</strong> para crear la de esta semana.</p>
+  <a class="btn" href="/produccion">Ir a Producción</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+if (localStorage.getItem('fajos_hide_guide') === '1') {
+  const g = document.getElementById('guia-inicio');
+  if (g) g.hidden = true;
+}
+</script>
+{% endblock %}

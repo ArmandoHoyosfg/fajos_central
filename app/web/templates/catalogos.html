@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Catálogos — Fajos{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Catálogos</h1>
+  <p class="muted">Los catálogos <strong>asisten</strong> la captura (listas y tarifas), no la bloquean: siempre puedes usar un material o modelo nuevo (sugerencias y tarifas). En Plata puedes escribir material o modelo que no estén aquí: se guardan en la nómina sin bloquear. Si eliges uno del catálogo, se aplica la tarifa o el material por defecto.</p>
+</div>
+
+<section class="card" style="margin-bottom:1.25rem">
+  <h2 style="margin-top:0">Materiales / tarifas</h2>
+  <p class="muted" style="margin-top:0">Tabla <code>tarifas_material</code>. Solo activos aparecen como sugerencia en captura (siempre puedes escribir otro valor).</p>
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead>
+        <tr><th>Material</th><th>$/g</th><th>Descripción</th><th>Activo</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for m in materiales %}
+        <tr>
+          <td><code>{{ m.material }}</code></td>
+          <td>{{ m.tarifa_por_gramo }}</td>
+          <td>{{ m.descripcion or '—' }}</td>
+          <td>{% if m.activo %}Sí{% else %}No{% endif %}</td>
+          <td>
+            <button type="button" class="btn btn-secondary btn-xs"
+              onclick="editMat({{ m.id }}, {{ (m.material or '')|tojson }}, {{ m.tarifa_por_gramo or 0 }}, {{ (m.descripcion or '')|tojson }}, {{ m.activo|int }})">Editar</button>
+            {% if m.activo %}
+            <button type="button" class="btn btn-secondary btn-xs" onclick="toggleMat({{ m.id }}, 0)">Desactivar</button>
+            {% else %}
+            <button type="button" class="btn btn-secondary btn-xs" onclick="toggleMat({{ m.id }}, 1)">Activar</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Sin materiales en BD. Agrega el primero abajo.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <form id="form-mat" class="form-grid" style="margin-top:1rem" onsubmit="return saveMat(event)">
+    <input type="hidden" name="mat_id" id="mat_id" value="">
+    <div><label>Material</label><input name="material" id="mat_nombre" required placeholder="AG3"></div>
+    <div><label>$/gramo</label><input name="tarifa_por_gramo" id="mat_tarifa" type="number" step="0.1" min="0" required value="12"></div>
+    <div class="full"><label>Descripción</label><input name="descripcion" id="mat_desc" placeholder="Opcional"></div>
+    <div class="full actions">
+      <button type="submit" class="btn">Guardar material</button>
+      <button type="button" class="btn btn-secondary" onclick="resetMat()">Limpiar</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2 style="margin-top:0">Modelos</h2>
+  <p class="muted" style="margin-top:0">Tabla <code>modelos</code> (PLT / PTA / etc.).</p>
+  <div class="table-wrap">
+    <table class="sortable">
+      <thead>
+        <tr><th>Modelo</th><th>Tipo</th><th>Material def.</th><th>Tarifa def.</th><th>Notas</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for m in modelos %}
+        <tr>
+          <td>{{ m.modelo }}</td>
+          <td>{{ m.tipo }}</td>
+          <td>{{ m.material_default or '—' }}</td>
+          <td>{{ m.tarifa_default or '—' }}</td>
+          <td>{{ m.notas or '—' }}</td>
+          <td>
+            <button type="button" class="btn btn-secondary btn-xs"
+              onclick="editMod({{ m.id }}, {{ (m.modelo or '')|tojson }}, {{ (m.tipo or 'PLT')|tojson }}, {{ (m.material_default or '')|tojson }}, {{ m.tarifa_default if m.tarifa_default is not none else 'null' }}, {{ (m.notas or '')|tojson }})">Editar</button>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="delMod({{ m.id }})">Eliminar</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">Sin modelos.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <form id="form-mod" class="form-grid" style="margin-top:1rem" onsubmit="return saveMod(event)">
+    <input type="hidden" name="modelo_id" id="mod_id" value="">
+    <div><label>Modelo</label><input name="modelo" id="mod_nombre" required></div>
+    <div><label>Tipo</label>
+      <select name="tipo" id="mod_tipo">
+        <option value="PLT">PLT (Plata)</option>
+        <option value="PTA">PTA (Pita)</option>
+        <option value="TLL">TLL (Taller)</option>
+      </select>
+    </div>
+    <div><label>Material default</label><input name="material_default" id="mod_mat" placeholder="AG3"></div>
+    <div><label>Tarifa default</label><input name="tarifa_default" id="mod_tarifa" type="number" step="0.1" min="0"></div>
+    <div class="full"><label>Notas</label><input name="notas" id="mod_notas"></div>
+    <div class="full actions">
+      <button type="submit" class="btn">Guardar modelo</button>
+      <button type="button" class="btn btn-secondary" onclick="resetMod()">Limpiar</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function resetMat() {
+  document.getElementById('mat_id').value = '';
+  document.getElementById('mat_nombre').value = '';
+  document.getElementById('mat_tarifa').value = '12';
+  document.getElementById('mat_desc').value = '';
+}
+function editMat(id, nombre, tarifa, desc, activo) {
+  document.getElementById('mat_id').value = id;
+  document.getElementById('mat_nombre').value = nombre || '';
+  document.getElementById('mat_tarifa').value = tarifa;
+  document.getElementById('mat_desc').value = desc || '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+async function saveMat(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  if (fd.get('mat_id')) fd.set('mat_id', fd.get('mat_id'));
+  fd.set('activo', '1');
+  const res = await fetch('/api/catalogos/material', { method: 'POST', body: fd });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok || d.ok === false) { alert(d.error || 'Error'); return false; }
+  location.reload();
+  return false;
+}
+async function toggleMat(id, activo) {
+  const fd = new FormData();
+  fd.set('activo', String(activo));
+  const res = await fetch('/api/catalogos/material/' + id + '/activo', { method: 'POST', body: fd });
+  if (!res.ok) { alert('No se pudo cambiar'); return; }
+  location.reload();
+}
+function resetMod() {
+  document.getElementById('mod_id').value = '';
+  document.getElementById('mod_nombre').value = '';
+  document.getElementById('mod_tipo').value = 'PLT';
+  document.getElementById('mod_mat').value = '';
+  document.getElementById('mod_tarifa').value = '';
+  document.getElementById('mod_notas').value = '';
+}
+function editMod(id, modelo, tipo, mat, tarifa, notas) {
+  document.getElementById('mod_id').value = id;
+  document.getElementById('mod_nombre').value = modelo || '';
+  document.getElementById('mod_tipo').value = tipo || 'PLT';
+  document.getElementById('mod_mat').value = mat || '';
+  document.getElementById('mod_tarifa').value = tarifa != null ? tarifa : '';
+  document.getElementById('mod_notas').value = notas || '';
+}
+async function saveMod(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const res = await fetch('/api/catalogos/modelo', { method: 'POST', body: fd });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok || d.ok === false) { alert(d.error || 'Error'); return false; }
+  location.reload();
+  return false;
+}
+async function delMod(id) {
+  if (!confirm('¿Eliminar este modelo del catálogo?')) return;
+  const res = await fetch('/api/catalogos/modelo/' + id, { method: 'DELETE' });
+  if (!res.ok) { alert('No se pudo eliminar'); return; }
+  location.reload();
+}
+</script>
+{% endblock %}

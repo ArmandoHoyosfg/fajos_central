@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}QR {{ trabajador.nombre_mostrar }} — Fajos Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Código QR</h1>
+    <p class="muted">{{ trabajador.nombre_mostrar }} · Ubic {{ trabajador.ubic }} · {{ codigo_label or trabajador.codigo_label or trabajador.codigo_qr or trabajador.id }}</p>
+  </div>
+  <div class="toolbar">
+    <a class="btn btn-secondary" href="/trabajadores">← Trabajadores</a>
+    <a class="btn btn-secondary" href="/trabajadores/qr-lote">Todos los QR</a>
+    <button type="button" class="btn" onclick="window.print()">Imprimir</button>
+  </div>
+</div>
+<div class="card" style="max-width:360px;margin:1.5rem auto;text-align:center;padding:1.5rem;">
+  <img src="/api/trabajadores/{{ trabajador.id }}/qr.png" alt="QR" width="220" height="220"
+       style="background:#fff;padding:8px;border-radius:8px;">
+  <p style="margin-top:1rem;font-weight:600;">{{ trabajador.nombre_mostrar }}</p>
+  <p class="muted">Ubic {{ trabajador.ubic }} · ID {{ trabajador.id }}</p>
+  <p class="muted faint" style="font-size:0.8rem;">Al escanear abre /m/t/{{ trabajador.id }}</p>
+</div>
+<style>@media print { .topbar, .toolbar, .btn { display:none !important; } }</style>
+{% endblock %}

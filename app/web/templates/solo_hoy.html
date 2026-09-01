@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Solo hoy — Fajos Central{% endblock %}
+{% block content %}
+<script>document.addEventListener('DOMContentLoaded',()=>{const m=document.querySelector('main.container');if(m)m.classList.add('wide');});</script>
+<div class="page-head">
+  <div>
+    <h1>Captura de hoy</h1>
+    <p class="muted">{{ captura.label }} · {{ captura.fecha }}{% if captura.semana %} · Semana {{ captura.semana.codigo }}{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-secondary" href="/produccion{% if captura.semana %}?semana_id={{ captura.semana.id }}{% endif %}">Vista completa</a>
+  </div>
+</div>
+
+{% if not captura.ok %}
+<div class="flash err">No hay semana actual. Créala desde Plata.</div>
+{% else %}
+<div class="kpi-bar" style="margin-bottom:1rem;">
+  <span class="kpi-item"><b>{{ captura.capturados }}</b> con gramos</span>
+  <span class="kpi-item"><b>{{ captura.pendientes }}</b> pendientes</span>
+  <span class="kpi-item muted">{{ captura.total }} líneas</span>
+</div>
+<div class="progress-bar-wrap" title="Avance del día">
+  {% set pct = (100 * captura.capturados / captura.total) if captura.total else 0 %}
+  <div class="progress-bar" style="width:{{ '%.1f'|format(pct) }}%"></div>
+</div>
+<p class="muted faint">Escribe gramos y Enter o sal del campo para guardar. Los pendientes van primero.</p>
+
+<div class="table-wrap table-compact no-sticky-col">
+<table>
+  <thead>
+    <tr><th>Nombre</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>{{ captura.label }}</th><th>Total g</th></tr>
+  </thead>
+  <tbody>
+  {% for r in captura.lineas %}
+    <tr data-prod-id="{{ r.id }}" class="{% if not r.gramos_hoy %}row-pendiente{% endif %}">
+      <td>{{ r.nombre }}</td>
+      <td>{{ r.ubic }}</td>
+      <td>{{ r.folio or '—' }}</td>
+      <td>{{ r.modelo or '—' }}</td>
+      <td>{{ r.material or '—' }}</td>
+      <td>
+        {% if captura.semana.cerrada %}
+          {{ r.gramos_hoy or '' }}
+        {% else %}
+          <input class="cell-gm hoy-input" type="number" step="0.1" min="0"
+                 data-id="{{ r.id }}" data-dia="{{ captura.col_hoy }}"
+                 value="{{ r.gramos_hoy if r.gramos_hoy else '' }}"
+                 placeholder="0">
+        {% endif %}
+      </td>
+      <td class="cell-total">{{ r.total_gramos or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">Sin líneas esta semana. Agrega filas en Plata.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="/static/capture_guard.js?v=3130"></script>
+<script>
+window.COL_HOY = {{ (captura.col_hoy|tojson) if captura else 'null' }};
+async function saveHoy(inp) {
+  if (window.FajosCaptureGuard) FajosCaptureGuard.normalizeInput(inp);
+  const body = new FormData();
+  body.set('dia', inp.dataset.dia);
+  body.set('gramos', inp.value === '' ? '' : inp.value);
+  const res = await fetch('/api/produccion/linea/' + inp.dataset.id + '/dia', { method: 'PATCH', body });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    if (window.FajosLive) FajosLive.showToast(data.user_message || 'No se pudo guardar', true);
+    else alert('No se pudo guardar');
+    throw new Error('save');
+  }
+  const tr = inp.closest('tr');
+  if (tr) {
+    if (parseFloat(inp.value || '0') > 0) tr.classList.remove('row-pendiente');
+    else tr.classList.add('row-pendiente');
+  }
+  if (window.FajosLive) FajosLive.showToast('Guardado');
+}
+window.__fajosSaveGram = saveHoy;
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.FajosCaptureGuard) FajosCaptureGuard.init();
+});
+</script>
+{% endblock %}

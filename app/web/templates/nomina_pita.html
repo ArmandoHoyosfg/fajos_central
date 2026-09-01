@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Nómina Pita — Fajos Central{% endblock %}
+{% block content %}
+<div class="help-panel">
+  <strong>Pita (PIT):</strong> doble clic en una celda para editar (pide confirmación).
+  Material tipo <em>PITA NxN</em>, producto casi siempre <em>Cinturón</em>.
+</div>
+<div class="page-head">
+  <div>
+    <h1>Nómina Pita</h1>
+    <p class="muted">Nombre · Ubic · Modelo · Folio · Material · Producto · Pitas · Efectivo · Firma</p>
+  </div>
+</div>
+<div class="toolbar plt-capture-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+  <form class="inline" method="get" action="/nomina-pita">
+    <label>Semana</label>
+    <select name="semana_id" onchange="this.form.submit()">
+      {% for s in semanas %}
+      <option value="{{ s.id }}" {% if s.id==semana_id %}selected{% endif %}>{{ s.codigo }}{% if s.es_actual %} ★{% endif %}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% if semana_id %}
+
+  <button type="button" class="btn btn-secondary" onclick="cerrarSemana({{ semana_id }})" {% if semana_cerrada %}disabled{% endif %}>Cerrar semana</button>
+  <button type="button" class="btn btn-secondary" onclick="reabrirSemana({{ semana_id }})" {% if not semana_cerrada %}disabled{% endif %}>Reabrir</button>
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'pit')" title="Duplicar a la semana siguiente">Duplicar → sig. semana</button>
+  {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;">SEMANA CERRADA</span>{% endif %}
+
+  <button type="button" class="btn" onclick="exportFormalPita({{ semana_id }})">Excel formal Pita</button>
+  <div class="kpi-bar" id="kpi-pita">
+    <span class="kpi-item"><b id="kpi-lineas">{{ totales.lineas or 0 }}</b> líneas</span>
+    <span class="kpi-item money"><b id="kpi-total">${{ '%.2f'|format((totales.total or 0)|float) }}</b> total pita</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if semana_id %}
+<div class="card" style="margin:1rem 0;">
+  <strong>Agregar línea</strong>
+  <form class="form-alta-compact" onsubmit="return addPit(event)">
+    <select name="trab" required>
+      <option value="">— trabajador —</option>
+      {% for t in trabajadores %}
+      <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}">{{ t.nombre_mostrar }} ({{ t.ubic }})</option>
+      {% endfor %}
+    </select>
+    <input name="modelo" placeholder="Modelo">
+    <input name="folio" placeholder="Folio">
+    <input name="material" placeholder="Material" value="PITA 6X6">
+    <input name="producto" placeholder="Producto" value="Cinturón">
+    <input name="pitas" type="number" step="0.1" placeholder="Pitas">
+    <input name="efectivo" type="number" step="0.1" placeholder="Efectivo $" required>
+    <button class="btn" type="submit" {% if semana_cerrada %}disabled{% endif %}>Agregar</button>
+  </form>
+</div>
+<div class="table-wrap table-compact">
+<table class="sortable" data-sortable="1">
+  <colgroup>
+    <col class="col-del"><col class="col-nombre"><col class="col-ubic"><col class="col-modelo"><col class="col-folio">
+    <col class="col-mat"><col class="col-prod"><col class="col-pitas"><col class="col-efec"><col class="col-firma">
+  </colgroup>
+  <thead>
+    <tr>
+      <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
+      <th class="col-nombre" data-sort-col="1">Nombre</th>
+      <th data-sort-col="2">Ubic</th><th data-sort-col="3">Modelo</th><th data-sort-col="4">Folio</th>
+      <th data-sort-col="5">Material</th><th data-sort-col="6">Producto</th>
+      <th data-sort-col="7">Pitas</th><th data-sort-col="8">Efectivo</th><th>Firma</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in lineas %}
+    <tr data-id="{{ r.id }}">
+      <td class="col-actions">
+{% set row_data = {
+          "modelo": r.modelo or "",
+          "folio": r.folio or "",
+          "material": r.material or "",
+          "producto": r.producto or "",
+          "pitas": r.pitas if r.pitas is not none else "",
+          "efectivo": r.efectivo if r.efectivo is not none else "",
+          "firmado": 1 if r.firmado else 0,
+          "nombre": r.nombre,
+          "ubic": r.ubic
+        } %}
+        <div class="row-menu">
+          <button type="button" class="btn-row-menu" title="Menú: editar o eliminar fila" aria-label="Menú de la fila" aria-expanded="false"
+            onclick="event.preventDefault();event.stopPropagation();(window.FajosRowMenu||{toggle:function(){alert('Recarga la página (Ctrl+F5)')}}).toggle(this,event)">⋯</button>
+          <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
+            <button type="button" onclick='openEditPit({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
+            <button type="button" class="danger" onclick="delPit({{ r.id }}); FajosRowMenu.closeAll()">Eliminar</button>
+          </div>
+        </div>
+      </td>
+      <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
+          ondblclick='openEditPit({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}</td>
+      <td>{{ r.ubic }}</td>
+      <td class="editable-hint"><input class="cell-edit" data-field="modelo" value="{{ r.modelo or '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit" data-field="folio" value="{{ r.folio or '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit" data-field="material" value="{{ r.material or '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit" data-field="producto" value="{{ r.producto or '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="pitas" type="number" step="0.1" value="{{ r.pitas if r.pitas is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="efectivo" type="number" step="0.1" value="{{ r.efectivo if r.efectivo is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td>
+        <input type="checkbox" {% if r.firmado %}checked{% endif %}
+               onchange="patchPit({{ r.id }}, 'firmado', this.checked ? '1' : '0')">
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="10" class="muted">Sin líneas de pita esta semana.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="modal-backdrop" id="modal-edit-pit" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2>Editar línea de pita</h2>
+    <p class="muted" id="edit-pit-who" style="margin-top:0"></p>
+    <form id="form-edit-pit" onsubmit="return FajosRowEdit.submit({formId:'form-edit-pit', modalId:'modal-edit-pit', urlBase:'/api/nomina-pita/linea/'})">
+      <div class="form-grid">
+        <div><label>Modelo</label><input name="modelo"></div>
+        <div><label>Folio</label><input name="folio"></div>
+        <div><label>Material</label><input name="material" placeholder="PITA 6X6"></div>
+        <div><label>Producto</label><input name="producto" placeholder="Cinturón"></div>
+        <div><label>Pitas</label><input name="pitas" type="number" step="0.1" min="0"></div>
+        <div><label>Efectivo $</label><input name="efectivo" type="number" step="0.1" min="0"></div>
+        <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-pit')">Cancelar</button>
+        <button type="submit" class="btn">Guardar fila</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% else %}
+<p class="muted">Selecciona o crea una semana.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="/static/table_sort.js?v=3178"></script>
+<script src="/static/semana_ops.js?v=3122"></script>
+<script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "pit";</script>
+
+<script src="/static/row_menu.js?v=3113"></script>
+<script src="/static/row_edit.js?v=3112"></script>
+<script>
+function openEditPit(id, data) {
+  const who = document.getElementById('edit-pit-who');
+  if (who) who.textContent = (data.nombre || '') + ' · ubic ' + (data.ubic || '');
+  FajosRowEdit.open({ modalId: 'modal-edit-pit', formId: 'form-edit-pit', id: id, data: data });
+}
+</script>
+
+
+<script>
+/* duplicarSemana → semana_ops.js */
+</script>
+
+<script src="/static/cell_edit.js"></script>
+<script>
+const SID = {{ semana_id or 'null' }};
+function toast(msg, err) {
+  if (window.FajosLive) return FajosLive.showToast(msg, err);
+  alert(msg);
+}
+async function addPit(e) {
+  e.preventDefault();
+  if (!SID) return false;
+  const form = e.target;
+  const parts = (form.trab.value||'').split('|');
+  const body = new FormData();
+  body.set('nombre', parts[0]);
+  body.set('ubic', parts[1]);
+  if (parts[2]) body.set('trabajador_id', parts[2]);
+  body.set('modelo', form.modelo.value || '');
+  body.set('folio', form.folio.value || '');
+  body.set('material', form.material.value || 'PITA 6X6');
+  body.set('producto', form.producto.value || 'Cinturón');
+  if (form.pitas.value) body.set('pitas', form.pitas.value);
+  body.set('efectivo', form.efectivo.value);
+  const res = await fetch('/api/nomina-pita/' + SID, { method: 'POST', body });
+  if (res.ok) location.reload();
+  else toast('Error al guardar', true);
+  return false;
+}
+async function patchPit(id, field, value) {
+  const body = new FormData();
+  body.set(field, value);
+  const res = await fetch('/api/nomina-pita/linea/' + id, { method: 'PATCH', body });
+  if (!res.ok) { toast('No se pudo guardar', true); return false; }
+  toast('Guardado');
+  if (field === 'efectivo') recalcKpi();
+  return true;
+}
+function recalcKpi() {
+  let sum = 0;
+  document.querySelectorAll('tr[data-id] input[data-field="efectivo"]').forEach(inp => {
+    const v = parseFloat(inp.value || '0');
+    if (!isNaN(v)) sum += v;
+  });
+  const el = document.getElementById('kpi-total');
+  if (el) el.textContent = '$' + sum.toFixed(2);
+}
+async function delPit(id) {
+  if (!confirm('¿Eliminar esta línea de pita?')) return;
+  const res = await fetch('/api/nomina-pita/linea/' + id, { method: 'DELETE' });
+  if (res.ok) location.reload();
+  else toast('No se pudo eliminar', true);
+}
+document.addEventListener('DOMContentLoaded', () => {
+
+  function onSaved(id, field, value, tr) {
+    if (field === 'efectivo') {
+      let sum = 0;
+      document.querySelectorAll('tr[data-id] input[data-field="efectivo"]').forEach(inp => {
+        const v = parseFloat(String(inp.value||'0').replace(',','.'));
+        if (!isNaN(v)) sum += v;
+      });
+      const el = document.getElementById('kpi-total');
+      if (el) el.textContent = '$' + sum.toFixed(2);
+    }
+  }
+
+  function bind() {
+    if (!window.FajosCellEdit) {
+      setTimeout(bind, 50);
+      return;
+    }
+    FajosCellEdit.bindCellEdits({
+      selector: 'input.cell-edit',
+      urlFor: (id) => '/api/nomina-pita/linea/' + id,
+      onSaved: onSaved
+    });
+  }
+  bind();
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var cerrada = {{ 'true' if semana_cerrada else 'false' }};
+  if (!cerrada) return;
+  document.querySelectorAll('input.cell-edit').forEach(function (el) {
+    el.readOnly = true; el.disabled = true;
+  });
+  document.querySelectorAll('input[type="checkbox"]').forEach(function (el) {
+    el.disabled = true;
+  });
+  document.querySelectorAll('.btn-row-menu').forEach(function (b) {
+    b.disabled = true; b.title = 'Semana cerrada';
+  });
+  document.querySelectorAll('td.name-edit').forEach(function (td) {
+    td.ondblclick = null; td.title = 'Semana cerrada';
+  });
+  document.querySelectorAll('form.inline button[type="submit"]').forEach(function (b) {
+    b.disabled = true;
+  });
+});
+</script>
+
+{% endblock %}
+
+<script>
+async function exportFormalPita(semanaId) {
+  try {
+    const res = await fetch('/api/export/nomina-pita/' + semanaId + '/preview');
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || d.message || 'No se pudo revisar la exportación'); return; }
+    const omit = d.omitidas || 0;
+    const exp = d.exportables || 0;
+    const tot = d.total || 0;
+    if (exp === 0) {
+      alert(
+        'No hay filas con efectivo > 0 para exportar.\n\n' +
+        'Hay ' + tot + ' línea(s) en pantalla, todas en $0.\n' +
+        'Llena el efectivo de las que deban pagarse y vuelve a intentar.\n\n' +
+        'Regla: en 0 no se exporta nada.'
+      );
+      return;
+    }
+    let msg = 'Exportar nómina formal Pita\n\n' +
+      'Líneas en tabla: ' + tot + '\n' +
+      'Se exportarán (efectivo > 0): ' + exp + '\n';
+    if (omit > 0) {
+      msg += 'Se omitirán (efectivo = 0): ' + omit + '\n';
+    }
+    msg += '\nRegla: las filas en $0 no van al Excel.\n\n¿Descargar?';
+    if (!confirm(msg)) return;
+    window.location.href = '/api/export/nomina-pita/' + semanaId;
+  } catch (e) {
+    alert('Error al preparar la exportación');
+  }
+}
+</script>

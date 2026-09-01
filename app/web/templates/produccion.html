@@ -1,0 +1,1204 @@
+{% extends "base.html" %}
+{% block title %}Producción — Fajos Piteados Central{% endblock %}
+{% block content %}
+<script>document.addEventListener('DOMContentLoaded',()=>{const m=document.querySelector('main.container');if(m)m.classList.add('wide');});</script>
+
+
+<div class="help-panel" id="help-panel">
+  <strong>Consejo:</strong> Lo más fácil es <strong>＋ Un día</strong>: eliges trabajador, folio (si ya existe), el día y los gramos. Solo edita la columna de <em>hoy</em> en la tabla; otros días piden confirmación. Al final de la semana usa <strong>Formal Excel</strong> para imprimir y pagar.
+  <button type="button" class="help-toggle" style="display:block;margin-top:0.4rem"
+          onclick="this.parentElement.hidden=true">Entendido, ocultar</button>
+</div>
+{# Fecha del día ya va en la topbar; aquí solo contexto de semana (discreto) #}
+{% if semanas %}
+  {% set actual = semanas | selectattr('es_actual') | list %}
+  {% if actual %}
+  <div class="semana-ctx semana-ctx--compact">
+    <span class="semana-ctx-label">Semana de nómina</span>
+    <span class="badge-actual">{{ actual[0].codigo }}</span>
+    {% if actual[0].fecha_inicio and actual[0].fecha_fin %}
+    <span class="semana-rango">{{ actual[0].fecha_inicio }} → {{ actual[0].fecha_fin }}</span>
+    {% endif %}
+    {% if semana_id and actual[0].id == semana_id %}
+    <span class="semana-ctx-ok">· viendo la actual</span>
+    {% elif semana_id %}
+    <span class="semana-ctx-warn">· estás en otra semana</span>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="semana-ctx semana-ctx--compact semana-ctx--warn">
+    <span class="muted">No hay semana en BD que cubra hoy. Usa ★ Semana actual.</span>
+  </div>
+  {% endif %}
+{% endif %}
+
+<div id="toast" class="toast-web" hidden></div>
+
+{# Catálogos: sugerencias; el usuario puede escribir valores que no estén en BD #}
+<datalist id="dl-materiales">
+  {% for m in materiales or [] %}
+  <option value="{{ m.material }}" data-tarifa="{{ m.tarifa_por_gramo }}"></option>
+  {% endfor %}
+</datalist>
+<datalist id="dl-modelos">
+  {% for m in modelos or [] %}
+  <option value="{{ m.modelo }}"
+          data-material="{{ m.material_default or '' }}"
+          data-tarifa="{{ m.tarifa_default if m.tarifa_default is not none else '' }}"></option>
+  {% endfor %}
+</datalist>
+<script src="/static/catalog_assist.js" defer></script>
+<script type="application/json" id="catalog-tarifas">{
+  {
+    {% for m in materiales or [] %}
+    {{ (m.material or '')|tojson }}: {{ m.tarifa_por_gramo if m.tarifa_por_gramo is not none else 'null' }}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  }
+</script>
+<script type="application/json" id="catalog-modelos">{
+  {
+    {% for m in modelos or [] %}
+    {{ (m.modelo or '')|tojson }}: {"material": {{ (m.material_default or '')|tojson }}, "tarifa": {{ m.tarifa_default if m.tarifa_default is not none else 'null' }}}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  }
+</script>
+
+
+<div class="page-head">
+  <div>
+    <h1>Producción semanal (Plata)</h1>
+    <p class="muted">Captura diaria con ＋ Un día. Material/modelo: elige del <a href="/catalogos">catálogo</a> (aplica $/g) o escribe uno libre; opcionalmente guárdalo en catálogo.</p>
+  </div>
+</div>
+
+<div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+  <form class="inline" method="get" action="/produccion">
+    <label class="muted">Semana</label>
+    <select name="semana_id" onchange="this.form.submit()">
+      {% for s in semanas %}
+      <option value="{{ s.id }}" {% if s.id == semana_id %}selected{% endif %}>
+        {{ s.codigo }} ({{ s.fecha_inicio }} → {{ s.fecha_fin }}){% if s.es_actual %} ★{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+  {% if semana_id %}
+  <div class="kpi-bar" id="kpi-live">
+    <span class="kpi-item"><b>{{ totales.lineas or 0 }}</b> líneas</span>
+    <span class="kpi-item"><b>{{ totales.total_gramos or 0 }}</b> g</span>
+    <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}</b></span>
+  </div>
+  <button type="button" class="btn" id="btn-formal-xlsx" onclick="checklistExport({{ semana_id }})">Formal Excel Plata</button>
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'plt')" title="Duplicar semana (elige áreas)">Duplicar → sig. semana</button>
+  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}/captura-manual" title="Nómina en blanco para anotar gramos a mano">Captura manual</a>
+  <a class="btn btn-secondary" href="/suministro{% if semana_id %}?semana_id={{ semana_id }}{% endif %}" title="Hoja del día: folio/nombre listos, solo anotar gramos">Suministro día</a>
+  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
+  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
+  {% endif %}
+</div>
+
+{% if semana_id %}
+
+<div class="plt-capture-bar" id="plt-capture-bar">
+  {% if semana_id %}
+  <button type="button" class="btn" onclick="openModal('modal-un-dia')" {% if semana_cerrada %}disabled{% endif %}>＋ Un día</button>
+  <button type="button" class="btn btn-secondary" onclick="openModal('modal-linea')" {% if semana_cerrada %}disabled{% endif %}>＋ Fila</button>
+  <button type="button" class="btn btn-secondary" onclick="cerrarSemana()" {% if semana_cerrada %}disabled{% endif %}>🔒 Cerrar semana</button>
+  <button type="button" class="btn btn-secondary" onclick="reabrirSemana()" {% if not semana_cerrada %}disabled{% endif %}>🔓 Reabrir</button>
+  <a class="btn btn-secondary" href="/historial/{{ semana_id }}" target="_blank">Historial</a>
+  {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;">SEMANA CERRADA</span>{% endif %}
+  {% endif %}
+  <button type="button" class="btn btn-secondary" onclick="crearSemanaActual()">★ Semana actual</button>
+  <a class="btn btn-secondary" href="/semanas" title="Editar, alinear o eliminar semanas">Semanas…</a>
+</div>
+
+{% set n_fi = folio_inactivos|length if folio_inactivos else 0 %}
+{% set n_re = reasignaciones|length if reasignaciones else 0 %}
+{% if n_fi or n_re %}
+<details class="folio-hints-compact">
+  <summary>
+    {% if n_fi %}<span>{{ n_fi }} sin avance</span>{% endif %}
+    {% if n_fi and n_re %} · {% endif %}
+    {% if n_re %}<span>{{ n_re }} reasignación{{ 'es' if n_re != 1 else '' }}</span>{% endif %}
+    <span class="muted"> — ver detalle</span>
+  </summary>
+  {% if folio_inactivos %}
+  <div class="folio-hint-block">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+      <strong>Sin avance</strong>
+      {% if not semana_cerrada and n_lote_inactivos and n_lote_inactivos > 0 %}
+      <button type="button" class="btn btn-secondary btn-xs" id="btn-terminar-lote"
+              onclick="terminarLoteInactivos({{ semana_id or 'null' }}, 3, {{ n_lote_inactivos }})"
+              title="Marca como terminados los folios con 3+ semanas sin gramos">
+        Terminar lote ({{ n_lote_inactivos }} con 3+ semanas)
+      </button>
+      {% endif %}
+    </div>
+    <p class="muted" style="margin:0 0 0.4rem;font-size:0.82rem">
+      El lote cierra folios con <strong>más de 2 semanas</strong> sin avance. Luego puedes reactivar uno por uno si hace falta.
+    </p>
+    <ul class="folio-hint-list">
+      {% for x in folio_inactivos[:12] %}
+      <li>
+        <code>{{ x.folio }}</code>
+        <span>{{ x.nombre }} · {{ x.ubic }}</span>
+        <span class="muted">{{ 'Parece terminado' if x.hint == 'posible_finalizado' else ('Cambio de persona' if x.hint == 'posible_reasignacion' else 'Sin gramos') }}</span>
+        <span class="badge-inactive" title="{{ x.ultima_txt or '' }}">{{ x.inactivo_txt or '1 semana' }}</span>
+        {% if x.ultima_txt %}<span class="muted faint" style="font-size:0.8rem">{{ x.ultima_txt }}</span>{% endif %}
+        {% if not semana_cerrada and x.prod_id %}
+        <button type="button" class="btn btn-secondary btn-xs btn-folio-terminar"
+                data-action="terminar-folio"
+                data-prod-id="{{ x.prod_id }}"
+                data-folio="{{ x.folio or '' }}">Terminar</button>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if reasignaciones %}
+  <div class="folio-hint-block">
+    <strong>Cambiaron de persona</strong>
+    <ul class="folio-hint-list">
+      {% for x in reasignaciones[:8] %}
+      <li>
+        <code>{{ x.folio }}</code>
+        <span>{{ (x.de.nombre if x.de else '?') }} → {{ (x.a.nombre if x.a else '?') }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</details>
+{% endif %}
+
+{% if terminados_semana and terminados_semana|length %}
+<details class="folio-hints-compact terminados-panel">
+  <summary>
+    <span>{{ terminados_semana|length }} folio(s) terminado(s)</span>
+    <span class="muted"> — ocultos de la captura · se eliminan tras 7 días sin uso · se pueden reactivar</span>
+  </summary>
+  <div class="folio-hint-block">
+    <ul class="folio-hint-list">
+      {% for x in terminados_semana %}
+      <li>
+        <code>{{ x.folio or '—' }}</code>
+        <span>{{ x.nombre }} · {{ x.ubic }}</span>
+        {% if x.total_gramos %}<span class="muted">{{ x.total_gramos }} g</span>{% endif %}
+        <button type="button" class="btn btn-secondary btn-xs btn-folio-reactivar"
+                data-action="reactivar-folio" data-prod-id="{{ x.id }}" data-folio="{{ x.folio or '' }}">Reactivar</button>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</details>
+{% endif %}
+
+
+<div class="filter-row" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin:0.75rem 0;">
+  <input type="search" id="flt-texto" placeholder="Filtrar nombre, folio, material…" style="min-width:200px;">
+  <label><input type="checkbox" id="flt-sin-firma"> Solo sin firmar</label>
+  <label><input type="checkbox" id="flt-sin-hoy"> Solo sin gramos hoy</label>
+  <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.8rem" data-sort-reset="table.sortable" title="Quitar orden de columnas">Reset orden</button>
+</div>
+<div class="table-wrap table-plt no-sticky-col">
+<table class="sortable" data-sortable="1">
+  <colgroup>
+    <col class="col-actions"><col class="col-nom"><col class="col-ubic"><col class="col-folio">
+    <col class="col-mod"><col class="col-mat"><col class="col-tar">
+    <col class="col-dia"><col class="col-dia"><col class="col-dia"><col class="col-dia">
+    <col class="col-dia"><col class="col-dia"><col class="col-dia">
+    <col class="col-tot"><col class="col-efe"><col class="col-fir">
+  </colgroup>
+  <thead>
+    <tr>
+      <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
+      <th class="col-nombre" data-sort-col="1">Nombre</th>
+      <th class="col-ubic" data-sort-col="2">Ubic</th>
+      <th class="col-folio" data-sort-col="3">Folio</th>
+      <th class="col-mod" data-sort-col="4">Modelo</th>
+      <th class="col-mat" data-sort-col="5">Mat</th>
+      <th class="col-tar" data-sort-col="6">$/g</th>
+      <th class="col-dia" data-sort-col="7">Sáb</th>
+      <th class="col-dia" data-sort-col="8">Dom</th>
+      <th class="col-dia" data-sort-col="9">Lun</th>
+      <th class="col-dia" data-sort-col="10">Mar</th>
+      <th class="col-dia" data-sort-col="11">Mié</th>
+      <th class="col-dia" data-sort-col="12">Jue</th>
+      <th class="col-dia" data-sort-col="13">Vie</th>
+      <th class="col-tot" data-sort-col="14">Gr</th>
+      <th class="col-efe" data-sort-col="15">$</th>
+      <th class="col-fir">✓</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in lineas %}
+    <tr class="mat-{{ (r.material or '')|lower }}{% if r.folio and folios_dup_set and (r.folio|string) in folios_dup_set %} folio-dup{% endif %}{% if folio_inact_ids and r.id in folio_inact_ids %} folio-inact{% endif %}" data-prod-id="{{ r.id }}" data-tarifa="{{ r.tarifa_gr or 0 }}">
+      {% set row_data = {
+            "nombre": r.nombre,
+            "ubic": r.ubic,
+            "folio": r.folio or "",
+            "modelo": r.modelo or "",
+            "material": r.material or "AG3",
+            "tarifa_gr": r.tarifa_gr if r.tarifa_gr is not none else 12,
+            "gm_sab": r.gm_sab if r.gm_sab else "",
+            "gm_dom": r.gm_dom if r.gm_dom else "",
+            "gm_lun": r.gm_lun if r.gm_lun else "",
+            "gm_mar": r.gm_mar if r.gm_mar else "",
+            "gm_mie": r.gm_mie if r.gm_mie else "",
+            "gm_jue": r.gm_jue if r.gm_jue else "",
+            "gm_vie": r.gm_vie if r.gm_vie else "",
+            "firmado": 1 if r.firmado else 0
+          } %}
+      <td class="col-actions">
+        {% if not semana_cerrada %}
+        <div class="row-menu">
+          <button type="button" class="btn-row-menu" data-action="row-menu-toggle"
+            title="Menú de la fila" aria-label="Menú" aria-expanded="false"
+            onclick="event.preventDefault();event.stopPropagation();if(window.FajosRowMenu)FajosRowMenu.toggle(this,event)">
+            <span class="dots" aria-hidden="true">⋮</span>
+          </button>
+          <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
+            <button type="button" onclick='openEditPlt({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
+            {% if r.folio %}
+            <button type="button" class="btn-folio-terminar" data-action="terminar-folio" data-prod-id="{{ r.id }}" data-folio="{{ r.folio or '' }}" onclick="if(window.FajosRowMenu)FajosRowMenu.closeAll()">Marcar folio terminado</button>
+            {% endif %}
+            <button type="button" class="danger" onclick="delLinea({{ r.id }}); FajosRowMenu.closeAll()">Eliminar</button>
+          </div>
+        </div>
+        {% else %}
+        <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
+          {% if not semana_cerrada %}ondblclick='openEditPlt({{ r.id }}, {{ row_data|tojson }})'{% endif %}>{{ r.nombre }}</td>
+      <td>{{ r.ubic }}</td>
+      <td title="{{ r.folio or '' }}">{{ r.folio or '—' }}</td>
+      <td title="{{ r.modelo or '' }}">{{ r.modelo or '—' }}</td>
+      <td>{{ r.material or '—' }}</td>
+      <td>{{ r.tarifa_gr or '—' }}</td>
+      {% for d in ['gm_sab','gm_dom','gm_lun','gm_mar','gm_mie','gm_jue','gm_vie'] %}
+      <td>
+        {% if semana_cerrada %}
+          {{ r[d] or '' }}
+        {% else %}
+          <input class="cell-gm" type="number" step="0.1" min="0"
+                 data-id="{{ r.id }}" data-dia="{{ d }}"
+                 data-hoy="{% if d == col_hoy %}1{% else %}0{% endif %}"
+                 value="{{ r[d] if r[d] else '' }}" title="{{ d }}">
+        {% endif %}
+      </td>
+      {% endfor %}
+      <td class="cell-total">{{ r.total_gramos or '' }}</td>
+      <td class="cell-efectivo">{% if r.efectivo %}${{ '%.2f'|format(r.efectivo|float) }}{% endif %}</td>
+      <td>
+        <input type="checkbox" {% if r.firmado %}checked{% endif %}
+               {% if semana_cerrada %}disabled{% endif %}
+               onchange="toggleFirmado({{ r.id }}, this.checked)">
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="17" class="muted">Sin líneas. Usa ＋ Un día / ＋ Fila.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Crea o selecciona una semana para capturar producción.</p>
+{% endif %}
+
+<div class="modal-backdrop" id="modal-un-dia" hidden>
+  <div class="modal" role="dialog">
+    <h2>Registrar un solo día</h2>
+    <p class="muted" style="margin-top:0">Si el folio ya existe, se actualiza ese día.</p>
+    <form id="form-un-dia" onsubmit="return submitUnDia(event)">
+      <div class="form-grid">
+        <div class="full">
+          <label>Trabajador</label>
+          <select name="trabajador_sel" id="dia-trab" required onchange="filtrarTrabajosDia()">
+            <option value="">— elegir —</option>
+            {% for t in trabajadores %}
+            <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}">{{ t.nombre_mostrar }} ({{ t.ubic }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="full">
+          <label>Trabajo existente (folio)</label>
+          <select name="trabajo_sel" id="dia-trabajo" onchange="rellenarDesdeTrabajo()">
+            <option value="">— nuevo / elegir —</option>
+          </select>
+        </div>
+        <div>
+          <label>Día</label>
+          <select name="dia" id="dia-select" required>
+            <option value="sab">Sáb</option><option value="dom">Dom</option>
+            <option value="lun">Lun</option><option value="mar">Mar</option>
+            <option value="mie">Mié</option><option value="jue">Jue</option>
+            <option value="vie">Vie</option>
+          </select>
+        </div>
+        <div class="full gram-multi-box">
+          <label>Gramos del día <span class="muted">(varios avances se suman)</span></label>
+          <div id="dia-gram-list" class="gram-multi-list">
+            <div class="gram-multi-row">
+              <input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance 1" inputmode="decimal">
+              <button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button>
+            </div>
+          </div>
+          <div class="gram-multi-actions">
+            <button type="button" class="btn btn-secondary btn-xs" onclick="addGramPartial()">＋ Otro avance</button>
+            <input type="hidden" name="gramos" id="dia-gramos-total" value="">
+          </div>
+          <div id="dia-gram-preview" class="gram-preview">Total a guardar: <strong>0</strong> g</div>
+          <label class="gram-sum-opt">
+            <input type="checkbox" id="dia-sumar-existente" checked>
+            Sumar a lo ya capturado este día
+          </label>
+          <div id="dia-gram-existente" class="muted" style="font-size:0.85rem;display:none"></div>
+        </div>
+        <div><label>Folio</label><input name="folio" placeholder="ST-149"></div>
+        <div>
+          <label>Modelo <span class="muted">(lista o libre)</span></label>
+          <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
+                 placeholder="Modelo…" onchange="onModeloInput(this)">
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mod-cat"
+                    title="Guarda este modelo en el catálogo">＋ Modelo al catálogo</button>
+          </div>
+        </div>
+        <div>
+          <label>Material <span class="muted">(lista o libre)</span></label>
+          <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                 placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
+          <div class="mat-chips" aria-label="Materiales del catálogo"></div>
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
+                    title="Guarda este material y $/g en el catálogo">＋ Material al catálogo</button>
+          </div>
+        </div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-un-dia')">Cancelar</button>
+        <button type="submit" class="btn">Guardar día</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<div class="modal-backdrop" id="modal-edit-plt" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true">
+    <h2>Editar línea de Plata</h2>
+    <p class="muted" id="edit-plt-who" style="margin-top:0"></p>
+    <form id="form-edit-plt" onsubmit="return FajosRowEdit.submit({formId:'form-edit-plt', modalId:'modal-edit-plt', urlBase:'/api/produccion/linea/'})">
+      <div class="form-grid">
+        <div><label>Folio</label><input name="folio"></div>
+        <div>
+          <label>Modelo <span class="muted">(lista o libre)</span></label>
+          <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
+                 placeholder="Modelo…" onchange="onModeloInput(this)">
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mod-cat"
+                    title="Guarda este modelo en el catálogo">＋ Modelo al catálogo</button>
+          </div>
+        </div>
+        <div>
+          <label>Material <span class="muted">(lista o libre)</span></label>
+          <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                 placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
+          <div class="mat-chips" aria-label="Materiales del catálogo"></div>
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
+                    title="Guarda este material y $/g en el catálogo">＋ Material al catálogo</button>
+          </div>
+        </div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" min="0"></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div class="full edit-totals-bar" id="edit-plt-totals">
+          <span>Total gramos: <strong id="edit-plt-tg">0</strong> g</span>
+          <span>Efectivo est.: <strong id="edit-plt-te">$0.00</strong></span>
+        </div>
+        <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-plt')">Cancelar</button>
+        <button type="submit" class="btn">Guardar fila</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-linea" hidden>
+  <div class="modal" role="dialog">
+    <h2>Agregar fila de producción</h2>
+    <form id="form-linea" onsubmit="return addLinea(event)">
+      <div class="form-grid">
+        <div class="full">
+          <label>Trabajador</label>
+          <select name="trabajador_sel" required>
+            <option value="">— elegir —</option>
+            {% for t in trabajadores %}
+            <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}">{{ t.nombre_mostrar }} ({{ t.ubic }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div><label>Folio</label><input name="folio"></div>
+        <div>
+          <label>Modelo <span class="muted">(lista o libre)</span></label>
+          <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
+                 placeholder="Modelo…" onchange="onModeloInput(this)">
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mod-cat"
+                    title="Guarda este modelo en el catálogo">＋ Modelo al catálogo</button>
+          </div>
+        </div>
+        <div>
+          <label>Material <span class="muted">(lista o libre)</span></label>
+          <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                 placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
+          <div class="mat-chips" aria-label="Materiales del catálogo"></div>
+          <div class="cat-actions">
+            <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
+                    title="Guarda este material y $/g en el catálogo">＋ Material al catálogo</button>
+          </div>
+        </div>
+        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-linea')">Cancelar</button>
+        <button type="submit" class="btn">Agregar fila</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+/* Catálogos: lógica en /static/catalog_assist.js (CatalogAssist) */
+function onMaterialInput(el){ if(window.CatalogAssist) CatalogAssist.onMaterialInput(el); }
+function onModeloInput(el){ if(window.CatalogAssist) CatalogAssist.onModeloInput(el); }
+function onMaterialChange(sel){ onMaterialInput(sel); }
+
+function onMaterialChange(sel) {
+  // compat: selects antiguos
+  if (sel && sel.tagName === 'SELECT') {
+    const opt = sel.options[sel.selectedIndex];
+    const tarifa = opt && opt.getAttribute('data-tarifa');
+    const form = sel.form || sel.closest('form');
+    const t = form && form.elements.namedItem('tarifa_gr');
+    if (t && tarifa != null && tarifa !== '') t.value = tarifa;
+  } else {
+    onMaterialInput(sel);
+  }
+}
+
+function onMaterialChange_legacy_unused(sel) {
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const tarifa = opt && opt.getAttribute('data-tarifa');
+  if (tarifa == null || tarifa === '') return;
+  const form = sel.closest('form');
+  if (!form) return;
+  const t = form.elements.namedItem('tarifa_gr');
+  if (t) t.value = tarifa;
+}
+</script>
+
+<script src="/static/folio_actions.js?v=31913"></script>
+<script src="/static/table_sort.js?v=3180"></script>
+<script src="/static/capture_guard.js?v=3130"></script>
+
+<script src="/static/semana_ops.js?v=3122"></script>
+<script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "plt";</script>
+
+<script src="/static/row_menu.js?v=31913"></script>
+<script src="/static/row_edit.js?v=3112"></script>
+<script>
+function openEditPlt(id, data) {
+  const who = document.getElementById("edit-plt-who");
+  if (who) who.textContent = (data.nombre || "") + " · ubic " + (data.ubic || "");
+  if (window.FajosRowEdit) {
+    FajosRowEdit.open({ modalId: "modal-edit-plt", formId: "form-edit-plt", id: id, data: data });
+  }
+  bindEditPltTotals();
+  const form = document.getElementById("form-edit-plt");
+  if (!form) return;
+  if (form._recalcTotals) setTimeout(form._recalcTotals, 30);
+  // material: asegurar valor aunque no esté en options / datalist
+  if (data && data.material) {
+    const sel = form.elements.namedItem("material");
+    if (sel) {
+      const val = data.material;
+      if (sel.tagName === "SELECT") {
+        let found = false;
+        for (const o of sel.options) { if (o.value === val) { found = true; break; } }
+        if (!found) {
+          const opt = document.createElement("option");
+          opt.value = val; opt.textContent = val;
+          sel.appendChild(opt);
+        }
+        sel.value = val;
+      } else {
+        sel.value = val;
+      }
+      if (typeof onMaterialInput === "function") onMaterialInput(sel);
+    }
+  }
+  if (data && data.modelo) {
+    const mod = form.elements.namedItem("modelo");
+    if (mod) {
+      mod.value = data.modelo;
+      if (typeof onModeloInput === "function") onModeloInput(mod);
+    }
+  }
+}
+</script>
+
+
+<script>
+/* duplicarSemana → semana_ops.js */
+</script>
+
+
+<script>
+async function sugerirTrabajo(selectEl) {
+  const v = selectEl.value || '';
+  const parts = v.split('|');
+  if (parts.length < 2) return;
+  const nombre = parts[0];
+  const ubic = parts[1];
+  const tid = parts[2] || '';
+  let url = '/api/insights/sugerir-trabajo?';
+  if (tid) url += 'trabajador_id=' + encodeURIComponent(tid);
+  else url += 'nombre=' + encodeURIComponent(nombre) + '&ubic=' + encodeURIComponent(ubic);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    const s = data.sugerencia;
+    if (!s) return;
+    const form = selectEl.closest('form') || document;
+    const set = (name, val) => {
+      const el = form.querySelector('[name="'+name+'"]') || document.querySelector('[name="'+name+'"]');
+      if (el && val != null && val !== '') el.value = val;
+    };
+    set('folio', s.folio);
+    set('modelo', s.modelo);
+    set('material', s.material);
+    set('tarifa_gr', s.tarifa_gr);
+    if (window.FajosLive) FajosLive.showToast('Sugerido: ' + (s.folio || s.modelo || s.material || 'datos previos'));
+  } catch (e) { console.warn(e); }
+}
+
+async function checklistExport(semanaId) {
+  if (!semanaId) return;
+  try {
+    const res = await fetch('/api/insights/checklist/' + semanaId);
+    const data = await res.json();
+    const items = data.items || [];
+    let html = '<div class="checklist-box">';
+    items.forEach(it => {
+      const ok = it.ok;
+      html += '<div class="checklist-item ' + (ok ? 'ok' : 'bad') + '">';
+      html += '<span class="mark">' + (ok ? '✓' : '!') + '</span>';
+      html += '<div><div>' + (it.texto || '') + '</div>';
+      if (it.detalle && it.detalle.length) {
+        html += '<ul>' + it.detalle.map(d => '<li>' + d + '</li>').join('') + '</ul>';
+      }
+      html += '</div></div>';
+    });
+    html += '</div>';
+    const go = confirm(
+      'Checklist antes de exportar formal:\n\n' +
+      items.map(it => (it.ok ? '✓ ' : '! ') + it.texto).join('\n') +
+      (items.some(i => i.detalle && i.detalle.length)
+        ? '\n\nRarezas:\n' + items.filter(i => i.detalle).flatMap(i => i.detalle).slice(0,5).join('\n')
+        : '') +
+      '\n\n¿Descargar Excel formal de Plata?'
+    );
+    if (go) {
+      window.location.href = '/api/export/produccion/' + semanaId + '?fmt=xlsx&formal=1';
+    }
+  } catch (e) {
+    console.warn(e);
+    window.location.href = '/api/export/produccion/' + semanaId + '?fmt=xlsx&formal=1';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('select[name="trab"], select[name="trabajador"], select#sel-trab, select.add-trab').forEach(sel => {
+    sel.addEventListener('change', () => sugerirTrabajo(sel));
+  });
+  // modals may use different names
+  document.querySelectorAll('select').forEach(sel => {
+    if ((sel.name || '').match(/trab/i) || (sel.id || '').match(/trab/i)) {
+      sel.addEventListener('change', () => sugerirTrabajo(sel));
+    }
+  });
+});
+</script>
+
+<script>
+const SEMANA_ID = {{ semana_id or 'null' }};
+const COL_HOY = "{{ col_hoy|default('gm_lun') }}";
+let CACHE_TRABAJOS = [];
+
+function showToast(msg, err) {
+  try {
+    if (window.FajosLive && FajosLive.showToast) {
+      FajosLive.showToast(msg, err);
+      return;
+    }
+  } catch (e) {}
+  const el = document.getElementById('toast');
+  if (el) {
+    el.hidden = false;
+    el.textContent = msg;
+    el.className = 'toast-web' + (err ? ' err' : ' ok');
+    clearTimeout(window._toastT);
+    window._toastT = setTimeout(() => { el.hidden = true; }, 3000);
+    return;
+  }
+  alert(msg);
+}
+
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.hidden = false;
+  if (id === 'modal-un-dia') {
+    loadTrabajosSemana().then(() => filtrarTrabajosDia());
+    const map = {0:'lun',1:'mar',2:'mie',3:'jue',4:'vie',5:'sab',6:'dom'};
+    const sel = document.getElementById('dia-select');
+    if (sel) sel.value = map[new Date().getDay()] || 'lun';
+    resetDiaGramPartials();
+  }
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.hidden = true;
+}
+/* Escape → modal_util.js */
+/* cierre de backdrop → modal_util.js */
+
+async function loadTrabajosSemana() {
+  if (!SEMANA_ID) return;
+  try {
+    const res = await fetch('/api/trabajos?semana_id=' + SEMANA_ID);
+    CACHE_TRABAJOS = await res.json();
+    if (!Array.isArray(CACHE_TRABAJOS)) CACHE_TRABAJOS = [];
+  } catch (e) { CACHE_TRABAJOS = []; }
+}
+
+function filtrarTrabajosDia() {
+  const sel = document.getElementById('dia-trab');
+  const tsel = document.getElementById('dia-trabajo');
+  if (!sel || !tsel) return;
+  const parts = (sel.value || '').split('|');
+  const tid = parts[2] ? parseInt(parts[2], 10) : null;
+  tsel.innerHTML = '<option value="">— nuevo / elegir —</option>';
+  CACHE_TRABAJOS.filter(t => !tid || t.trabajador_id == tid).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify({
+      trabajo_id: t.trabajo_id, folio: t.folio || '', modelo: t.modelo || '',
+      material: t.material || 'AG3', tarifa_gr: t.tarifa_gr || 12, produccion_id: t.produccion_id || null,
+    });
+    opt.textContent = (t.folio || 's/folio') + ' · ' + (t.modelo || '') + ' · ' + (t.material || '');
+    tsel.appendChild(opt);
+  });
+}
+
+function rellenarDesdeTrabajo() {
+  const tsel = document.getElementById('dia-trabajo');
+  if (!tsel || !tsel.value) return;
+  try {
+    const t = JSON.parse(tsel.value);
+    const form = document.getElementById('form-un-dia');
+    if (!form) return;
+    if (form.folio) form.folio.value = t.folio || '';
+    if (form.modelo) form.modelo.value = t.modelo || '';
+    if (form.material) form.material.value = t.material || 'AG3';
+    if (form.tarifa_gr && t.tarifa_gr) form.tarifa_gr.value = t.tarifa_gr;
+  } catch (e) {}
+}
+
+
+/* —— Varios gramajes en "Un día" —— */
+function addGramPartial() {
+  const list = document.getElementById('dia-gram-list');
+  if (!list) return;
+  const n = list.querySelectorAll('.gram-partial').length + 1;
+  const row = document.createElement('div');
+  row.className = 'gram-multi-row';
+  row.innerHTML = '<input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance ' + n + '" inputmode="decimal">' +
+    '<button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar">×</button>';
+  list.appendChild(row);
+  list.querySelectorAll('.gram-rm').forEach(b => { b.hidden = list.querySelectorAll('.gram-partial').length <= 1; });
+  row.querySelector('.gram-partial').addEventListener('input', recalcDiaGramPreview);
+  row.querySelector('.gram-partial').focus();
+  recalcDiaGramPreview();
+}
+function removeGramPartial(btn) {
+  const list = document.getElementById('dia-gram-list');
+  if (!list) return;
+  const rows = list.querySelectorAll('.gram-multi-row');
+  if (rows.length <= 1) return;
+  btn.closest('.gram-multi-row').remove();
+  list.querySelectorAll('.gram-rm').forEach(b => { b.hidden = list.querySelectorAll('.gram-partial').length <= 1; });
+  recalcDiaGramPreview();
+}
+function sumGramPartials() {
+  let s = 0;
+  document.querySelectorAll('#dia-gram-list .gram-partial').forEach(inp => {
+    const v = parseFloat(inp.value);
+    if (!isNaN(v) && v > 0) s += v;
+  });
+  return Math.round(s * 1000) / 1000;
+}
+function getExistingDayGrams() {
+  // Match exacto: folio + material + columna del día (data-dia = gm_lun, etc.)
+  const form = document.getElementById('form-un-dia');
+  if (!form) return 0;
+  const folio = String((form.elements.namedItem('folio') || {}).value || '').trim();
+  const material = String((form.elements.namedItem('material') || {}).value || '').trim().toUpperCase();
+  const dia = (form.elements.namedItem('dia') || {}).value || '';
+  const map = {sab:'gm_sab',dom:'gm_dom',lun:'gm_lun',mar:'gm_mar',mie:'gm_mie',jue:'gm_jue',vie:'gm_vie'};
+  const col = map[dia] || dia;
+  if (!col) return 0;
+  // Preferir trabajo seleccionado con produccion_id
+  const tsel = document.getElementById('dia-trabajo');
+  if (tsel && tsel.value) {
+    try {
+      const t = JSON.parse(tsel.value);
+      if (t.produccion_id) {
+        const inp = document.querySelector(
+          'tr[data-prod-id="' + t.produccion_id + '"] input.cell-gm[data-dia="' + col + '"]'
+        );
+        if (inp) {
+          const v = parseFloat(inp.value || '0');
+          if (!isNaN(v) && v > 0) return v;
+        }
+      }
+    } catch (e) {}
+  }
+  let found = 0;
+  document.querySelectorAll('table.sortable tbody tr[data-prod-id]').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    // orden: actions, nombre, ubic, folio, modelo, material, tarifa, días...
+    const folioCell = cells[3];
+    const matCell = cells[5];
+    const ftxt = String((folioCell && (folioCell.getAttribute('title') || folioCell.textContent)) || '')
+      .replace('—', '').trim();
+    const mtxt = String((matCell && matCell.textContent) || '').trim().toUpperCase();
+    if (folio && ftxt !== folio) return;
+    if (!folio && ftxt) return;
+    if (material && mtxt && mtxt !== material) return;
+    const inp = tr.querySelector('input.cell-gm[data-dia="' + col + '"]');
+    if (inp) {
+      const v = parseFloat(inp.value || '0');
+      if (!isNaN(v) && v > 0) found = v;
+    }
+  });
+  return found;
+}
+function recalcDiaGramPreview() {
+  const nuevos = sumGramPartials();
+  const sumar = (document.getElementById('dia-sumar-existente') || {}).checked;
+  const existente = sumar ? getExistingDayGrams() : 0;
+  const total = Math.round((existente + nuevos) * 1000) / 1000;
+  const hid = document.getElementById('dia-gramos-total');
+  if (hid) hid.value = total > 0 ? String(total) : '';
+  const prev = document.getElementById('dia-gram-preview');
+  if (prev) {
+    if (existente > 0 && sumar) {
+      prev.innerHTML = 'Ya había <strong>' + existente + '</strong> g + avances <strong>' + nuevos + '</strong> g = <strong>' + total + '</strong> g a guardar';
+    } else {
+      prev.innerHTML = 'Total a guardar: <strong>' + total + '</strong> g';
+    }
+  }
+  const ex = document.getElementById('dia-gram-existente');
+  if (ex) {
+    if (existente > 0) {
+      ex.style.display = '';
+      ex.textContent = 'Valor actual en tabla para este día/folio: ' + existente + ' g';
+    } else {
+      ex.style.display = 'none';
+    }
+  }
+  return total;
+}
+function resetDiaGramPartials() {
+  const list = document.getElementById('dia-gram-list');
+  if (!list) return;
+  list.innerHTML = '<div class="gram-multi-row"><input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance 1" inputmode="decimal"><button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button></div>';
+  const inp = list.querySelector('.gram-partial');
+  if (inp) inp.addEventListener('input', recalcDiaGramPreview);
+  const cb = document.getElementById('dia-sumar-existente');
+  if (cb) cb.onchange = recalcDiaGramPreview;
+  const diaSel = document.getElementById('dia-select');
+  if (diaSel) diaSel.addEventListener('change', recalcDiaGramPreview);
+  recalcDiaGramPreview();
+}
+function bindEditPltTotals() {
+  const form = document.getElementById('form-edit-plt');
+  if (!form || form.dataset.totalsBound) return;
+  form.dataset.totalsBound = '1';
+  const recalc = () => {
+    let g = 0;
+    form.querySelectorAll('.edit-gm, input[name^="gm_"]').forEach(inp => {
+      if (!(inp.name || '').startsWith('gm_')) return;
+      const v = parseFloat(inp.value);
+      if (!isNaN(v)) g += v;
+    });
+    g = Math.round(g * 1000) / 1000;
+    const tarifa = parseFloat((form.elements.namedItem('tarifa_gr') || {}).value || '0') || 0;
+    const ef = Math.round(g * tarifa * 100) / 100;
+    const tg = document.getElementById('edit-plt-tg');
+    const te = document.getElementById('edit-plt-te');
+    if (tg) tg.textContent = String(g);
+    if (te) te.textContent = '$' + ef.toFixed(2);
+  };
+  form.addEventListener('input', recalc);
+  form._recalcTotals = recalc;
+}
+
+
+async function submitUnDia(e) {
+  e.preventDefault();
+  if (!SEMANA_ID) { showToast('Selecciona una semana', true); return false; }
+  const form = document.getElementById('form-un-dia');
+  const fd = new FormData(form);
+  const parts = String(fd.get('trabajador_sel') || '').split('|');
+  if (parts.length < 2) { showToast('Elige trabajador', true); return false; }
+  const total = recalcDiaGramPreview();
+  if (!(total > 0)) { showToast('Indica al menos un avance en gramos', true); return false; }
+  const body = new FormData();
+  body.set('nombre', parts[0]);
+  body.set('ubic', parts[1]);
+  if (parts[2]) body.set('trabajador_id', parts[2]);
+  body.set('dia', fd.get('dia'));
+  body.set('gramos', String(total));
+  body.set('folio', fd.get('folio') || '');
+  body.set('modelo', fd.get('modelo') || '');
+  body.set('material', fd.get('material') || 'AG3');
+  if (fd.get('tarifa_gr')) body.set('tarifa_gr', fd.get('tarifa_gr'));
+  const tsel = document.getElementById('dia-trabajo');
+  if (tsel && tsel.value) {
+    try {
+      const t = JSON.parse(tsel.value);
+      if (t.trabajo_id) body.set('trabajo_id', t.trabajo_id);
+    } catch (err) {}
+  }
+  const res = await fetch('/api/produccion/' + SEMANA_ID + '/dia', { method: 'POST', body });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.ok) {
+    const g = data.gramos != null ? data.gramos : '';
+    const msg = (data.updated ? 'Día actualizado' : 'Día registrado')
+      + (g !== '' ? (': ' + g + ' g') : '')
+      + (data.total_gramos != null ? (' · total fila ' + data.total_gramos + ' g') : '');
+    showToast(msg);
+    closeModal('modal-un-dia');
+    setTimeout(() => location.reload(), 500);
+  } else showToast(data.user_message || data.message || data.detail || 'Error al guardar día', true);
+  return false;
+}
+
+async function addLinea(e) {
+  e.preventDefault();
+  if (!SEMANA_ID) { showToast('Sin semana', true); return false; }
+  const form = document.getElementById('form-linea');
+  const fd = new FormData(form);
+  const parts = String(fd.get('trabajador_sel') || '').split('|');
+  if (parts.length < 2) { showToast('Elige trabajador', true); return false; }
+  const body = new FormData();
+  body.set('nombre', parts[0]);
+  body.set('ubic', parts[1]);
+  if (parts[2]) body.set('trabajador_id', parts[2]);
+  body.set('folio', fd.get('folio') || '');
+  body.set('modelo', fd.get('modelo') || '');
+  body.set('material', fd.get('material') || 'AG3');
+  body.set('tarifa_gr', fd.get('tarifa_gr') || '12');
+  const res = await fetch('/api/produccion/' + SEMANA_ID, { method: 'POST', body });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.ok) {
+    showToast('Fila agregada');
+    closeModal('modal-linea');
+    setTimeout(() => location.reload(), 400);
+  } else showToast(data.user_message || data.message || 'Error', true);
+  return false;
+}
+
+async function crearSemanaActual() {
+  const res = await fetch('/api/semanas/actual', { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { showToast(data.message || 'Error', true); return; }
+  location.href = '/produccion?semana_id=' + data.semana.id;
+}
+
+async function cerrarSemana() { return FajosSemanaOps.cerrarSemana(SEMANA_ID); }
+async function reabrirSemana() { return FajosSemanaOps.reabrirSemana(SEMANA_ID); }
+async function delLinea(id) {
+  if (!confirm('¿Eliminar esta línea?')) return;
+  const res = await fetch('/api/produccion/linea/' + id, { method: 'DELETE' });
+  if (res.ok) location.reload();
+  else showToast('Error al eliminar', true);
+}
+async function marcarTerminado(prodId, folio) {
+  if (prodId == null || prodId === '' || Number(prodId) <= 0) {
+    showToast('No se identificó la línea (recarga la página)', true);
+    return;
+  }
+  const label = folio ? ('folio ' + folio) : ('línea #' + prodId);
+  if (!confirm('¿Marcar ' + label + ' como terminado?\n\n• Se oculta de la captura\n• Los gramos de esta semana se conservan para el pago\n• Puedes reactivarlo desde «folios terminados»')) return;
+  try {
+    const res = await fetch('/api/produccion/linea/' + prodId + '/terminar', {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showToast(d.error || d.user_message || d.message || ('Error HTTP ' + res.status), true);
+      return;
+    }
+    showToast('Terminado: ' + (d.folio || label));
+    setTimeout(() => location.reload(), 400);
+  } catch (e) {
+    showToast('Error de red al terminar folio', true);
+  }
+}
+async function reactivarFolio(prodId, folio) {
+  const label = folio ? ('folio ' + folio) : 'esta línea';
+  if (!confirm('¿Reactivar ' + label + ' para seguir capturando?')) return;
+  try {
+    const res = await fetch('/api/produccion/linea/' + prodId + '/reactivar', { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showToast(d.error || d.user_message || d.message || 'No se pudo reactivar', true);
+      return;
+    }
+    showToast('Folio reactivado' + (d.folio ? (': ' + d.folio) : ''));
+    setTimeout(() => location.reload(), 400);
+  } catch (e) {
+    showToast('Error de red', true);
+  }
+}
+async function toggleFirmado(id, checked) {
+
+  const fd = new FormData();
+  fd.append('firmado', checked ? '1' : '0');
+  const res = await fetch('/api/produccion/linea/' + id + '/firmado', { method: 'PATCH', body: fd });
+  if (!res.ok) showToast('No se pudo actualizar firma', true);
+  else showToast(checked ? 'Firmado' : 'Firma quitada');
+}
+async function saveGramCell(inp) {
+  if (inp.readOnly) return;
+  if (window.FajosCaptureGuard) FajosCaptureGuard.normalizeInput(inp);
+  const id = inp.dataset.id;
+  const dia = inp.dataset.dia;
+  const map = {gm_sab:'sab',gm_dom:'dom',gm_lun:'lun',gm_mar:'mar',gm_mie:'mie',gm_jue:'jue',gm_vie:'vie'};
+  const fd = new FormData();
+  fd.append('dia', map[dia] || dia);
+  fd.append('gramos', inp.value === '' ? '0' : inp.value);
+  const res = await fetch('/api/produccion/linea/' + id + '/dia', { method: 'PATCH', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    showToast('Guardado');
+    if (window.FajosLive) { FajosLive.flashCell(inp); FajosLive.flashRow(inp); FajosLive.pulseKpi('#kpi-live'); }
+    // actualizar total g / $ de la fila si el API los devuelve
+    const tr = inp.closest('tr');
+    if (tr && data.total_gramos != null) {
+      const tg = tr.querySelector('.cell-total');
+      if (tg) tg.textContent = FajosCaptureGuard ? FajosCaptureGuard.formatGram(data.total_gramos) : data.total_gramos;
+    }
+  } else {
+    showToast(data.user_message || data.message || 'Error', true);
+    throw new Error(data.message || 'save failed');
+  }
+}
+
+function applyTableFilters() {
+  const q = ((document.getElementById('flt-texto') || {}).value || '').trim().toLowerCase();
+  const sinFirma = (document.getElementById('flt-sin-firma') || {}).checked;
+  const sinHoy = (document.getElementById('flt-sin-hoy') || {}).checked;
+  document.querySelectorAll('tr[data-prod-id]').forEach(tr => {
+    let show = true;
+    if (q && !tr.textContent.toLowerCase().includes(q)) show = false;
+    if (sinFirma) {
+      const box = tr.querySelector('input[type=checkbox]');
+      if (box && box.checked) show = false;
+    }
+    if (sinHoy) {
+      const inp = tr.querySelector('input.cell-gm[data-dia="' + COL_HOY + '"]');
+      const v = inp ? parseFloat(inp.value || '0') : 0;
+      if (v > 0) show = false;
+    }
+    tr.style.display = show ? '' : 'none';
+  });
+  if (window.FajosLive) FajosLive.recalcFromTable('.table-wrap table', '#kpi-live');
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadTrabajosSemana();
+  if (window.FajosLive) {
+    FajosLive.bindGramInputs({
+      tableSel: '.table-wrap table',
+      kpiSel: '#kpi-live',
+      onSave: async (inp) => { await saveGramCell(inp); },
+    });
+  }
+  // Días distintos de hoy: bloqueados salvo sesión de edición temporal (dashboard)
+  window.FAJOS_EDIT_DIAS = window.FAJOS_EDIT_DIAS || new Set();
+  if (COL_HOY) window.FAJOS_EDIT_DIAS.add(COL_HOY);
+  function applyDayLocks() {
+    document.querySelectorAll('input.cell-gm').forEach(inp => {
+      const d = inp.dataset.dia;
+      if (!d) return;
+      const free = window.FAJOS_EDIT_DIAS.has(d);
+      if (free) {
+        inp.readOnly = false;
+        inp.classList.add('day-unlocked-temp');
+        inp.title = (d === COL_HOY) ? 'Hoy — editable' : 'Edición temporal (acceso del dashboard) — solo mientras estés aquí';
+      } else {
+        inp.readOnly = true;
+        inp.classList.remove('day-unlocked-temp');
+        inp.title = 'Doble clic para editar (no es hoy)';
+        if (!inp.dataset.lockBound) {
+          inp.dataset.lockBound = '1';
+          inp.addEventListener('dblclick', () => {
+            if (confirm('¿Editar día que no es hoy?')) {
+              inp.readOnly = false;
+              inp.classList.add('day-unlocked-temp');
+              window.FAJOS_EDIT_DIAS.add(d);
+              inp.focus();
+            }
+          });
+        }
+      }
+    });
+  }
+  applyDayLocks();
+  ['flt-texto', 'flt-sin-firma', 'flt-sin-hoy'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', applyTableFilters);
+  });
+});
+</script>
+
+<script>
+(function applyDashboardDeepLink(){
+  const params = new URLSearchParams(location.search);
+  const q = params.get('q');
+  const filtro = params.get('filtro');
+  const highlight = params.get('highlight');
+  const dia = params.get('dia'); // gm_dom, gm_lun, ...
+  const labels = {gm_sab:'Sábado',gm_dom:'Domingo',gm_lun:'Lunes',gm_mar:'Martes',gm_mie:'Miércoles',gm_jue:'Jueves',gm_vie:'Viernes'};
+
+  function showSessionBanner(msg) {
+    if (document.getElementById('session-edit-banner')) return;
+    const bar = document.createElement('div');
+    bar.id = 'session-edit-banner';
+    bar.className = 'session-edit-banner';
+    bar.style.cssText = 'margin:0.5rem 0;padding:0.55rem 0.85rem;border-radius:8px;background:rgba(201,162,39,0.15);border:1px solid rgba(201,162,39,0.4);font-size:0.9rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;';
+    bar.innerHTML = '<strong>Edición temporal:</strong> <span></span>';
+    bar.querySelector('span').textContent = msg;
+    const host = document.querySelector('.plt-sticky-bar') || document.querySelector('.page-head') || document.querySelector('main');
+    if (host) host.insertAdjacentElement('afterend', bar);
+  }
+
+  function unlockDia(col) {
+    if (!col) return;
+    window.FAJOS_EDIT_DIAS = window.FAJOS_EDIT_DIAS || new Set();
+    window.FAJOS_EDIT_DIAS.add(col);
+    if (typeof applyDayLocks === 'function') applyDayLocks();
+    else {
+      document.querySelectorAll('input.cell-gm[data-dia="'+col+'"]').forEach(inp => {
+        inp.readOnly = false;
+        inp.classList.add('day-unlocked-temp');
+      });
+    }
+  }
+
+  function filterSinDia(col) {
+    if (!col) return;
+    document.querySelectorAll('table.sortable tbody tr').forEach(tr => {
+      const inp = tr.querySelector('input.cell-gm[data-dia="'+col+'"]');
+      if (!inp) return;
+      const v = parseFloat(inp.value || '0');
+      if (v > 0) tr.style.display = 'none';
+      else {
+        tr.style.display = '';
+        tr.classList.add('row-highlight-deep');
+        tr.style.outline = '2px solid var(--accent, #c9a227)';
+        tr.style.outlineOffset = '-2px';
+        tr.style.background = 'rgba(201,162,39,0.08)';
+      }
+    });
+  }
+
+  function run() {
+    const txt = document.getElementById('flt-texto');
+    const sinFirma = document.getElementById('flt-sin-firma');
+    const sinHoy = document.getElementById('flt-sin-hoy');
+    if (q && txt) { txt.value = q; }
+    if (filtro === 'sin_firma' && sinFirma) sinFirma.checked = true;
+    if (filtro === 'sin_hoy' && sinHoy) sinHoy.checked = true;
+
+    // Edición temporal de un día concreto (Completar ayer, etc.)
+    if (dia && /^gm_(sab|dom|lun|mar|mie|jue|vie)$/.test(dia)) {
+      unlockDia(dia);
+      showSessionBanner(
+        (labels[dia] || dia) + ' editable solo en esta visita. Al salir o recargar sin el enlace, vuelve a bloquearse.'
+      );
+      if (filtro === 'sin_dia') filterSinDia(dia);
+    } else if (filtro === 'sin_hoy') {
+      unlockDia(typeof COL_HOY !== 'undefined' ? COL_HOY : null);
+      showSessionBanner('Filtrado: líneas sin gramos de hoy. La columna de hoy ya es editable.');
+    } else if (filtro === 'sin_firma') {
+      showSessionBanner('Filtrado: líneas sin firmar. Marca la casilla Firma cuando corresponda.');
+    }
+
+    if (typeof applyTableFilters === 'function') applyTableFilters();
+    else if (typeof filterRows === 'function') filterRows();
+
+    if (highlight || q) {
+      const needle = (q || '').toLowerCase();
+      document.querySelectorAll('table.sortable tbody tr').forEach(tr => {
+        if (tr.style.display === 'none') return;
+        const text = (tr.textContent || '').toLowerCase();
+        if (needle && text.includes(needle)) {
+          tr.classList.add('row-highlight-deep');
+          tr.style.outline = '2px solid var(--accent, #c9a227)';
+          tr.style.outlineOffset = '-2px';
+          tr.style.background = 'rgba(201,162,39,0.12)';
+        }
+      });
+      const first = document.querySelector('tr.row-highlight-deep');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // Si hay día desbloqueado, enfocar la primera celda vacía de ese día
+    if (dia) {
+      const empty = document.querySelector('tr:not([style*="display: none"]) input.cell-gm[data-dia="'+dia+'"]:not([value]), tr:not([style*="display: none"]) input.cell-gm[data-dia="'+dia+'"][value=""]');
+      const any = document.querySelector('tr:not([style*="display: none"]) input.cell-gm[data-dia="'+dia+'"]');
+      const target = empty || any;
+      if (target) { try { target.focus(); } catch(e) {} }
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(run, 80));
+  } else {
+    setTimeout(run, 80);
+  }
+})();
+</script>
+
+{% endblock %}
+
+

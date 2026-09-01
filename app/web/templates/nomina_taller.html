@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}Nómina Taller — Fajos Central{% endblock %}
+{% block content %}
+<div class="help-panel">
+  <strong>Taller (TLL):</strong> doble clic en Puesto, Sueldo o Extras para editar (pide confirmación).
+  Total = Sueldo + Extras.
+</div>
+<div class="page-head">
+  <div>
+    <h1>Nómina Taller</h1>
+    <p class="muted">Nombre · Ubic · Puesto · Sueldo · Extras · Total · Firma</p>
+  </div>
+</div>
+<div class="toolbar plt-capture-bar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+  <form class="inline" method="get" action="/nomina-taller">
+    <label>Semana</label>
+    <select name="semana_id" onchange="this.form.submit()">
+      {% for s in semanas %}
+      <option value="{{ s.id }}" {% if s.id==semana_id %}selected{% endif %}>{{ s.codigo }}{% if s.es_actual %} ★{% endif %}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% if semana_id %}
+
+  <button type="button" class="btn btn-secondary" onclick="cerrarSemana({{ semana_id }})" {% if semana_cerrada %}disabled{% endif %}>Cerrar semana</button>
+  <button type="button" class="btn btn-secondary" onclick="reabrirSemana({{ semana_id }})" {% if not semana_cerrada %}disabled{% endif %}>Reabrir</button>
+  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'tll')" title="Duplicar a la semana siguiente">Duplicar → sig. semana</button>
+  {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;">SEMANA CERRADA</span>{% endif %}
+
+  <button type="button" class="btn" onclick="exportFormalTaller({{ semana_id }})">Excel formal Taller</button>
+  <a class="btn btn-secondary" href="/api/export/resumen/{{ semana_id }}">Resumen 3 nóminas</a>
+  <div class="kpi-bar">
+    <span class="kpi-item"><b id="kpi-lineas">{{ totales.lineas or 0 }}</b> líneas</span>
+    <span class="kpi-item money"><b id="kpi-total">${{ '%.2f'|format((totales.total or 0)|float) }}</b> total taller</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if semana_id %}
+<div class="card" style="margin:1rem 0;">
+  <strong>Agregar línea</strong>
+  <form class="inline" style="flex-wrap:wrap;margin-top:0.5rem;" onsubmit="return addTll(event)">
+    <select name="trab" id="tll-trab" required>
+      <option value="">— trabajador —</option>
+      {% for t in trabajadores %}
+      <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}|{{ t.puesto or '' }}">{{ t.nombre_mostrar }} ({{ t.ubic }}) {{ t.puesto or '' }}</option>
+      {% endfor %}
+    </select>
+    <input name="puesto" id="tll-puesto" placeholder="Puesto" style="width:110px;" oninput="tllPuestoHint()">
+    <input name="pitas" id="tll-pitas" type="number" step="1" min="0" placeholder="Pitas (torcedor)" style="width:120px;" title="Solo Torcedores: cantidad de pitas × $3.20">
+    <input name="precio_pita" id="tll-precio" type="number" step="0.1" value="3.2" style="width:70px;" title="Precio por pita">
+    <input name="sueldo" type="number" step="0.1" placeholder="Sueldo" required style="width:100px;">
+    <input name="extras" type="number" step="0.1" placeholder="Extras" value="0" style="width:90px;">
+    <button class="btn" type="submit" {% if semana_cerrada %}disabled{% endif %}>Agregar</button>
+  </form>
+</div>
+<div class="table-wrap table-compact">
+<table class="sortable" data-sortable="1">
+  <colgroup>
+    <col class="col-del"><col class="col-nombre"><col class="col-ubic"><col class="col-puesto"><col class="col-pitas" style="width:4.5rem">
+    <col class="col-sueldo"><col class="col-extras"><col class="col-total"><col class="col-firma">
+  </colgroup>
+  <thead>
+    <tr>
+      <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
+      <th class="col-nombre" data-sort-col="1">Nombre</th>
+      <th data-sort-col="2">Ubic</th><th data-sort-col="3">Puesto</th>
+      <th>Pitas</th>
+      <th data-sort-col="4">Sueldo</th><th data-sort-col="5">Extras</th>
+      <th data-sort-col="6">Total</th><th>Firma</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in lineas %}
+    <tr data-id="{{ r.id }}">
+      <td class="col-actions">
+{% set row_data = {
+          "puesto": r.puesto or "",
+          "sueldo": r.sueldo if r.sueldo is not none else "",
+          "extras": r.extras if r.extras is not none else 0,
+          "firmado": 1 if r.firmado else 0,
+          "nombre": r.nombre,
+          "ubic": r.ubic
+        } %}
+        <div class="row-menu">
+          <button type="button" class="btn-row-menu" title="Menú: editar o eliminar fila" aria-label="Menú de la fila" aria-expanded="false"
+            onclick="event.preventDefault();event.stopPropagation();(window.FajosRowMenu||{toggle:function(){alert('Recarga la página (Ctrl+F5)')}}).toggle(this,event)">⋯</button>
+          <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
+            <button type="button" onclick='openEditTll({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
+            <button type="button" class="danger" onclick="delTll({{ r.id }}); FajosRowMenu.closeAll()">Eliminar</button>
+          </div>
+        </div>
+      </td>
+      <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
+          ondblclick='openEditTll({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}{% set _modo = (r.sueldo_modo or 'variable')|string|lower %}{% if _modo == 'fijo' %} <span class="badge-fijo" title="Sueldo fijo del catálogo{% if r.sueldo_base %} · base ${{ '%.2f'|format(r.sueldo_base|float) }}{% endif %}">Fijo</span>{% else %} <span class="badge-var" title="Sueldo variable — llenar cada semana">Var</span>{% endif %}</td>
+      <td>{{ r.ubic }}</td>
+      <td class="editable-hint"><input class="cell-edit" data-field="puesto" value="{{ r.puesto or '' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint">{% if r.es_torcedor or 'torcedor' in (r.puesto or '')|lower %}<input class="cell-edit" data-field="pitas" type="number" step="1" min="0" value="{{ r.pitas if r.pitas is not none else '' }}" readonly title="Pitas × $3.20 = sueldo">{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="sueldo" type="number" step="0.1" value="{{ r.sueldo if r.sueldo is not none else '' }}" data-modo="{{ r.sueldo_modo or 'variable' }}" readonly title="Doble clic para editar"></td>
+      <td class="editable-hint"><input class="cell-edit money" data-field="extras" type="number" step="0.1" value="{{ r.extras if r.extras is not none else '' }}" readonly title="Doble clic para editar"></td>
+      <td class="cell-total"><strong>${{ '%.2f'|format((r.total or 0)|float) }}</strong></td>
+      <td>
+        <input type="checkbox" {% if r.firmado %}checked{% endif %}
+               onchange="patchTll({{ r.id }}, 'firmado', this.checked ? '1' : '0')">
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">Sin líneas de taller esta semana.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="modal-backdrop" id="modal-edit-tll" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2>Editar línea de taller</h2>
+    <p class="muted" id="edit-tll-who" style="margin-top:0"></p>
+    <form id="form-edit-tll" onsubmit="return FajosRowEdit.submit({formId:'form-edit-tll', modalId:'modal-edit-tll', urlBase:'/api/nomina-taller/linea/'})">
+      <div class="form-grid">
+        <div class="full"><label>Puesto</label><input name="puesto" autocomplete="off"></div>
+        <div><label>Pitas (torcedor)</label><input name="pitas" type="number" step="1" min="0" placeholder="× $3.20"></div>
+        <div><label>Precio/pita</label><input name="precio_pita" type="number" step="0.1" min="0" value="3.2"></div>
+        <div><label>Sueldo</label><input name="sueldo" type="number" step="0.1" min="0"></div>
+        <div><label>Extras</label><input name="extras" type="number" step="0.1" min="0"></div>
+        <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-tll')">Cancelar</button>
+        <button type="submit" class="btn">Guardar fila</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% else %}
+<p class="muted">Selecciona o crea una semana.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="/static/table_sort.js?v=3178"></script>
+<style>
+.badge-fijo{background:#2e7d32;color:#fff;padding:0.1rem 0.35rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem}
+.badge-var{background:#5c6bc0;color:#fff;padding:0.1rem 0.35rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem}
+input.cell-edit.money[data-modo="variable"][value="0"],
+input.cell-edit.money[data-modo="variable"][value="0.0"] { outline: 1px dashed #f9e2af; }
+</style>
+
+<script src="/static/semana_ops.js?v=3122"></script>
+<script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "tll";</script>
+
+<script src="/static/row_menu.js?v=3113"></script>
+<script src="/static/row_edit.js?v=3112"></script>
+<script>
+function openEditTll(id, data) {
+  const who = document.getElementById('edit-tll-who');
+  if (who) who.textContent = (data.nombre || '') + ' · ubic ' + (data.ubic || '');
+  FajosRowEdit.open({
+    modalId: 'modal-edit-tll',
+    formId: 'form-edit-tll',
+    id: id,
+    title: 'Editar línea de taller',
+    data: data
+  });
+}
+</script>
+
+
+<script>
+/* duplicarSemana → semana_ops.js */
+</script>
+
+<script src="/static/cell_edit.js"></script>
+<script>
+const SID = {{ semana_id or 'null' }};
+function toast(msg, err) {
+  if (window.FajosLive) return FajosLive.showToast(msg, err);
+  alert(msg);
+}
+document.getElementById('tll-trab')?.addEventListener('change', function() {
+  const p = (this.value||'').split('|');
+  const puesto = document.getElementById('tll-puesto');
+  if (puesto && p[3]) puesto.value = p[3];
+});
+async function addTll(e) {
+  e.preventDefault();
+  if (!SID) return false;
+  const form = e.target;
+  const parts = (form.trab.value||'').split('|');
+  const body = new FormData();
+  body.set('nombre', parts[0]);
+  body.set('ubic', parts[1]);
+  if (parts[2]) body.set('trabajador_id', parts[2]);
+  body.set('puesto', form.puesto.value || parts[3] || '');
+  body.set('sueldo', form.sueldo.value);
+  body.set('extras', form.extras.value || '0');
+  const res = await fetch('/api/nomina-taller/' + SID, { method: 'POST', body });
+  if (res.ok) location.reload();
+  else toast('Error al guardar', true);
+  return false;
+}
+async function patchTll(id, field, value) {
+  const body = new FormData();
+  body.set(field, value);
+  const res = await fetch('/api/nomina-taller/linea/' + id, { method: 'PATCH', body });
+  if (!res.ok) { toast('No se pudo guardar', true); return false; }
+  toast('Guardado');
+  if (field === 'sueldo' || field === 'extras') {
+    // update total cell client-side
+    const tr = document.querySelector('tr[data-id="'+id+'"]');
+    if (tr) {
+      const s = parseFloat(tr.querySelector('[data-field="sueldo"]').value || 0);
+      const x = parseFloat(tr.querySelector('[data-field="extras"]').value || 0);
+      const cell = tr.querySelector('.cell-total strong');
+      if (cell) cell.textContent = '$' + (s+x).toFixed(2);
+    }
+  }
+  return true;
+}
+async function delTll(id) {
+  if (!confirm('¿Eliminar esta línea de taller?')) return;
+  const res = await fetch('/api/nomina-taller/linea/' + id, { method: 'DELETE' });
+  if (res.ok) location.reload();
+  else toast('No se pudo eliminar', true);
+}
+document.addEventListener('DOMContentLoaded', () => {
+
+  function onSaved(id, field, value, tr) {
+    if (field === 'sueldo' || field === 'extras') {
+      const s = parseFloat(String(tr.querySelector('[data-field="sueldo"]').value||'0').replace(',','.'))||0;
+      const x = parseFloat(String(tr.querySelector('[data-field="extras"]').value||'0').replace(',','.'))||0;
+      const cell = tr.querySelector('.cell-total strong');
+      if (cell) cell.textContent = '$' + (s+x).toFixed(2);
+      let sum = 0;
+      document.querySelectorAll('tr[data-id]').forEach(row => {
+        const a = parseFloat(String(row.querySelector('[data-field="sueldo"]').value||'0').replace(',','.'))||0;
+        const b = parseFloat(String(row.querySelector('[data-field="extras"]').value||'0').replace(',','.'))||0;
+        sum += a+b;
+      });
+      const el = document.getElementById('kpi-total');
+      if (el) el.textContent = '$' + sum.toFixed(2);
+    }
+  }
+
+  function bind() {
+    if (!window.FajosCellEdit) {
+      setTimeout(bind, 50);
+      return;
+    }
+    FajosCellEdit.bindCellEdits({
+      selector: 'input.cell-edit',
+      urlFor: (id) => '/api/nomina-taller/linea/' + id,
+      onSaved: onSaved
+    });
+  }
+  bind();
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var cerrada = {{ 'true' if semana_cerrada else 'false' }};
+  if (!cerrada) return;
+  document.querySelectorAll('input.cell-edit').forEach(function (el) {
+    el.readOnly = true; el.disabled = true;
+  });
+  document.querySelectorAll('input[type="checkbox"]').forEach(function (el) {
+    el.disabled = true;
+  });
+  document.querySelectorAll('.btn-row-menu').forEach(function (b) {
+    b.disabled = true; b.title = 'Semana cerrada';
+  });
+  document.querySelectorAll('td.name-edit').forEach(function (td) {
+    td.ondblclick = null; td.title = 'Semana cerrada';
+  });
+  document.querySelectorAll('form.inline button[type="submit"]').forEach(function (b) {
+    b.disabled = true;
+  });
+});
+</script>
+
+{% endblock %}
+
+<script>
+function tllPuestoHint() {
+  const p = (document.getElementById('tll-puesto')||{}).value || '';
+  const el = document.getElementById('tll-pitas');
+  if (!el) return;
+  el.style.outline = /torcedor/i.test(p) ? '2px solid var(--accent)' : '';
+}
+</script>
+
+<script>
+async function exportFormalTaller(semanaId) {
+  try {
+    const res = await fetch('/api/export/nomina-taller/' + semanaId + '/preview');
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || d.message || 'No se pudo revisar la exportación'); return; }
+    const omit = d.omitidas || 0;
+    const exp = d.exportables || 0;
+    const tot = d.total || 0;
+    if (exp === 0) {
+      alert(
+        'No hay filas con monto > 0 para exportar.\n\n' +
+        'Hay ' + tot + ' línea(s) en pantalla, todas en $0.\n' +
+        'Llena sueldos/extras (o pitas de torcedores) y vuelve a intentar.\n\n' +
+        'Regla: en 0 no se exporta nada.'
+      );
+      return;
+    }
+    let msg = 'Exportar nómina formal Taller\n\n' +
+      'Líneas en tabla: ' + tot + '\n' +
+      'Se exportarán (monto > 0): ' + exp + '\n';
+    if (omit > 0) {
+      msg += 'Se omitirán (en $0): ' + omit + '\n';
+    }
+    msg += '\nRegla: las filas en $0 no van al Excel.\n\n¿Descargar?';
+    if (!confirm(msg)) return;
+    window.location.href = '/api/export/nomina-taller/' + semanaId;
+  } catch (e) {
+    alert('Error al preparar la exportación');
+  }
+}
+</script>

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Buscar — Fajos Piteados Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Buscar</h1>
+    <p class="muted">Trabajadores y semanas / nóminas en un solo lugar</p>
+  </div>
+</div>
+
+<form class="search-box" action="/buscar" method="get" style="max-width:520px;margin-bottom:1.25rem">
+  <input type="search" name="q" value="{{ q }}" placeholder="Nombre, ubic, código de semana..." autofocus>
+  <button type="submit"><i data-lucide="search"></i></button>
+</form>
+
+{% if q %}
+  <p class="muted">Resultados para «{{ q }}»</p>
+
+  <h2><i data-lucide="users" style="width:18px;height:18px;vertical-align:middle"></i> Trabajadores ({{ trabajadores|length }})</h2>
+  {% if trabajadores %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Nombre</th><th>Ubic</th><th>Tipo</th><th>Activo</th></tr>
+    </thead>
+    <tbody>
+      {% for t in trabajadores %}
+      <tr>
+        <td>{{ t.id }}</td>
+        <td><a href="/trabajadores?q={{ t.nombre_mostrar|urlencode }}">{{ t.nombre_mostrar }}</a></td>
+        <td>{{ t.ubic }}</td>
+        <td>
+          {% set tipo = (t.tipo or '')|upper %}
+          {% if 'PLT' in tipo and 'PIT' in tipo %}<span class="badge badge-mix">{{ t.tipo }}</span>
+          {% elif 'PLT' in tipo %}<span class="badge badge-plt">{{ t.tipo }}</span>
+          {% elif 'PIT' in tipo %}<span class="badge badge-pit">{{ t.tipo }}</span>
+          {% elif 'TLL' in tipo %}<span class="badge badge-tll">{{ t.tipo }}</span>
+          {% else %}<span class="badge badge-mix">{{ t.tipo or '—' }}</span>{% endif %}
+        </td>
+        <td>{% if t.activo %}<span class="badge badge-ok">Sí</span>{% else %}<span class="badge badge-off">No</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">Ningún trabajador coincide.</p>
+  {% endif %}
+
+  <h2><i data-lucide="calendar" style="width:18px;height:18px;vertical-align:middle"></i> Semanas ({{ semanas|length }})</h2>
+  {% if semanas %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Código</th><th>Inicio</th><th>Fin</th><th>Notas</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in semanas %}
+      <tr>
+        <td><strong>{{ s.codigo }}</strong></td>
+        <td>{{ s.fecha_inicio }}</td>
+        <td>{{ s.fecha_fin }}</td>
+        <td>{{ s.notas or '—' }}</td>
+        <td>
+          <a class="btn btn-sm btn-secondary" href="/produccion?semana_id={{ s.id }}">Producción</a>
+          <a class="btn btn-sm" href="/api/export/produccion/{{ s.id }}?fmt=xlsx&formal=1">Formal</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">Ninguna semana coincide.</p>
+  {% endif %}
+{% else %}
+  <p class="empty">Escribe un nombre, ubicación o código de semana para buscar.</p>
+{% endif %}
+{% endblock %}

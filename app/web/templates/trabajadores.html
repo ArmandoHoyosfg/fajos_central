@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+{% block title %}Trabajadores — Fajos Piteados Central{% endblock %}
+{% block content %}
+
+<div class="help-panel" id="help-panel">
+  <strong>Consejo:</strong> <strong>＋ Nuevo</strong> da de alta. <strong>Editar</strong> corrige nombre o ubicación. <strong>Baja</strong> no borra el historial: solo deja de salir en capturas nuevas. Puedes <strong>Reactivar</strong> después.
+  <button type="button" class="help-toggle" style="display:block;margin-top:0.4rem"
+          onclick="this.parentElement.hidden=true">Entendido, ocultar</button>
+</div>
+<div class="page-head">
+  <div>
+    <h1>Trabajadores</h1>
+    <p class="muted">Alta, edición, cambios y bajas. Los inactivos no aparecen en captura nueva.</p>
+  </div>
+</div>
+
+<div class="plt-capture-bar trab-actions-bar" id="trab-actions-bar">
+  <button type="button" class="btn" onclick="openEditId(null)">＋ Nuevo</button>
+  <a class="btn btn-secondary" href="/trabajadores/qr-lote">QR de todos</a>
+  <button type="button" class="btn btn-secondary" onclick="syncTodos()" title="Propaga nombre y ubicación del catálogo a Plata, Pita y Taller">Sincronizar nóminas</button>
+  <a class="btn btn-secondary" href="/api/export/trabajadores" title="Descargar catálogo en Excel">Excel</a>
+  <a class="btn btn-secondary" href="/api/export/trabajadores?activos=1" title="Solo activos">Excel activos</a>
+  {% if duplicados %}
+  <a class="btn btn-secondary" href="#unir-fichas">Duplicados ({{ duplicados|length }})</a>
+  {% endif %}
+</div>
+<div id="toast" class="toast-web" hidden></div>
+
+{% if duplicados %}
+<details class="folio-hints-compact" id="unir-fichas">
+  <summary>
+    <span>{{ duplicados|length }} posible(s) duplicado(s)</span>
+    <span class="muted"> — unir o descartar 7 días</span>
+  </summary>
+  <div class="folio-hint-block">
+    <p class="muted" style="margin:0 0 0.4rem;font-size:0.82rem">
+      Mismo nombre, o nombres parecidos en la misma ubicación.
+      <strong>Descartar</strong> oculta la sugerencia una semana (vuelve a salir después si sigue).
+    </p>
+    {% for c in duplicados %}
+    <form class="merge-row" onsubmit="return unirFichas(event)">
+      <div class="merge-row-label">
+        <strong>{{ c.nombre }}</strong>
+        <span class="muted">· {{ c.motivo or 'posible' }} · {{ c.n }} fichas</span>
+      </div>
+      <select name="id_keep" required title="Se queda">
+        {% for d in c.detalle %}
+        <option value="{{ d.id }}" {% if loop.first %}selected{% endif %}>
+          ID {{ d.id }} · ubic {{ d.ubic }} · {{ 'act' if d.activo else 'baja' }}{% if d.tipo %} · {{ d.tipo }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <span class="muted">← keep</span>
+      <select name="id_merge" required title="Se da de baja">
+        {% for d in c.detalle %}
+        <option value="{{ d.id }}" {% if loop.index == 2 %}selected{% endif %}>
+          ID {{ d.id }} · ubic {{ d.ubic }} · {{ 'act' if d.activo else 'baja' }}{% if d.tipo %} · {{ d.tipo }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-xs">Unir</button>
+      <button type="button" class="btn btn-secondary btn-xs"
+              onclick="descartarDup({{ c.detalle[0].id }}, {{ c.detalle[1].id if c.detalle|length > 1 else c.detalle[0].id }})">Descartar</button>
+    </form>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;">
+  <form class="inline" method="get" action="/trabajadores">
+    <input type="search" name="q" value="{{ q or '' }}" placeholder="Buscar nombre o ubic…" style="min-width:220px;">
+    <button type="submit" class="btn btn-secondary">Buscar</button>
+  </form>
+  <label class="muted"><input type="checkbox" id="flt-activos" checked onchange="filterRows()"> Solo activos</label>
+  <input type="search" id="flt-local" placeholder="Filtro rápido…" style="min-width:160px;" oninput="filterRows()">
+  <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.8rem" data-sort-reset="table.sortable">Reset orden</button>
+</div>
+
+<div class="table-wrap no-sticky-col">
+<table class="sortable" data-sortable="1">
+  <thead>
+    <tr>
+      <th data-sort-col="0">ID</th>
+      <th data-sort-col="1">Nombre</th>
+      <th data-sort-col="2">Nombre completo</th>
+      <th data-sort-col="3">Ubic</th>
+      <th data-sort-col="4">Tipo</th>
+      <th data-sort-col="5">Puesto</th>
+      <th>Sueldo</th>
+      <th data-sort-col="7">Estado</th>
+      <th data-sort-col="8">Incorp.</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for t in trabajadores %}
+    <tr data-activo="{{ 1 if t.activo else 0 }}" data-id="{{ t.id }}">
+      <td>{{ t.id }}</td>
+      <td>{{ t.nombre_mostrar }}</td>
+      <td>{{ t.nombre_completo or '—' }}</td>
+      <td>{{ t.ubic }}</td>
+      <td>{{ t.tipo or 'PLT' }}</td>
+      <td>{{ t.puesto or '—' }}</td>
+      <td class="col-sueldo-edit">
+        {% if (t.tipo or '')|upper in ['TLL','TALLER'] or 'TLL' in (t.tipo or '')|upper %}
+        <div style="display:flex;flex-direction:column;gap:0.25rem;min-width:7rem;">
+          <select class="sueldo-modo-sel" data-id="{{ t.id }}" title="Tipo de sueldo taller"
+                  onchange="guardarSueldoModo({{ t.id }}, this)">
+            <option value="variable" {% if (t.sueldo_modo or 'variable') != 'fijo' %}selected{% endif %}>Variable</option>
+            <option value="fijo" {% if (t.sueldo_modo or 'variable') == 'fijo' %}selected{% endif %}>Fijo</option>
+          </select>
+          <input type="number" class="sueldo-base-inp" data-id="{{ t.id }}" step="0.1" min="0"
+                 placeholder="Base $" title="Sueldo base semanal (fijo)"
+                 value="{{ t.sueldo_base if t.sueldo_base is not none else '' }}"
+                 {% if (t.sueldo_modo or 'variable') != 'fijo' %}disabled{% endif %}
+                 onchange="guardarSueldoBase({{ t.id }}, this)"
+                 style="width:100%;max-width:6.5rem;">
+        </div>
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if t.activo %}
+        <span style="color:#a6e3a1;font-weight:600">Activo</span>
+        {% else %}
+        <span style="color:#f38ba8;font-weight:600">Baja</span>
+        {% endif %}
+      </td>
+      <td>{{ t.fecha_incorporacion or '—' }}</td>
+      <td style="white-space:nowrap">
+        <a class="btn btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.8rem" href="/trabajadores/{{ t.id }}/qr" title="Código QR">QR</a>
+        <button type="button" class="btn btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.8rem" onclick="verDesempeno({{ t.id }})" title="Desempeño">📈</button>
+        <button type="button" class="btn btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.8rem"
+                onclick="openEditId({{ t.id }})">Editar</button>
+        {% if t.activo %}
+        <button type="button" class="btn btn-danger" style="padding:0.2rem 0.5rem;font-size:0.8rem"
+                onclick="baja({{ t.id }}, '{{ t.nombre_mostrar }}')">Baja</button>
+        {% else %}
+        <button type="button" class="btn" style="padding:0.2rem 0.5rem;font-size:0.8rem"
+                onclick="activar({{ t.id }})">Reactivar</button>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="10" class="muted">No hay trabajadores. Agrega el primero.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="modal-backdrop" id="modal-trab" hidden>
+  <div class="modal" role="dialog">
+    <h2 id="modal-trab-title">Trabajador</h2>
+    <form id="form-trab" onsubmit="return saveTrab(event)">
+      <input type="hidden" name="id" id="trab-id" value="">
+      <div class="form-grid">
+        <div class="full">
+          <label>Nombre (mostrar)</label>
+          <input name="nombre_mostrar" id="trab-nombre" required>
+        </div>
+        <div class="full">
+          <label>Nombre completo</label>
+          <input name="nombre_completo" id="trab-completo">
+        </div>
+        <div>
+          <label>Ubicación</label>
+          <input name="ubic" id="trab-ubic" type="number" min="1" required>
+        </div>
+        <div>
+          <label>Tipo</label>
+          <select name="tipo" id="trab-tipo">
+            <option>PLT</option><option>PIT</option><option>TLL</option>
+            <option>PLT/PIT</option><option>Mixto</option>
+          </select>
+        </div>
+        <div>
+          <label>Puesto</label>
+          <input name="puesto" id="trab-puesto" placeholder="solo TLL / opcional">
+        </div>
+        <div>
+          <label>Sueldo (Taller)</label>
+          <select name="sueldo_modo" id="trab-sueldo-modo">
+            <option value="variable">Variable (llenar cada semana)</option>
+            <option value="fijo">Fijo (se copia al duplicar)</option>
+          </select>
+        </div>
+        <div>
+          <label>Sueldo base $</label>
+          <input name="sueldo_base" id="trab-sueldo-base" type="number" step="0.1" min="0" placeholder="Solo si es fijo">
+        </div>
+        <div>
+          <label>Incorporación</label>
+          <input name="fecha_incorporacion" id="trab-fecha" type="date">
+        </div>
+        <div class="full">
+          <label>Notas</label>
+          <input name="notas" id="trab-notas">
+        </div>
+        <div>
+          <label>Estado</label>
+          <select name="activo" id="trab-activo">
+            <option value="1">Activo</option>
+            <option value="0">Baja</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-trab')">Cancelar</button>
+        <button type="submit" class="btn">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-desempeno" hidden>
+  <div class="modal" role="dialog" style="max-width:420px;">
+    <h2>Desempeño / folios</h2>
+    <div id="desempeno-body" class="muted">Cargando…</div>
+    <div class="actions" style="margin-top:1rem;">
+      <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-desempeno').hidden=true">Cerrar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/table_sort.js?v=3178"></script>
+<button type="button" class="btn btn-secondary" style="display:none" data-sort-reset="table.sortable"></button>
+
+<script>
+function showToast(msg, err) {
+  if (window.FajosLive) return FajosLive.showToast(msg, err);
+  const el = document.getElementById('toast');
+  if (!el) { alert(msg); return; }
+  el.hidden = false;
+  el.textContent = msg;
+  el.className = 'toast-web' + (err ? ' err' : ' ok');
+  clearTimeout(window._tt); window._tt = setTimeout(() => el.hidden = true, 2800);
+}
+function openModal(id) { const el = document.getElementById(id); if (el) el.hidden = false; }
+function closeModal(id) { const el = document.getElementById(id); if (el) el.hidden = true; }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop:not([hidden])').forEach(m => m.hidden = true);
+});
+
+function fillForm(t) {
+  document.getElementById('modal-trab-title').textContent = t ? 'Editar trabajador' : 'Nuevo trabajador';
+  document.getElementById('trab-id').value = t ? t.id : '';
+  document.getElementById('trab-nombre').value = t ? (t.nombre_mostrar || '') : '';
+  document.getElementById('trab-completo').value = t ? (t.nombre_completo || '') : '';
+  document.getElementById('trab-ubic').value = t ? (t.ubic || '') : '';
+  document.getElementById('trab-tipo').value = t ? (t.tipo || 'PLT') : 'PLT';
+  document.getElementById('trab-puesto').value = t ? (t.puesto || '') : '';
+  const sm = document.getElementById('trab-sueldo-modo');
+  const sb = document.getElementById('trab-sueldo-base');
+  if (sm) sm.value = t ? (t.sueldo_modo || 'variable') : 'variable';
+  if (sb) sb.value = t && t.sueldo_base != null ? t.sueldo_base : '';
+  document.getElementById('trab-fecha').value = t && t.fecha_incorporacion ? String(t.fecha_incorporacion).slice(0,10) : '';
+  document.getElementById('trab-notas').value = t ? (t.notas || '') : '';
+  document.getElementById('trab-activo').value = t && !t.activo ? '0' : '1';
+}
+function openEdit(t) { fillForm(t); openModal('modal-trab'); }
+async function openEditId(id) {
+  if (!id) { fillForm(null); openModal('modal-trab'); return; }
+  try {
+    const res = await fetch('/api/trabajadores/' + id);
+    const t = await res.json();
+    if (!res.ok) { showToast(t.message || 'No encontrado', true); return; }
+    fillForm(t);
+    openModal('modal-trab');
+  } catch (e) { showToast('Error al cargar', true); }
+}
+
+
+async function saveTrab(e) {
+  e.preventDefault();
+  const form = document.getElementById('form-trab');
+  const fd = new FormData(form);
+  const id = fd.get('id');
+  const body = new FormData();
+  ['nombre_mostrar','nombre_completo','ubic','tipo','puesto','sueldo_modo','sueldo_base','fecha_incorporacion','notas','activo'].forEach(k => {
+    const v = fd.get(k);
+    if (v !== null && v !== undefined) body.set(k, v);
+  });
+  let res;
+  if (id) {
+    res = await fetch('/api/trabajadores/' + id, { method: 'PUT', body });
+  } else {
+    res = await fetch('/api/trabajadores', { method: 'POST', body });
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    const sync = data.sync || {};
+    const n = (sync.plata||0)+(sync.pita||0)+(sync.taller||0);
+    showToast(id
+      ? ('Trabajador actualizado' + (n ? ' · nóminas alineadas (' + n + ')' : ''))
+      : 'Trabajador creado');
+    closeModal('modal-trab');
+    setTimeout(() => location.reload(), 350);
+  } else {
+    showToast(data.user_message || data.message || 'Error al guardar', true);
+  }
+  return false;
+}
+
+async function baja(id, nombre) {
+  if (!confirm('¿Dar de baja a ' + nombre + '?\nNo se borran historiales; deja de aparecer en captura nueva.')) return;
+  const res = await fetch('/api/trabajadores/' + id + '/baja', { method: 'POST', body: new FormData() });
+  if (res.ok) { showToast('Baja registrada'); setTimeout(() => location.reload(), 350); }
+  else showToast('No se pudo dar de baja', true);
+}
+async function activar(id) {
+  const res = await fetch('/api/trabajadores/' + id + '/activar', { method: 'POST', body: new FormData() });
+  if (res.ok) { showToast('Reactivado'); setTimeout(() => location.reload(), 350); }
+  else showToast('No se pudo reactivar', true);
+}
+
+
+async function verDesempeno(id) {
+  try {
+    const res = await fetch('/api/trabajadores/' + id + '/desempeno');
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(d.user_message || d.message || d.detail || ('HTTP ' + res.status), true);
+      return;
+    }
+    const box = document.getElementById('desempeno-body');
+    if (!box) {
+      alert('Abiertos: ' + (d.folios_abiertos||0) + ' · Terminados: ' + (d.folios_terminados||0));
+      return;
+    }
+    let html = '<p><strong>Abiertos:</strong> ' + (d.folios_abiertos||0)
+      + ' · <strong>Terminados:</strong> ' + (d.folios_terminados||0)
+      + ' · <strong>Gramos:</strong> ' + (d.gramos_registrados||0) + '</p>';
+    html += '<ul style="margin:0.5rem 0;padding-left:1.2rem;max-height:240px;overflow:auto;">';
+    (d.trabajos||[]).forEach(w => {
+      html += '<li>' + (w.folio || '(sin folio)') + ' · ' + (w.modelo || '')
+        + ' · ' + (w.material || '')
+        + (w.activo ? ' <span style="color:#a6e3a1">activo</span>' : ' <span class="muted">terminado</span>')
+        + '</li>';
+    });
+    if (!(d.trabajos||[]).length) html += '<li class="muted">Sin folios registrados</li>';
+    html += '</ul>';
+    box.innerHTML = html;
+    document.getElementById('modal-desempeno').hidden = false;
+  } catch (e) {
+    showToast('Error de red al cargar desempeño', true);
+    console.error(e);
+  }
+}
+async function guardarSueldoModo(id, sel) {
+  const modo = sel.value;
+  const body = new FormData();
+  body.set('sueldo_modo', modo);
+  const res = await fetch('/api/trabajadores/' + id, { method: 'PATCH', body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showToast(data.user_message || data.message || 'No se guardó el tipo de sueldo', true);
+    return;
+  }
+  const inp = document.querySelector('.sueldo-base-inp[data-id="' + id + '"]');
+  if (inp) inp.disabled = (modo !== 'fijo');
+  showToast(modo === 'fijo' ? 'Marcado como sueldo fijo' : 'Marcado como variable');
+}
+async function guardarSueldoBase(id, inp) {
+  const body = new FormData();
+  body.set('sueldo_base', inp.value === '' ? '' : inp.value);
+  body.set('sueldo_modo', 'fijo');
+  const res = await fetch('/api/trabajadores/' + id, { method: 'PATCH', body });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    showToast(data.user_message || data.message || 'No se guardó el sueldo base', true);
+    return;
+  }
+  showToast('Sueldo base actualizado');
+}
+
+async function descartarDup(idA, idB) {
+  if (!confirm('¿Ocultar esta sugerencia durante 7 días?\nSi sigue siendo duplicado, volverá a aparecer después.')) return;
+  const fd = new FormData();
+  fd.set('id_a', idA);
+  fd.set('id_b', idB);
+  try {
+    const res = await fetch('/api/trabajadores/duplicados/descartar', { method: 'POST', body: fd });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showToast(d.error || d.message || 'No se pudo descartar', true);
+      return;
+    }
+    showToast('Sugerencia ocultada por 7 días');
+    setTimeout(() => location.reload(), 400);
+  } catch (e) { showToast('Error de red', true); }
+}
+async function unirFichas(e) {
+
+  e.preventDefault();
+  const form = e.target;
+  const keep = form.querySelector('[name="id_keep"]').value;
+  const merge = form.querySelector('[name="id_merge"]').value;
+  if (!keep || !merge) { showToast('Elige las dos fichas', true); return false; }
+  if (keep === merge) {
+    showToast('Elige dos fichas distintas: una se queda y la otra se da de baja', true);
+    return false;
+  }
+  if (!confirm('Se quedará la ficha ID ' + keep + '.\nLa ficha ID ' + merge + ' pasará a baja y todas sus nóminas se moverán a la principal.\n\n¿Continuar?')) return false;
+  const fd = new FormData();
+  fd.set('id_keep', keep);
+  fd.set('id_merge', merge);
+  try {
+    const res = await fetch('/api/trabajadores/merge', { method: 'POST', body: fd });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || d.ok === false) {
+      showToast(d.error || d.user_message || d.message || 'No se pudo unir', true);
+      return false;
+    }
+    const c = d.counts || {};
+    showToast('Unido. Movidas: Plata ' + (c.plata||0) + ', Pita ' + (c.pita||0) + ', Taller ' + (c.taller||0));
+    setTimeout(() => location.reload(), 500);
+  } catch (err) {
+    showToast('Error de red', true);
+  }
+  return false;
+}
+
+async function syncTodos() {
+  if (!confirm('¿Propagar nombre y ubicación de TODOS los trabajadores a las nóminas (Plata, Pita, Taller)?\n\nNo borra gramos ni montos; solo alinea nombre/ubic.')) return;
+  try {
+    const res = await fetch('/api/trabajadores/sincronizar-todo', { method: 'POST', body: new FormData() });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(d.user_message || d.message || 'Error al sincronizar', true); return; }
+    showToast('Sincronizado: Plata ' + (d.plata||0) + ', Pita ' + (d.pita||0) + ', Taller ' + (d.taller||0));
+  } catch (e) { showToast('Error de red', true); }
+}
+function filterRows() {
+  const solo = document.getElementById('flt-activos').checked;
+  const q = (document.getElementById('flt-local').value || '').toLowerCase();
+  document.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    let show = true;
+    if (solo && tr.dataset.activo !== '1') show = false;
+    if (q && !tr.textContent.toLowerCase().includes(q)) show = false;
+    tr.style.display = show ? '' : 'none';
+  });
+}
+document.addEventListener('DOMContentLoaded', filterRows);
+</script>
+{% endblock %}

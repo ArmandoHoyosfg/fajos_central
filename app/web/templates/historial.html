@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Historial semana — Fajos Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Historial de cambios</h1>
+    <p class="muted">Semana {{ semana.codigo if semana else semana_id }} · últimos movimientos de gramos y campos</p>
+  </div>
+  <div class="toolbar">
+    <a class="btn btn-secondary" href="/produccion?semana_id={{ semana_id }}">← Plata</a>
+  </div>
+</div>
+{% if not rows %}
+<p class="muted">Aún no hay movimientos registrados en esta semana (o la tabla de historial no existe — ejecuta <code>db/schema/002_historial.sql</code>).</p>
+{% else %}
+<div class="table-wrap table-compact">
+<table>
+  <thead>
+    <tr>
+      <th>Cuándo</th><th>Nombre</th><th>Ubic</th><th>Folio</th>
+      <th>Campo</th><th>Antes</th><th>Después</th><th>Origen</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for h in rows %}
+    <tr>
+      <td>{{ h.creado_en }}</td>
+      <td>{{ h.nombre or '—' }}</td>
+      <td>{{ h.ubic or '—' }}</td>
+      <td>{{ h.folio or '—' }}</td>
+      <td><code>{{ h.campo }}</code></td>
+      <td>{{ h.valor_anterior if h.valor_anterior is not none else '—' }}</td>
+      <td>{{ h.valor_nuevo if h.valor_nuevo is not none else '—' }}</td>
+      <td>{{ h.origen or '' }}{% if h.usuario %} · {{ h.usuario }}{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

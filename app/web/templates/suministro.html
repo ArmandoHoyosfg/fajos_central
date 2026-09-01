@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}Suministro {{ label_dia }} — Fajos{% endblock %}
+{% block content %}
+<style>
+  .sum-toolbar {
+    display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem;
+    align-items: flex-end; margin-bottom: 1rem;
+    padding: 0.85rem 1rem; border-radius: 12px;
+    background: var(--surface-2, rgba(127,127,127,0.08));
+    border: 1px solid var(--border, rgba(127,127,127,0.2));
+  }
+  .sum-toolbar label {
+    display: flex; flex-direction: column; gap: 0.25rem;
+    font-size: 0.78rem; color: var(--muted); font-weight: 600;
+  }
+  .sum-toolbar select, .sum-toolbar input[type="number"] {
+    min-width: 6.5rem; padding: 0.35rem 0.5rem; border-radius: 8px;
+    border: 1px solid var(--border, #ccc); background: var(--surface, #fff);
+    color: var(--text); font-size: 0.9rem;
+  }
+  .sum-toolbar .chk {
+    flex-direction: row; align-items: center; gap: 0.4rem;
+    margin-top: 1.1rem; font-weight: 500; font-size: 0.85rem;
+  }
+  .sum-actions { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem; align-items:center; }
+  .sum-sheet {
+    background: #fff; color: #111; border-radius:12px; padding:1rem; overflow:auto;
+    --sum-fs: 11pt;
+  }
+  .sum-sheet.fs-muy_chica { --sum-fs: 8pt; }
+  .sum-sheet.fs-chica { --sum-fs: 9pt; }
+  .sum-sheet.fs-normal { --sum-fs: 11pt; }
+  .sum-sheet.fs-grande { --sum-fs: 13pt; }
+  .sum-sheet.fs-muy_grande { --sum-fs: 15pt; }
+  .sum-sheet h1 { margin:0 0 0.25rem; font-size: calc(var(--sum-fs) + 4pt); color: #1F4E79; }
+  .sum-meta { color: #444; font-size: var(--sum-fs); margin-bottom:0.75rem; }
+  table.sum-table { width:100%; border-collapse:collapse; font-size: var(--sum-fs); }
+  table.sum-table th, table.sum-table td {
+    border:1px solid #333; padding:0.28rem 0.4rem; text-align:left;
+  }
+  table.sum-table th { background:#1F4E79; color:#fff; text-align:center; font-weight:600; }
+  table.sum-table td.av, table.sum-table td.tot { min-width:2.6rem; height:1.4em; text-align:center; }
+  table.sum-table th.col-ubic, table.sum-table td.col-ubic { width: 2.8rem; max-width: 3.2rem; text-align: center; }
+  table.sum-table th.col-mat, table.sum-table td.col-mat { width: 2.6rem; max-width: 3rem; text-align: center; }
+  table.sum-table th.col-mod, table.sum-table td.col-mod { width: 4.5rem; max-width: 5.5rem; }
+  table.sum-table th.col-folio, table.sum-table td.col-folio { width: 5rem; max-width: 6rem; }
+  table.sum-table th.col-av, table.sum-table td.col-av { min-width: 2.8rem; }
+  table.sum-table th.col-nom, table.sum-table td.col-nom { min-width: 7rem; }
+  table.sum-table tr.blank-row { background:#FFFDE7; }
+  .sum-sheet.tema-material table.sum-table tr.mat-ag3 { background:#E3F2FD; }
+  .sum-sheet.tema-material table.sum-table tr.mat-ag4 { background:#E8F5E9; }
+  .sum-sheet.tema-material table.sum-table tr.mat-dol { background:#FFF8E1; }
+  .sum-sheet.tema-material table.sum-table tr.mat-dlo { background:#FCE4EC; }
+  .sum-sheet.tema-claro table.sum-table tr:not(.blank-row) { background:#fff; }
+  .sum-sheet.tema-cian table.sum-table tr:not(.blank-row) { background:#B3E5FC; }
+  .sum-sheet.tema-magenta table.sum-table tr:not(.blank-row) { background:#F8BBD0; }
+  .sum-sheet.tema-amarillo table.sum-table tr:not(.blank-row) { background:#FFF59D; }
+  .sum-sheet.tema-verde table.sum-table tr:not(.blank-row) { background:#C8E6C9; }
+  .sum-sheet.tema-negro table.sum-table tr:not(.blank-row) { background:#E0E0E0; }
+  .hint { font-size:0.82rem; color: var(--muted); margin: 0.25rem 0 0.75rem; }
+
+  @page {
+    size: {% if papel == 'a4' %}A4 portrait{% elif papel in ['legal','oficio'] %}legal portrait{% else %}letter portrait{% endif %};
+    margin: 12mm;
+  }
+  @media print {
+    .no-print, nav, header, footer, .topbar, .nav, .dev-badge, .theme-switch, .brand { display:none !important; }
+    body { background:#fff !important; }
+    .sum-sheet { box-shadow:none; padding:0; border-radius:0; }
+    table.sum-table { font-size: var(--sum-fs); }
+  }
+</style>
+
+<div class="page-head no-print">
+  <h1>Suministro del día</h1>
+  <p class="muted">Formato para anotar gramos a mano. Fecha y día ya van impresos. Filas amarillas = folio nuevo.</p>
+</div>
+
+<form id="sum-opts" class="sum-toolbar no-print" method="get" action="/suministro">
+  {% if semana_id %}<input type="hidden" name="semana_id" value="{{ semana_id }}">{% endif %}
+  <label>Avances
+    <select name="avances" title="De 2 a 10 columnas de avance">
+      {% for n in range(2, 11) %}
+      <option value="{{ n }}" {% if avances == n %}selected{% endif %}>{{ n }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Filas extra
+    <select name="extras">
+      {% for n in [0,1,2,3,4] %}
+      <option value="{{ n }}" {% if extras == n %}selected{% endif %}>{{ n }} por trabajador</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Papel
+    <select name="papel">
+      <option value="letter" {% if papel == 'letter' %}selected{% endif %}>Carta (Letter)</option>
+      <option value="legal" {% if papel in ['legal','oficio'] %}selected{% endif %}>Oficio (Legal)</option>
+      <option value="a4" {% if papel == 'a4' %}selected{% endif %}>A4</option>
+    </select>
+  </label>
+  <label>Letra
+    <select name="fuente">
+      <option value="muy_chica" {% if fuente == 'muy_chica' %}selected{% endif %}>Muy chica</option>
+      <option value="chica" {% if fuente == 'chica' %}selected{% endif %}>Chica</option>
+      <option value="normal" {% if fuente == 'normal' %}selected{% endif %}>Normal</option>
+      <option value="grande" {% if fuente == 'grande' %}selected{% endif %}>Grande</option>
+      <option value="muy_grande" {% if fuente == 'muy_grande' %}selected{% endif %}>Muy grande</option>
+    </select>
+  </label>
+  <label>Colores / tóner
+    <select name="tema">
+      <option value="material" {% if tema == 'material' %}selected{% endif %}>Por material</option>
+      <option value="claro" {% if tema == 'claro' %}selected{% endif %}>Claro (ahorra tinta)</option>
+      <option value="cian" {% if tema == 'cian' %}selected{% endif %}>Más cian (azul)</option>
+      <option value="magenta" {% if tema == 'magenta' %}selected{% endif %}>Más magenta</option>
+      <option value="amarillo" {% if tema == 'amarillo' %}selected{% endif %}>Más amarillo</option>
+      <option value="verde" {% if tema == 'verde' %}selected{% endif %}>Más verde</option>
+      <option value="negro" {% if tema == 'negro' %}selected{% endif %}>Gris / más negro</option>
+    </select>
+  </label>
+  <label class="chk"><input type="checkbox" name="folio" value="1" {% if mostrar_folio %}checked{% endif %}> Folio</label>
+  <label class="chk"><input type="checkbox" name="modelo" value="1" {% if mostrar_modelo %}checked{% endif %}> Modelo</label>
+  <label class="chk"><input type="checkbox" name="mat" value="1" {% if mostrar_mat %}checked{% endif %}> Material</label>
+  <label class="chk"><input type="checkbox" name="obs" value="1" {% if mostrar_obs %}checked{% endif %}> Observaciones</label>
+  <label class="chk"><input type="checkbox" name="generico" value="1" {% if generico %}checked{% endif %}> Modo genérico</label>
+  <label>Repeticiones
+    <select name="reps" title="Solo en modo genérico: veces que se repite cada nombre">
+      {% for n in [1,2,3,4,5,6,8,10] %}
+      <option value="{{ n }}" {% if reps == n %}selected{% endif %}>{{ n }}× por nombre</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="btn btn-secondary">Aplicar</button>
+</form>
+<p class="hint no-print">
+  <strong>Modo genérico:</strong> solo UBIC + NOMBRE rellenos; el resto en blanco y cada trabajador se repite N veces.
+  Columnas UBIC/Mat/Modelo compactas para dar espacio a Av1…AvN. Hasta 10 columnas de avance (Av1–Av10).
+</p>
+
+<div class="sum-actions no-print">
+  <a class="btn" id="btn-xlsx" href="#">Descargar Excel</a>
+  <button type="button" class="btn btn-secondary" onclick="window.print()">Imprimir</button>
+  <a class="btn btn-secondary" href="/produccion{% if semana_id %}?semana_id={{ semana_id }}{% endif %}">Volver a Plata</a>
+  <span class="muted">
+    {% if generico %}Modo genérico · {{ reps }}× por nombre{% else %}{{ total_lineas }} folio(s) · {{ extras }} extra{% endif %}
+    · {{ n_avances }} avances
+  </span>
+</div>
+
+<div class="sum-sheet fs-{{ fuente }} tema-{{ tema }}">
+  <h1>TALLER DE FAJOS CENTRAL — SUMINISTRO DIARIO</h1>
+  <div class="sum-meta">
+    <strong>FECHA:</strong> {{ fecha }}
+    &nbsp;·&nbsp; <strong>DÍA:</strong> {{ label_dia }}
+    &nbsp;·&nbsp; <strong>SEMANA:</strong> {{ codigo_semana or '—' }}
+  </div>
+  <table class="sum-table">
+    <thead>
+      <tr>
+        <th class="col-ubic">UBIC</th><th class="col-nom">NOMBRE</th>
+        {% if mostrar_folio %}<th class="col-folio">FOLIO</th>{% endif %}
+        {% if mostrar_modelo %}<th class="col-mod">MODELO</th>{% endif %}
+        {% if mostrar_mat %}<th class="col-mat">MAT</th>{% endif %}
+        {% for i in range(1, n_avances + 1) %}<th class="col-av">Av{{ i }}</th>{% endfor %}
+        <th class="col-av">TOTAL</th>
+        {% if mostrar_obs %}<th>OBSERVACIONES</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="{% if r.blank %}blank-row{% else %}mat-{{ (r.material or '')|lower }}{% endif %}">
+        <td class="col-ubic">{{ r.ubic }}</td>
+        <td class="col-nom">{{ r.nombre }}</td>
+        {% if mostrar_folio %}<td class="col-folio">{% if not generico %}{{ r.folio }}{% endif %}</td>{% endif %}
+        {% if mostrar_modelo %}<td class="col-mod">{% if not generico %}{{ r.modelo }}{% endif %}</td>{% endif %}
+        {% if mostrar_mat %}<td class="col-mat">{% if not generico %}{{ r.material }}{% endif %}</td>{% endif %}
+        {% for i in range(1, n_avances + 1) %}<td class="av col-av"></td>{% endfor %}
+        <td class="tot col-av"></td>
+        {% if mostrar_obs %}<td></td>{% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="20" class="muted">Sin trabajos activos en la semana.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p style="margin-top:0.75rem;font-size:0.85rem;color:#555">
+    Capturó: ______________ &nbsp; Revisó: ______________
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById('sum-opts');
+  if (!form) return;
+
+  function qsFromForm() {
+    var p = new URLSearchParams();
+    {% if semana_id %}p.set('semana_id', '{{ semana_id }}');{% endif %}
+    // selects
+    ['avances', 'extras', 'papel', 'fuente', 'tema', 'reps'].forEach(function (name) {
+      var el = form.elements.namedItem(name);
+      if (el && el.value != null) p.set(name, el.value);
+    });
+    // checkboxes: ALWAYS send 0 or 1 (si no se envían, el servidor asume 1)
+    ['folio', 'modelo', 'mat', 'obs', 'generico'].forEach(function (name) {
+      var el = form.elements.namedItem(name);
+      p.set(name, (el && el.checked) ? '1' : '0');
+    });
+    return p.toString();
+  }
+
+  function applyOpts(e) {
+    if (e) e.preventDefault();
+    var q = qsFromForm();
+    window.location.href = '/suministro?' + q;
+    return false;
+  }
+
+  form.addEventListener('submit', applyOpts);
+
+  // Cualquier cambio de select o checkbox reaplica la vista
+  form.querySelectorAll('select, input[type="checkbox"]').forEach(function (el) {
+    el.addEventListener('change', applyOpts);
+  });
+
+  var btn = document.getElementById('btn-xlsx');
+  if (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      window.location.href = '/api/export/suministro?' + qsFromForm();
+    });
+  }
+})();
+</script>
+{% endblock %}
