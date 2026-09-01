@@ -14,9 +14,15 @@
   {% if semanas %}
     {% set actual = semanas | selectattr('es_actual') | list %}
     {% if actual %}
-      · Semana actual: <span class="badge-actual">{{ actual[0].codigo }}</span>
+      <span class="sep">·</span>
+      <span>Semana actual:</span>
+      <span class="badge-actual">{{ actual[0].codigo }}</span>
+      {% if actual[0].fecha_inicio and actual[0].fecha_fin %}
+      <span class="semana-rango">({{ actual[0].fecha_inicio }} → {{ actual[0].fecha_fin }})</span>
+      {% endif %}
     {% else %}
-      · <span class="muted">Ninguna semana en BD cubre hoy</span>
+      <span class="sep">·</span>
+      <span class="muted">Ninguna semana en BD cubre hoy</span>
     {% endif %}
   {% endif %}
 </div>

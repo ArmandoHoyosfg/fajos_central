@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.21.6] — 2026-09-01
+
+### UI: barra «Hoy / Semana actual»
+- Deja de usar fondo oscuro fijo (chocaba con tema Claro)
+- Usa colores del tema y muestra el rango de fechas ISO junto al código
+
 ## [3.21.5] — 2026-08-31
 
 ### Fix: /dev NameError `method`
