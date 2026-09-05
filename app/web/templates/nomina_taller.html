@@ -276,20 +276,14 @@ document.addEventListener('DOMContentLoaded', function () {
     b.disabled = true;
   });
 });
-</script>
 
-{% endblock %}
-
-<script>
 function tllPuestoHint() {
   const p = (document.getElementById('tll-puesto')||{}).value || '';
   const el = document.getElementById('tll-pitas');
   if (!el) return;
   el.style.outline = /torcedor/i.test(p) ? '2px solid var(--accent)' : '';
 }
-</script>
 
-<script>
 async function exportFormalTaller(semanaId) {
   try {
     const res = await fetch('/api/export/nomina-taller/' + semanaId + '/preview');
@@ -321,3 +315,5 @@ async function exportFormalTaller(semanaId) {
   }
 }
 </script>
+
+{% endblock %}

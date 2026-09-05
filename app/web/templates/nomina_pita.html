@@ -260,11 +260,7 @@ document.addEventListener('DOMContentLoaded', function () {
     b.disabled = true;
   });
 });
-</script>
 
-{% endblock %}
-
-<script>
 async function exportFormalPita(semanaId) {
   try {
     const res = await fetch('/api/export/nomina-pita/' + semanaId + '/preview');
@@ -296,3 +292,5 @@ async function exportFormalPita(semanaId) {
   }
 }
 </script>
+
+{% endblock %}
