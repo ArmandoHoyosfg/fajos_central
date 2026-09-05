@@ -223,20 +223,47 @@ async function delTll(id) {
 }
 document.addEventListener('DOMContentLoaded', () => {
 
-  function onSaved(id, field, value, tr) {
+  function recalcKpiTaller() {
+    let sum = 0;
+    document.querySelectorAll('tr[data-id]').forEach(function (row) {
+      const su = row.querySelector('[data-field="sueldo"]');
+      const ex = row.querySelector('[data-field="extras"]');
+      const a = parseFloat(String((su && su.value) || '0').replace(',', '.')) || 0;
+      const b = parseFloat(String((ex && ex.value) || '0').replace(',', '.')) || 0;
+      sum += a + b;
+    });
+    document.querySelectorAll('body *').forEach(function (el) {
+      if (el.childNodes.length === 1 && /\$[0-9]+\.[0-9]{2}\s*total taller/i.test(el.textContent || '')) {
+        el.innerHTML = el.innerHTML.replace(/\$[0-9]+\.[0-9]{2}/, '$' + sum.toFixed(2));
+      }
+    });
+  }
+function onSaved(id, field, value, tr, result) {
+    result = result || {};
+    // Torcedor: al guardar pitas el API recalcula sueldo
+    if (field === 'pitas' || field === 'precio_pita') {
+      if (result.sueldo != null) {
+        const sInp = tr.querySelector('[data-field="sueldo"]');
+        if (sInp) { sInp.value = result.sueldo; sInp.dataset.orig = String(result.sueldo); }
+      }
+      if (result.total != null) {
+        const cell = tr.querySelector('.cell-total strong') || tr.querySelector('.cell-total');
+        if (cell) cell.textContent = '$' + (parseFloat(result.total) || 0).toFixed(2);
+      } else {
+        const s = parseFloat(String((tr.querySelector('[data-field="sueldo"]')||{}).value||'0').replace(',','.'))||0;
+        const x = parseFloat(String((tr.querySelector('[data-field="extras"]')||{}).value||'0').replace(',','.'))||0;
+        const cell = tr.querySelector('.cell-total strong');
+        if (cell) cell.textContent = '$' + (s+x).toFixed(2);
+      }
+      recalcKpiTaller();
+      return;
+    }
     if (field === 'sueldo' || field === 'extras') {
       const s = parseFloat(String(tr.querySelector('[data-field="sueldo"]').value||'0').replace(',','.'))||0;
       const x = parseFloat(String(tr.querySelector('[data-field="extras"]').value||'0').replace(',','.'))||0;
       const cell = tr.querySelector('.cell-total strong');
       if (cell) cell.textContent = '$' + (s+x).toFixed(2);
-      let sum = 0;
-      document.querySelectorAll('tr[data-id]').forEach(row => {
-        const a = parseFloat(String(row.querySelector('[data-field="sueldo"]').value||'0').replace(',','.'))||0;
-        const b = parseFloat(String(row.querySelector('[data-field="extras"]').value||'0').replace(',','.'))||0;
-        sum += a+b;
-      });
-      const el = document.getElementById('kpi-total');
-      if (el) el.textContent = '$' + sum.toFixed(2);
+      recalcKpiTaller();
     }
   }
 
@@ -318,6 +345,42 @@ async function exportFormalTaller(semanaId) {
     alert('Error al preparar la exportación');
   }
 }
+</script>
+
+
+<script>
+(function () {
+  const PRECIO_DEF = 3.2;
+  function bindTorcedorCalc(root) {
+    if (!root) return;
+    const pitas = root.querySelector('[name="pitas"]');
+    const precio = root.querySelector('[name="precio_pita"]');
+    const sueldo = root.querySelector('[name="sueldo"]');
+    const puesto = root.querySelector('[name="puesto"]');
+    if (!pitas || !sueldo) return;
+    function recalc() {
+      const p = (puesto && puesto.value) || '';
+      if (p && !/torcedor/i.test(p) && !pitas.value) return;
+      const n = parseFloat(String(pitas.value || '').replace(',', '.'));
+      if (isNaN(n)) return;
+      const pr = parseFloat(String((precio && precio.value) || PRECIO_DEF).replace(',', '.'));
+      const rate = isNaN(pr) ? PRECIO_DEF : pr;
+      sueldo.value = (n * rate).toFixed(2);
+    }
+    pitas.addEventListener('input', recalc);
+    pitas.addEventListener('change', recalc);
+    if (precio) {
+      precio.addEventListener('input', recalc);
+      precio.addEventListener('change', recalc);
+    }
+    if (puesto) puesto.addEventListener('input', function () {
+      if (/torcedor/i.test(puesto.value || '')) recalc();
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('form').forEach(bindTorcedorCalc);
+  });
+})();
 </script>
 
 {% endblock %}

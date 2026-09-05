@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.22.4] — 2026-09-05
+
+### Torcedores: sueldo automático por pitas
+- Al guardar **pitas** en Taller → `sueldo = pitas × precio` (defecto **$3.20**)
+- Corregido: el PATCH solo enviaba pitas sin puesto y no recalculaba
+- UI actualiza sueldo y total en la fila; cálculo en vivo en formularios de alta/edición
+
 ## [3.22.3] — 2026-09-05
 
 ### Fix: exportadores Pita/Taller

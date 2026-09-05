@@ -1849,19 +1849,22 @@ class NominaTallerRepo(BaseRepo):
             return cur.fetchone() or {}
 
     def _calc_torcedor(self, data: dict) -> dict:
-        """Si es torcedor y hay pitas, fija sueldo = pitas × precio."""
+        """Si es torcedor y hay pitas, fija sueldo = pitas × precio (defecto $3.20)."""
         puesto = data.get("puesto")
         if not self.es_torcedor(str(puesto) if puesto is not None else None):
             return data
-        if "pitas" not in data and data.get("pitas") is None:
+        if "pitas" not in data:
             return data
         try:
-            pitas = float(data.get("pitas") or 0)
+            raw = data.get("pitas")
+            if raw is None or str(raw).strip() == "":
+                return data
+            pitas = float(raw)
         except (TypeError, ValueError):
             return data
         precio = data.get("precio_pita")
         try:
-            precio = float(precio) if precio is not None else self.PRECIO_PITA_DEFAULT
+            precio = float(precio) if precio is not None and str(precio).strip() != "" else self.PRECIO_PITA_DEFAULT
         except (TypeError, ValueError):
             precio = self.PRECIO_PITA_DEFAULT
         data = dict(data)
@@ -1940,8 +1943,45 @@ class NominaTallerRepo(BaseRepo):
                 )
             return cur.lastrowid
 
+    def obtener(self, row_id: int) -> dict | None:
+        with self.db.cursor() as cur:
+            try:
+                cur.execute(
+                    """
+                    SELECT id, semana_id, trabajador_id, nombre, ubic, puesto,
+                           sueldo, extras, total, firmado, notas, pitas, precio_pita
+                    FROM nomina_taller WHERE id=%s
+                    """,
+                    (row_id,),
+                )
+            except Exception:
+                cur.execute(
+                    """
+                    SELECT id, semana_id, trabajador_id, nombre, ubic, puesto,
+                           sueldo, extras, total, firmado, notas
+                    FROM nomina_taller WHERE id=%s
+                    """,
+                    (row_id,),
+                )
+            return cur.fetchone()
+
     def actualizar(self, row_id: int, data: dict) -> None:
-        data = self._calc_torcedor(dict(data))
+        """Actualiza campos. Si llegan pitas (torcedor), recalcula sueldo = pitas × precio."""
+        data = dict(data)
+        # Al editar solo "pitas" no viene el puesto: cargar fila actual
+        need_ctx = ("pitas" in data or "precio_pita" in data) and (
+            "puesto" not in data or data.get("precio_pita") is None
+        )
+        if need_ctx:
+            cur_row = self.obtener(row_id) or {}
+            if "puesto" not in data:
+                data["puesto"] = cur_row.get("puesto")
+            if "precio_pita" not in data or data.get("precio_pita") is None:
+                data["precio_pita"] = cur_row.get("precio_pita") or self.PRECIO_PITA_DEFAULT
+            # si solo cambia precio y ya hay pitas en BD, incluirlas
+            if "pitas" not in data and cur_row.get("pitas") is not None:
+                data["pitas"] = cur_row.get("pitas")
+        data = self._calc_torcedor(data)
         fields = []
         params: list = []
         for k in ("nombre", "ubic", "puesto", "sueldo", "extras", "pitas", "precio_pita", "firmado", "notas", "trabajador_id"):

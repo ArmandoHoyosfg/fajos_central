@@ -31,21 +31,22 @@
     const body = new FormData();
     body.set(field, value == null ? "" : String(value));
     const res = await fetch(url, { method: "PATCH", body });
+    let j = null;
+    try { j = await res.json(); } catch (e) { j = null; }
     if (!res.ok) {
       let detail = "No se pudo guardar";
-      try {
-        const j = await res.json();
+      if (j) {
         detail = j.detail || j.message || detail;
         if (Array.isArray(detail)) {
           detail = detail.map(function (d) { return d.msg || JSON.stringify(d); }).join("; ");
         }
-      } catch (e) {}
+      }
       toast(detail, true);
       alert(detail);
       return false;
     }
     toast("Guardado");
-    return true;
+    return j || true;
   }
 
   function beginEdit(inp) {
@@ -123,13 +124,13 @@
           lock(inp);
           return;
         }
-        const ok = await patchField(urlFor(id), field, inp.value);
+        const result = await patchField(urlFor(id), field, inp.value);
         lock(inp);
-        if (!ok && inp.dataset.orig != null) {
+        if (!result && inp.dataset.orig != null) {
           inp.value = inp.dataset.orig;
-        } else if (ok) {
+        } else if (result) {
           inp.dataset.orig = inp.value;
-          onSaved(id, field, inp.value, tr);
+          onSaved(id, field, inp.value, tr, result);
         }
       });
     });

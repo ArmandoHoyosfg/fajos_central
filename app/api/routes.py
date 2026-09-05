@@ -2228,7 +2228,7 @@ async def api_patch_taller(
     request: Request,
     repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
 ):
-    """Actualiza solo los campos enviados en el formulario."""
+    """Actualiza campos. Torcedor: al guardar pitas → sueldo = pitas × precio (def. 3.2)."""
     form = await request.form()
     data = {}
     if "puesto" in form:
@@ -2252,7 +2252,17 @@ async def api_patch_taller(
     if not data:
         return {"ok": True, "id": row_id, "unchanged": True}
     repo.actualizar(row_id, data)
-    return {"ok": True, "id": row_id, "updated": list(data.keys())}
+    row = repo.obtener(row_id) or {}
+    return {
+        "ok": True,
+        "id": row_id,
+        "updated": list(data.keys()),
+        "sueldo": row.get("sueldo"),
+        "extras": row.get("extras"),
+        "total": row.get("total"),
+        "pitas": row.get("pitas"),
+        "precio_pita": row.get("precio_pita"),
+    }
 
 
 @router.get("/api/export/master")
