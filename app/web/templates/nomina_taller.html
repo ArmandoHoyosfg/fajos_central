@@ -239,31 +239,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 function onSaved(id, field, value, tr, result) {
-    result = result || {};
-    // Torcedor: al guardar pitas el API recalcula sueldo
+    result = result && typeof result === 'object' ? result : {};
+    const PRECIO = 3.2;
+    function setSueldoTotal(s, x) {
+      const sInp = tr.querySelector('[data-field="sueldo"]');
+      const xInp = tr.querySelector('[data-field="extras"]');
+      if (sInp && s != null) {
+        sInp.value = Number(s).toFixed(1).replace(/\.0$/, '.0');
+        if (String(s).indexOf('.') >= 0) sInp.value = Number(s).toFixed(2);
+        else sInp.value = String(s);
+        sInp.value = (Math.round(Number(s) * 100) / 100).toFixed(2);
+        sInp.dataset.orig = sInp.value;
+      }
+      const extras = x != null ? Number(x) : (parseFloat(String((xInp && xInp.value) || '0').replace(',', '.')) || 0);
+      const sueldo = s != null ? Number(s) : (parseFloat(String((sInp && sInp.value) || '0').replace(',', '.')) || 0);
+      const cell = tr.querySelector('.cell-total strong') || tr.querySelector('.cell-total');
+      if (cell) cell.textContent = '$' + (sueldo + extras).toFixed(2);
+      if (typeof recalcKpi === 'function') recalcKpi();
+      else if (typeof recalcKpiTaller === 'function') recalcKpiTaller();
+    }
     if (field === 'pitas' || field === 'precio_pita') {
-      if (result.sueldo != null) {
-        const sInp = tr.querySelector('[data-field="sueldo"]');
-        if (sInp) { sInp.value = result.sueldo; sInp.dataset.orig = String(result.sueldo); }
+      let sueldo = result.sueldo;
+      if (sueldo == null || sueldo === '') {
+        const n = parseFloat(String(value || '0').replace(',', '.')) || 0;
+        const pr = result.precio_pita != null ? Number(result.precio_pita) : PRECIO;
+        sueldo = Math.round(n * pr * 100) / 100;
       }
-      if (result.total != null) {
-        const cell = tr.querySelector('.cell-total strong') || tr.querySelector('.cell-total');
-        if (cell) cell.textContent = '$' + (parseFloat(result.total) || 0).toFixed(2);
-      } else {
-        const s = parseFloat(String((tr.querySelector('[data-field="sueldo"]')||{}).value||'0').replace(',','.'))||0;
-        const x = parseFloat(String((tr.querySelector('[data-field="extras"]')||{}).value||'0').replace(',','.'))||0;
-        const cell = tr.querySelector('.cell-total strong');
-        if (cell) cell.textContent = '$' + (s+x).toFixed(2);
-      }
-      recalcKpiTaller();
+      setSueldoTotal(sueldo, result.extras != null ? result.extras : null);
       return;
     }
     if (field === 'sueldo' || field === 'extras') {
-      const s = parseFloat(String(tr.querySelector('[data-field="sueldo"]').value||'0').replace(',','.'))||0;
-      const x = parseFloat(String(tr.querySelector('[data-field="extras"]').value||'0').replace(',','.'))||0;
-      const cell = tr.querySelector('.cell-total strong');
-      if (cell) cell.textContent = '$' + (s+x).toFixed(2);
-      recalcKpiTaller();
+      const s = parseFloat(String((tr.querySelector('[data-field="sueldo"]') || {}).value || '0').replace(',', '.')) || 0;
+      const x = parseFloat(String((tr.querySelector('[data-field="extras"]') || {}).value || '0').replace(',', '.')) || 0;
+      setSueldoTotal(s, x);
     }
   }
 

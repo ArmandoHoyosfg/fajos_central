@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.22.5] — 2026-09-05
+
+### Torcedores: cálculo de sueldo fiable
+- El puesto «Torcedor» a menudo está en el **catálogo** y vacío en `nomina_taller`; al editar solo pitas no se detectaba
+- Al guardar pitas se **fuerza** `sueldo = pitas × $3.20` y se actualiza la fila en pantalla (también si la API no devolvía sueldo)
+
 ## [3.22.4] — 2026-09-05
 
 ### Torcedores: sueldo automático por pitas

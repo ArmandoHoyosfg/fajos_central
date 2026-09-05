@@ -1848,12 +1848,16 @@ class NominaTallerRepo(BaseRepo):
             )
             return cur.fetchone() or {}
 
-    def _calc_torcedor(self, data: dict) -> dict:
-        """Si es torcedor y hay pitas, fija sueldo = pitas × precio (defecto $3.20)."""
-        puesto = data.get("puesto")
-        if not self.es_torcedor(str(puesto) if puesto is not None else None):
-            return data
+    def _calc_torcedor(self, data: dict, *, forzar: bool = False) -> dict:
+        """Sueldo torcedor = pitas × precio (defecto $3.20).
+
+        *forzar*: True cuando el usuario edita pitas (aunque puesto en nomina_taller
+        esté vacío y el puesto real venga del catálogo de trabajadores).
+        """
         if "pitas" not in data:
+            return data
+        puesto = data.get("puesto")
+        if not forzar and not self.es_torcedor(str(puesto) if puesto is not None else None):
             return data
         try:
             raw = data.get("pitas")
@@ -1899,7 +1903,7 @@ class NominaTallerRepo(BaseRepo):
 
     def insertar(self, semana_id: int, data: dict) -> int:
         data = self._resolve_trabajador_id(dict(data))
-        data = self._calc_torcedor(data)
+        data = self._calc_torcedor(data, forzar=bool(data.get('pitas') is not None))
         with self.db.cursor() as cur:
             try:
                 cur.execute(
@@ -1944,7 +1948,34 @@ class NominaTallerRepo(BaseRepo):
             return cur.lastrowid
 
     def obtener(self, row_id: int) -> dict | None:
+        """Fila de nómina; puesto efectivo = fila o catálogo de trabajadores."""
         with self.db.cursor() as cur:
+            try:
+                cur.execute(
+                    """
+                    SELECT n.id, n.semana_id, n.trabajador_id, n.nombre, n.ubic,
+                           COALESCE(tr.puesto, n.puesto) AS puesto,
+                           n.puesto AS puesto_fila,
+                           n.sueldo, n.extras, n.total, n.firmado, n.notas,
+                           n.pitas, n.precio_pita
+                    FROM nomina_taller n
+                    LEFT JOIN trabajadores tr ON (
+                        (n.trabajador_id IS NOT NULL AND tr.id = n.trabajador_id)
+                        OR (
+                            (n.trabajador_id IS NULL OR n.trabajador_id = 0)
+                            AND tr.nombre_mostrar = n.nombre AND tr.ubic = n.ubic
+                        )
+                    )
+                    WHERE n.id=%s
+                    LIMIT 1
+                    """,
+                    (row_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row
+            except Exception:
+                pass
             try:
                 cur.execute(
                     """
@@ -1966,22 +1997,23 @@ class NominaTallerRepo(BaseRepo):
             return cur.fetchone()
 
     def actualizar(self, row_id: int, data: dict) -> None:
-        """Actualiza campos. Si llegan pitas (torcedor), recalcula sueldo = pitas × precio."""
+        """Actualiza campos. Si llegan pitas → sueldo = pitas × precio (def. 3.2)."""
         data = dict(data)
-        # Al editar solo "pitas" no viene el puesto: cargar fila actual
-        need_ctx = ("pitas" in data or "precio_pita" in data) and (
-            "puesto" not in data or data.get("precio_pita") is None
-        )
-        if need_ctx:
+        forzar_pita = "pitas" in data or "precio_pita" in data
+        if forzar_pita:
             cur_row = self.obtener(row_id) or {}
-            if "puesto" not in data:
+            if "puesto" not in data or not data.get("puesto"):
                 data["puesto"] = cur_row.get("puesto")
             if "precio_pita" not in data or data.get("precio_pita") is None:
                 data["precio_pita"] = cur_row.get("precio_pita") or self.PRECIO_PITA_DEFAULT
-            # si solo cambia precio y ya hay pitas en BD, incluirlas
             if "pitas" not in data and cur_row.get("pitas") is not None:
                 data["pitas"] = cur_row.get("pitas")
-        data = self._calc_torcedor(data)
+            # Si el puesto efectivo es torcedor O el usuario edita pitas en una fila
+            # que ya es de torcedor en catálogo, forzar cálculo.
+            forzar = self.es_torcedor(str(data.get("puesto") or "")) or forzar_pita
+            data = self._calc_torcedor(data, forzar=forzar)
+        else:
+            data = self._calc_torcedor(data, forzar=False)
         fields = []
         params: list = []
         for k in ("nombre", "ubic", "puesto", "sueldo", "extras", "pitas", "precio_pita", "firmado", "notas", "trabajador_id"):
