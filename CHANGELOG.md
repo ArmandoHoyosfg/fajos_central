@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.22.3] — 2026-09-05
+
+### Fix: exportadores Pita/Taller
+- `exportFormalPita`, `exportFormalTaller` y `tllPuestoHint` estaban **después** de `{% endblock %}` del bloque scripts (no se servían al navegador)
+- Movidos dentro de `{% block scripts %}` (misma lógica y endpoints)
+
 ## [3.22.2] — 2026-09-01
 
 ### Fix botones Plata + migraciones
