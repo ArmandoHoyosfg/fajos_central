@@ -37,6 +37,32 @@ def linea_tiene_gramos(row: dict) -> bool:
     return False
 
 
+def linea_activa(row: dict) -> bool:
+    """False si el folio está terminado/cerrado (no debe salir en exportaciones de captura/formal)."""
+    notas = str(row.get("notas") or "").lower()
+    if "[terminado]" in notas:
+        return False
+    # trabajo ligado inactivo
+    try:
+        ta = row.get("trabajo_activo")
+        if ta is not None and int(ta) == 0:
+            return False
+    except (TypeError, ValueError):
+        pass
+    # flag explícito
+    if row.get("es_terminado") in (True, 1, "1"):
+        return False
+    return True
+
+
+def filtrar_lineas_export(lineas: list[dict], *, solo_con_gramos: bool = False) -> list[dict]:
+    """Filtro unificado para exportaciones Plata: sin terminados; opcional solo con gramos."""
+    out = [r for r in (lineas or []) if linea_activa(r)]
+    if solo_con_gramos:
+        out = [r for r in out if linea_tiene_gramos(r)]
+    return out
+
+
 
 
 def _json_default(obj: Any) -> Any:
@@ -104,8 +130,8 @@ class ExportService:
                 f"Formato no soportado: {fmt}",
                 details={"format": fmt, "allowed": ["xlsx", "csv", "pdf", "json"]},
             )
-        # Nómina formal/limpia: excluir filas sin gramos en ningún día
-        lineas = [r for r in lineas if linea_tiene_gramos(r)]
+        # Formal/limpia: sin folios terminados y sin filas en 0 gramos
+        lineas = filtrar_lineas_export(lineas, solo_con_gramos=True)
         try:
             if fmt == "xlsx":
                 data = self._to_xlsx(lineas, codigo_semana)
@@ -182,7 +208,7 @@ class ExportService:
             cell.alignment = Alignment(horizontal="center", wrap_text=True)
 
         # Solo filas con gramos en al menos un día (nómina limpia para imprimir)
-        data_rows = [r for r in lineas if linea_tiene_gramos(r)]
+        data_rows = filtrar_lineas_export(lineas, solo_con_gramos=True)
         def _pk(r):
             try:
                 u = int(float(r.get("ubic") or 0))
@@ -894,6 +920,8 @@ class ExportService:
         - generico=True: solo UBIC+NOMBRE rellenos; resto en blanco;
           cada trabajador se repite reps_por_trabajador veces.
         """
+        lineas = filtrar_lineas_export(lineas or [], solo_con_gramos=False)
+
         data = self._to_xlsx_suministro_diario(
             lineas,
             fecha_iso=fecha_iso,
@@ -1220,7 +1248,9 @@ class ExportService:
         - Una fila de identidad por trabajo de la semana + una fila en blanco
           extra por cada trabajador (nombre+ubic) para anotar otro folio.
         - Incluye líneas aunque aún no tengan gramos.
+        - Excluye folios terminados/cerrados (misma regla que la UI de Plata).
         """
+        lineas = filtrar_lineas_export(lineas, solo_con_gramos=False)
         data = self._to_xlsx_captura_manual(lineas, codigo_semana)
         stem = f"nomina_captura_{codigo_semana or 'semana'}"
         return (

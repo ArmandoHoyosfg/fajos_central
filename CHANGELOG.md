@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.22.6] — 2026-09-05
+
+### Exportaciones sincronizadas (sin folios cerrados)
+- **Captura manual**, **formal**, CSV/PDF/JSON y **suministro** excluyen folios terminados (`[terminado]` / trabajo inactivo)
+- Helper unificado `filtrar_lineas_export` / `linea_activa`
+
 ## [3.22.5] — 2026-09-05
 
 ### Torcedores: cálculo de sueldo fiable

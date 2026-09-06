@@ -1813,8 +1813,8 @@ async def api_export_captura_manual(
     if not semana:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    # Todas las líneas de la semana (también sin gramos) — es la nómina a capturar
-    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=True)
+    # Activas (también sin gramos); excluye folios terminados/cerrados
+    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=False)
     content, media_type, filename = export_svc.export_captura_manual(
         lineas,
         codigo_semana=str(semana.get("codigo") or ""),
