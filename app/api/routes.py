@@ -1870,9 +1870,10 @@ async def api_export(
     if not semana:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=True)
-    # Formal (y siempre limpio): solo filas con gramos en al menos un día
-    lineas = [r for r in lineas if linea_tiene_gramos(r)]
+    # Activas + con gramos; folios terminados fuera de cualquier export
+    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=False)
+    from app.services.export_service import filtrar_lineas_export
+    lineas = filtrar_lineas_export(lineas, solo_con_gramos=True)
     if formal:
         def _key(row: dict):
             try:
