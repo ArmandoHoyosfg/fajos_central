@@ -1155,8 +1155,9 @@ class LauncherApp(tk.Tk):
         startup = self._startup_lnk_path()
         startup.parent.mkdir(parents=True, exist_ok=True)
 
-        def esc(s: str) -> str:
-            return s.replace("'", "''")
+        def esc_ps(s: str) -> str:
+            """Escape for PowerShell single-quoted string."""
+            return str(s).replace("'", "''")
 
         ico = ROOT / "app" / "web" / "static" / "logo.ico"
         vbs = ROOT / "start_startup.vbs"
@@ -1164,40 +1165,39 @@ class LauncherApp(tk.Tk):
         venv_w = ROOT / ".venv" / "Scripts" / "pythonw.exe"
         launcher = ROOT / "launcher.py"
 
-        parts = [
-            "$W = New-Object -ComObject WScript.Shell",
-            "$S = $W.CreateShortcut('%s')" % esc(str(startup)),
-        ]
-        # Nunca apuntar a .bat (Windows abre cmd.exe al iniciar sesión)
+        # Construir TargetPath + Arguments sin romper comillas de Python
         if vbs.exists():
-            parts.append("$S.TargetPath = 'wscript.exe'")
-            parts.append(
-                "$S.Arguments = '//nologo "%s"'" % esc(str(vbs)).replace('"', '`"')
-            )
+            target = "wscript.exe"
+            arguments = "//nologo " + str(vbs)
         elif silent.exists() and venv_w.exists():
-            parts.append("$S.TargetPath = 'wscript.exe'")
-            args = '//nologo "%s" "%s" "%s"' % (silent, venv_w, launcher)
-            parts.append("$S.Arguments = '%s'" % esc(args).replace('"', '`"'))
+            target = "wscript.exe"
+            arguments = "//nologo {0} {1} {2}".format(silent, venv_w, launcher)
         elif venv_w.exists():
-            parts.append("$S.TargetPath = '%s'" % esc(str(venv_w)))
-            parts.append("$S.Arguments = '"%s"'" % esc(str(launcher)))
+            target = str(venv_w)
+            arguments = str(launcher)
         else:
-            # último recurso: pythonw del proceso actual si es posible
             exe = sys.executable
             if exe.lower().endswith("python.exe"):
                 cand = Path(exe).with_name("pythonw.exe")
                 if cand.exists():
                     exe = str(cand)
-            parts.append("$S.TargetPath = '%s'" % esc(exe))
-            parts.append("$S.Arguments = '"%s"'" % esc(str(launcher)))
+            target = exe
+            arguments = str(launcher)
 
-        parts.append("$S.WorkingDirectory = '%s'" % esc(str(ROOT)))
-        parts.append("$S.WindowStyle = 7")  # minimizado por si acaso
-        parts.append("$S.Description = 'Fajos Central (sin consola)'")
+        # Shortcut WindowStyle: 1=normal, 3=max, 7=minimized
+        lines = [
+            "$W = New-Object -ComObject WScript.Shell",
+            "$S = $W.CreateShortcut('{0}')".format(esc_ps(startup)),
+            "$S.TargetPath = '{0}'".format(esc_ps(target)),
+            "$S.Arguments = '{0}'".format(esc_ps(arguments)),
+            "$S.WorkingDirectory = '{0}'".format(esc_ps(ROOT)),
+            "$S.WindowStyle = 7",
+            "$S.Description = 'Fajos Central (sin consola)'",
+        ]
         if ico.exists():
-            parts.append("$S.IconLocation = '%s,0'" % esc(str(ico)))
-        parts.append("$S.Save()")
-        ps = "; ".join(parts)
+            lines.append("$S.IconLocation = '{0},0'".format(esc_ps(ico)))
+        lines.append("$S.Save()")
+        ps = "; ".join(lines)
         subprocess.run(
             ["powershell", "-NoProfile", "-Command", ps],
             check=True,
@@ -1205,6 +1205,7 @@ class LauncherApp(tk.Tk):
             text=True,
             timeout=20,
         )
+
 
     def _run_backup(self, silent: bool = False) -> dict:
         try:
