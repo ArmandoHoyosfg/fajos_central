@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.22.9] — 2026-09-07
+
+### Fix ModuleNotFoundError app.export_service
+- `app/__init__.py` no debe reexportar servicios (rompía `python launcher.py`)
+- `__version__` solo en el paquete `app`
+
 ## [3.22.8] — 2026-09-07
 
 ### Fix SyntaxError en launcher (acceso de inicio)
