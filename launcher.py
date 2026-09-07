@@ -1140,7 +1140,7 @@ class LauncherApp(tk.Tk):
         try:
             if self.var_startup.get():
                 self._create_startup_shortcut()
-                messagebox.showinfo("Inicio", "Se agregó Fajos Central al inicio de Windows.")
+                messagebox.showinfo("Inicio", "Se agregó Fajos Central al inicio de Windows (sin consola).\nSi antes veías una ventana negra, desactiva y vuelve a activar esta opción.")
             else:
                 p = self._startup_lnk_path()
                 if p.exists():
@@ -1151,35 +1151,49 @@ class LauncherApp(tk.Tk):
             messagebox.showerror("Inicio", str(e))
 
     def _create_startup_shortcut(self) -> None:
+        """Acceso en Startup sin consola: wscript → start_startup.vbs → pythonw."""
         startup = self._startup_lnk_path()
         startup.parent.mkdir(parents=True, exist_ok=True)
 
         def esc(s: str) -> str:
             return s.replace("'", "''")
 
-        start_bat = ROOT / "start.bat"
         ico = ROOT / "app" / "web" / "static" / "logo.ico"
+        vbs = ROOT / "start_startup.vbs"
+        silent = ROOT / "start_silent.vbs"
+        venv_w = ROOT / ".venv" / "Scripts" / "pythonw.exe"
+        launcher = ROOT / "launcher.py"
+
         parts = [
             "$W = New-Object -ComObject WScript.Shell",
             "$S = $W.CreateShortcut('%s')" % esc(str(startup)),
         ]
-        if start_bat.exists():
-            parts.append("$S.TargetPath = '%s'" % esc(str(start_bat)))
-            parts.append("$S.Arguments = ''")
+        # Nunca apuntar a .bat (Windows abre cmd.exe al iniciar sesión)
+        if vbs.exists():
+            parts.append("$S.TargetPath = 'wscript.exe'")
+            parts.append(
+                "$S.Arguments = '//nologo "%s"'" % esc(str(vbs)).replace('"', '`"')
+            )
+        elif silent.exists() and venv_w.exists():
+            parts.append("$S.TargetPath = 'wscript.exe'")
+            args = '//nologo "%s" "%s" "%s"' % (silent, venv_w, launcher)
+            parts.append("$S.Arguments = '%s'" % esc(args).replace('"', '`"'))
+        elif venv_w.exists():
+            parts.append("$S.TargetPath = '%s'" % esc(str(venv_w)))
+            parts.append("$S.Arguments = '"%s"'" % esc(str(launcher)))
         else:
-            venv_w = ROOT / ".venv" / "Scripts" / "pythonw.exe"
-            venv_c = ROOT / ".venv" / "Scripts" / "python.exe"
-            if venv_w.exists():
-                target = str(venv_w)
-            elif venv_c.exists():
-                target = str(venv_c)
-            else:
-                target = sys.executable
-            args = '"' + str(ROOT / "launcher.py") + '"'
-            parts.append("$S.TargetPath = '%s'" % esc(target))
-            parts.append("$S.Arguments = '%s'" % esc(args))
+            # último recurso: pythonw del proceso actual si es posible
+            exe = sys.executable
+            if exe.lower().endswith("python.exe"):
+                cand = Path(exe).with_name("pythonw.exe")
+                if cand.exists():
+                    exe = str(cand)
+            parts.append("$S.TargetPath = '%s'" % esc(exe))
+            parts.append("$S.Arguments = '"%s"'" % esc(str(launcher)))
+
         parts.append("$S.WorkingDirectory = '%s'" % esc(str(ROOT)))
-        parts.append("$S.Description = 'Fajos Central'")
+        parts.append("$S.WindowStyle = 7")  # minimizado por si acaso
+        parts.append("$S.Description = 'Fajos Central (sin consola)'")
         if ico.exists():
             parts.append("$S.IconLocation = '%s,0'" % esc(str(ico)))
         parts.append("$S.Save()")

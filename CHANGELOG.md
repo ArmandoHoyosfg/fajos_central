@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.22.7] — 2026-09-07
+
+### Arranque con Windows sin consola
+- El acceso de **Inicio** ya no apunta a `start.bat` (Windows abría `cmd`)
+- Usa `wscript.exe` + `start_startup.vbs` → `pythonw` + `launcher.py`
+- `start.bat` delega de inmediato al VBS y cierra
+
 ## [3.22.6] — 2026-09-05
 
 ### Exportaciones sincronizadas (sin folios cerrados)
