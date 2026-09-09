@@ -278,8 +278,17 @@ async def api_folio_meta(
     folio = (folio or "").strip()
     if not folio:
         return {"ok": False, "error": "folio vacío"}
-    meta = repo.meta_por_folio(folio, semana_id=semana_id)
-    return {"ok": True, "folio": folio, **(meta or {})}
+    meta = repo.meta_por_folio(folio, semana_id=semana_id) or {}
+    if not meta.get("tarifa_gr") and meta.get("material"):
+        try:
+            from app.db.repository import HistorialPreciosRepo
+            sug = HistorialPreciosRepo().sugerir(meta.get("material"), meta.get("modelo"))
+            if sug is not None:
+                meta["tarifa_gr"] = sug
+                meta["tarifa_fuente"] = "historial"
+        except Exception:
+            pass
+    return {"ok": True, "folio": folio, **meta}
 
 
 @router.post("/api/produccion/folio-sync")
@@ -1753,6 +1762,18 @@ async def api_add_produccion(
                             repo.actualizar_gramos_dia(pid, d, float(upd[d]))
                         except Exception:
                             pass
+        try:
+            from app.db.repository import HistorialPreciosRepo
+            HistorialPreciosRepo().registrar(
+                payload.get("material") or "",
+                payload.get("tarifa_gr") or 0,
+                payload.get("modelo"),
+                fuente="reabrir_fila",
+                semana_id=semana_id,
+                prod_id=pid,
+            )
+        except Exception:
+            pass
         return {
             "id": pid,
             "ok": True,
@@ -1760,6 +1781,18 @@ async def api_add_produccion(
             "message": "Fila existente reabierta/actualizada (folio antes cerrado o duplicado).",
         }
     new_id = repo.insertar(semana_id, payload)
+    try:
+        from app.db.repository import HistorialPreciosRepo
+        HistorialPreciosRepo().registrar(
+            payload.get("material") or "",
+            payload.get("tarifa_gr") or 0,
+            payload.get("modelo"),
+            fuente="alta_fila",
+            semana_id=semana_id,
+            prod_id=new_id,
+        )
+    except Exception:
+        pass
     return {"id": new_id, "ok": True, "reopened": False}
 
 

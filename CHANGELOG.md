@@ -5,6 +5,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.23.1] — 2026-09-09
+
+### Fixes captura Plata + historial + precios
+- `toggleSelAll` / cierre por selección en `row_select.js` (global)
+- Filtros «solo sin firmar» y «sin gramos hoy» (ya no confunden con checkbox de fila)
+- Material + $/Gr juntos; tarifa desde catálogo (editable)
+- Historial de precios por material/modelo (`historial_precios`)
+- Página Historial con textos claros para usuarios no técnicos
+
 ## [3.23.0] — 2026-09-08
 
 ### Folios: lote por selección, reapertura y datos unificados

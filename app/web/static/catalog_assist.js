@@ -266,6 +266,7 @@
 
   global.CatalogAssist = {
     onMaterialInput: onMaterialInput,
+    markTarifaEdited: markTarifaEdited,
     onModeloInput: onModeloInput,
     wireForm: wireForm,
     tariffs: tariffs,
