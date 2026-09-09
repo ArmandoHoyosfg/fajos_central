@@ -783,7 +783,12 @@ class ProduccionRepo(BaseRepo):
             return cur.fetchone()
 
     def listar_por_semana(self, semana_id: int, *, incluir_terminados: bool = False) -> list[dict]:
-        """Lista producción; por defecto oculta folios marcados terminados (trabajo inactivo)."""
+        """Lista producción; por defecto **no** muestra folios terminados/cerrados.
+
+        Criterio de ocultar (cualquiera):
+        - notas contienen [terminado]
+        - trabajo ligado con activo = 0
+        """
         sql = """
             SELECT p.id, p.semana_id, p.trabajador_id, p.trabajo_id,
                    COALESCE(tr.nombre_mostrar, p.nombre) AS nombre,
@@ -801,9 +806,12 @@ class ProduccionRepo(BaseRepo):
             WHERE p.semana_id = %s
         """
         if not incluir_terminados:
+            # Ocultar si notas tienen [terminado] O el trabajo está inactivo.
+            # (Antes: trabajo_id NULL pasaba el filtro de trabajo; solo notas bastaba,
+            #  pero reforzamos con exclusión explícita.)
             sql += """
-              AND (p.trabajo_id IS NULL OR tj.id IS NULL OR COALESCE(tj.activo, 1) = 1)
               AND (p.notas IS NULL OR p.notas NOT LIKE %s)
+              AND NOT (p.trabajo_id IS NOT NULL AND COALESCE(tj.activo, 1) = 0)
             """
             params: tuple = (semana_id, "%[terminado]%")
         else:
@@ -814,7 +822,14 @@ class ProduccionRepo(BaseRepo):
         with self.db.cursor() as cur:
             try:
                 cur.execute(sql, params)
-                return list(cur.fetchall() or [])
+                rows = list(cur.fetchall() or [])
+                if not incluir_terminados:
+                    rows = [
+                        r for r in rows
+                        if "[terminado]" not in str(r.get("notas") or "").lower()
+                        and int(r.get("trabajo_activo") if r.get("trabajo_activo") is not None else 1) != 0
+                    ]
+                return rows
             except Exception:
                 # Fallback sin join trabajos / sin filtro
                 cur.execute(
@@ -833,7 +848,8 @@ class ProduccionRepo(BaseRepo):
                 if not incluir_terminados:
                     rows = [
                         r for r in rows
-                        if "[terminado]" not in str(r.get("notas") or "")
+                        if "[terminado]" not in str(r.get("notas") or "").lower()
+                        and int(r.get("trabajo_activo") if r.get("trabajo_activo") is not None else 1) != 0
                     ]
                 return rows
 
@@ -931,6 +947,77 @@ class ProduccionRepo(BaseRepo):
                 ),
             )
             return cur.lastrowid
+
+
+
+    def meta_por_folio(self, folio: str, semana_id: int | None = None) -> dict | None:
+        """Última línea conocida del folio → modelo, material, tarifa."""
+        folio = (folio or "").strip()
+        if not folio:
+            return None
+        with self.db.cursor() as cur:
+            if semana_id:
+                cur.execute(
+                    """
+                    SELECT modelo, material, tarifa_gr, folio
+                    FROM produccion_plata
+                    WHERE UPPER(TRIM(folio)) = UPPER(%s) AND semana_id = %s
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (folio, int(semana_id)),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT modelo, material, tarifa_gr, folio
+                    FROM produccion_plata
+                    WHERE UPPER(TRIM(folio)) = UPPER(%s)
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (folio,),
+                )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "modelo": row.get("modelo"),
+                "material": row.get("material"),
+                "tarifa_gr": float(row["tarifa_gr"]) if row.get("tarifa_gr") is not None else None,
+            }
+
+    def sincronizar_folio(
+        self,
+        folio: str,
+        *,
+        modelo: str | None = None,
+        material: str | None = None,
+        tarifa_gr: float | None = None,
+        semana_id: int | None = None,
+    ) -> int:
+        """Actualiza modelo/material/tarifa en todas las líneas del mismo folio."""
+        folio = (folio or "").strip()
+        if not folio:
+            return 0
+        fields, params = [], []
+        if modelo is not None and str(modelo).strip() != "":
+            fields.append("modelo=%s")
+            params.append(str(modelo).strip())
+        if material is not None and str(material).strip() != "":
+            fields.append("material=%s")
+            params.append(str(material).strip())
+        if tarifa_gr is not None and str(tarifa_gr).strip() != "":
+            fields.append("tarifa_gr=%s")
+            params.append(float(tarifa_gr))
+        if not fields:
+            return 0
+        sql = f"UPDATE produccion_plata SET {', '.join(fields)} WHERE UPPER(TRIM(folio)) = UPPER(%s)"
+        params.append(folio)
+        if semana_id:
+            sql += " AND semana_id=%s"
+            params.append(int(semana_id))
+        with self.db.cursor() as cur:
+            cur.execute(sql, params)
+            return int(cur.rowcount or 0)
 
 
     def duplicar_trabajos_a_semana(self, semana_origen_id: int, semana_destino_id: int) -> dict:
@@ -1848,20 +1935,27 @@ class NominaTallerRepo(BaseRepo):
             )
             return cur.fetchone() or {}
 
-    def _calc_torcedor(self, data: dict) -> dict:
-        """Si es torcedor y hay pitas, fija sueldo = pitas × precio."""
-        puesto = data.get("puesto")
-        if not self.es_torcedor(str(puesto) if puesto is not None else None):
+    def _calc_torcedor(self, data: dict, *, forzar: bool = False) -> dict:
+        """Sueldo torcedor = pitas × precio (defecto $3.20).
+
+        *forzar*: True cuando el usuario edita pitas (aunque puesto en nomina_taller
+        esté vacío y el puesto real venga del catálogo de trabajadores).
+        """
+        if "pitas" not in data:
             return data
-        if "pitas" not in data and data.get("pitas") is None:
+        puesto = data.get("puesto")
+        if not forzar and not self.es_torcedor(str(puesto) if puesto is not None else None):
             return data
         try:
-            pitas = float(data.get("pitas") or 0)
+            raw = data.get("pitas")
+            if raw is None or str(raw).strip() == "":
+                return data
+            pitas = float(raw)
         except (TypeError, ValueError):
             return data
         precio = data.get("precio_pita")
         try:
-            precio = float(precio) if precio is not None else self.PRECIO_PITA_DEFAULT
+            precio = float(precio) if precio is not None and str(precio).strip() != "" else self.PRECIO_PITA_DEFAULT
         except (TypeError, ValueError):
             precio = self.PRECIO_PITA_DEFAULT
         data = dict(data)
@@ -1896,7 +1990,7 @@ class NominaTallerRepo(BaseRepo):
 
     def insertar(self, semana_id: int, data: dict) -> int:
         data = self._resolve_trabajador_id(dict(data))
-        data = self._calc_torcedor(data)
+        data = self._calc_torcedor(data, forzar=bool(data.get('pitas') is not None))
         with self.db.cursor() as cur:
             try:
                 cur.execute(
@@ -1940,8 +2034,73 @@ class NominaTallerRepo(BaseRepo):
                 )
             return cur.lastrowid
 
+    def obtener(self, row_id: int) -> dict | None:
+        """Fila de nómina; puesto efectivo = fila o catálogo de trabajadores."""
+        with self.db.cursor() as cur:
+            try:
+                cur.execute(
+                    """
+                    SELECT n.id, n.semana_id, n.trabajador_id, n.nombre, n.ubic,
+                           COALESCE(tr.puesto, n.puesto) AS puesto,
+                           n.puesto AS puesto_fila,
+                           n.sueldo, n.extras, n.total, n.firmado, n.notas,
+                           n.pitas, n.precio_pita
+                    FROM nomina_taller n
+                    LEFT JOIN trabajadores tr ON (
+                        (n.trabajador_id IS NOT NULL AND tr.id = n.trabajador_id)
+                        OR (
+                            (n.trabajador_id IS NULL OR n.trabajador_id = 0)
+                            AND tr.nombre_mostrar = n.nombre AND tr.ubic = n.ubic
+                        )
+                    )
+                    WHERE n.id=%s
+                    LIMIT 1
+                    """,
+                    (row_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row
+            except Exception:
+                pass
+            try:
+                cur.execute(
+                    """
+                    SELECT id, semana_id, trabajador_id, nombre, ubic, puesto,
+                           sueldo, extras, total, firmado, notas, pitas, precio_pita
+                    FROM nomina_taller WHERE id=%s
+                    """,
+                    (row_id,),
+                )
+            except Exception:
+                cur.execute(
+                    """
+                    SELECT id, semana_id, trabajador_id, nombre, ubic, puesto,
+                           sueldo, extras, total, firmado, notas
+                    FROM nomina_taller WHERE id=%s
+                    """,
+                    (row_id,),
+                )
+            return cur.fetchone()
+
     def actualizar(self, row_id: int, data: dict) -> None:
-        data = self._calc_torcedor(dict(data))
+        """Actualiza campos. Si llegan pitas → sueldo = pitas × precio (def. 3.2)."""
+        data = dict(data)
+        forzar_pita = "pitas" in data or "precio_pita" in data
+        if forzar_pita:
+            cur_row = self.obtener(row_id) or {}
+            if "puesto" not in data or not data.get("puesto"):
+                data["puesto"] = cur_row.get("puesto")
+            if "precio_pita" not in data or data.get("precio_pita") is None:
+                data["precio_pita"] = cur_row.get("precio_pita") or self.PRECIO_PITA_DEFAULT
+            if "pitas" not in data and cur_row.get("pitas") is not None:
+                data["pitas"] = cur_row.get("pitas")
+            # Si el puesto efectivo es torcedor O el usuario edita pitas en una fila
+            # que ya es de torcedor en catálogo, forzar cálculo.
+            forzar = self.es_torcedor(str(data.get("puesto") or "")) or forzar_pita
+            data = self._calc_torcedor(data, forzar=forzar)
+        else:
+            data = self._calc_torcedor(data, forzar=False)
         fields = []
         params: list = []
         for k in ("nombre", "ubic", "puesto", "sueldo", "extras", "pitas", "precio_pita", "firmado", "notas", "trabajador_id"):
@@ -2188,3 +2347,105 @@ class CatalogosRepo:
                 except (TypeError, ValueError):
                     return None
         return None
+
+
+class HistorialPreciosRepo:
+    """Guarda y consulta precios usados (material + modelo → tarifa)."""
+
+    def __init__(self, db=None):
+        from app.db.connection import get_db
+        self.db = db or get_db()
+
+    def ensure_table(self) -> None:
+        sql = """
+        CREATE TABLE IF NOT EXISTS historial_precios (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          material VARCHAR(64) NOT NULL,
+          modelo VARCHAR(128) NULL,
+          tarifa_gr DECIMAL(10,2) NOT NULL,
+          fuente VARCHAR(32) DEFAULT 'captura',
+          semana_id INT NULL,
+          prod_id INT NULL,
+          creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_hp_mat (material),
+          INDEX idx_hp_mat_mod (material, modelo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(sql)
+        except Exception:
+            pass
+
+    def registrar(
+        self,
+        material: str,
+        tarifa_gr: float,
+        modelo: str | None = None,
+        *,
+        fuente: str = "captura",
+        semana_id: int | None = None,
+        prod_id: int | None = None,
+    ) -> None:
+        material = (material or "").strip()
+        if not material or tarifa_gr is None:
+            return
+        self.ensure_table()
+        modelo = (modelo or "").strip() or None
+        try:
+            tarifa_gr = float(tarifa_gr)
+        except (TypeError, ValueError):
+            return
+        # Evitar spam: si el último precio igual, no insertar
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT tarifa_gr FROM historial_precios
+                WHERE material=%s AND IFNULL(modelo,'')=IFNULL(%s,'')
+                ORDER BY id DESC LIMIT 1
+                """,
+                (material, modelo),
+            )
+            row = cur.fetchone()
+            if row and abs(float(row.get("tarifa_gr") or 0) - tarifa_gr) < 0.001:
+                return
+            cur.execute(
+                """
+                INSERT INTO historial_precios
+                  (material, modelo, tarifa_gr, fuente, semana_id, prod_id)
+                VALUES (%s,%s,%s,%s,%s,%s)
+                """,
+                (material, modelo, tarifa_gr, fuente, semana_id, prod_id),
+            )
+
+    def sugerir(self, material: str, modelo: str | None = None) -> float | None:
+        """Último precio conocido para material (+ modelo si hay)."""
+        material = (material or "").strip()
+        if not material:
+            return None
+        self.ensure_table()
+        modelo = (modelo or "").strip() or None
+        with self.db.cursor() as cur:
+            if modelo:
+                cur.execute(
+                    """
+                    SELECT tarifa_gr FROM historial_precios
+                    WHERE material=%s AND modelo=%s
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (material, modelo),
+                )
+                row = cur.fetchone()
+                if row:
+                    return float(row["tarifa_gr"])
+            cur.execute(
+                """
+                SELECT tarifa_gr FROM historial_precios
+                WHERE material=%s
+                ORDER BY id DESC LIMIT 1
+                """,
+                (material,),
+            )
+            row = cur.fetchone()
+            return float(row["tarifa_gr"]) if row else None
+

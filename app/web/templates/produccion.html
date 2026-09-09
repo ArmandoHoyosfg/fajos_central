@@ -103,6 +103,12 @@
   {% if semana_id %}
   <button type="button" class="btn" onclick="openModal('modal-un-dia')" {% if semana_cerrada %}disabled{% endif %}>＋ Un día</button>
   <button type="button" class="btn btn-secondary" onclick="openModal('modal-linea')" {% if semana_cerrada %}disabled{% endif %}>＋ Fila</button>
+
+  <button type="button" class="btn btn-secondary" id="btn-cerrar-sel"
+          onclick="cerrarFoliosSeleccionados()" title="Cierra solo los marcados con 2+ semanas sin avance">
+    Cerrar seleccionados (≥2 sem)
+  </button>
+
   <button type="button" class="btn btn-secondary" onclick="cerrarSemana()" {% if semana_cerrada %}disabled{% endif %}>🔒 Cerrar semana</button>
   <button type="button" class="btn btn-secondary" onclick="reabrirSemana()" {% if not semana_cerrada %}disabled{% endif %}>🔓 Reabrir</button>
   <a class="btn btn-secondary" href="/historial/{{ semana_id }}" target="_blank">Historial</a>
@@ -128,7 +134,7 @@
       <strong>Sin avance</strong>
       {% if not semana_cerrada and n_lote_inactivos and n_lote_inactivos > 0 %}
       <button type="button" class="btn btn-secondary btn-xs" id="btn-terminar-lote"
-              onclick="terminarLoteInactivos({{ semana_id or 'null' }}, 3, {{ n_lote_inactivos }})"
+              onclick="terminarLoteInactivos({{ semana_id or 'null' }}, 2, {{ n_lote_inactivos }})"
               title="Marca como terminados los folios con 3+ semanas sin gramos">
         Terminar lote ({{ n_lote_inactivos }} con 3+ semanas)
       </button>
@@ -176,7 +182,7 @@
 <details class="folio-hints-compact terminados-panel">
   <summary>
     <span>{{ terminados_semana|length }} folio(s) terminado(s)</span>
-    <span class="muted"> — ocultos de la captura · se eliminan tras 7 días sin uso · se pueden reactivar</span>
+    <span class="muted"> — no aparecen en la tabla · se pueden reactivar aquí · se purgan tras 7 días</span>
   </summary>
   <div class="folio-hint-block">
     <ul class="folio-hint-list">
@@ -212,6 +218,7 @@
   </colgroup>
   <thead>
     <tr>
+      <th class="col-sel" title="Seleccionar"><input type="checkbox" id="sel-all-folios" onclick="toggleSelAll(this)"></th>
       <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
       <th class="col-nombre" data-sort-col="1">Nombre</th>
       <th class="col-ubic" data-sort-col="2">Ubic</th>
@@ -250,6 +257,11 @@
             "gm_vie": r.gm_vie if r.gm_vie else "",
             "firmado": 1 if r.firmado else 0
           } %}
+      <td class="col-sel">
+        <input type="checkbox" class="row-sel" value="{{ r.id }}"
+               data-inact="{{ 1 if folio_inact_ids and r.id in folio_inact_ids else 0 }}"
+               title="Seleccionar para cerrar por lote">
+      </td>
       <td class="col-actions">
         {% if not semana_cerrada %}
         <div class="row-menu">
@@ -292,7 +304,7 @@
       <td class="cell-total">{{ r.total_gramos or '' }}</td>
       <td class="cell-efectivo">{% if r.efectivo %}${{ '%.2f'|format(r.efectivo|float) }}{% endif %}</td>
       <td>
-        <input type="checkbox" {% if r.firmado %}checked{% endif %}
+        <input type="checkbox" class="chk-firmado" {% if r.firmado %}checked{% endif %}
                {% if semana_cerrada %}disabled{% endif %}
                onchange="toggleFirmado({{ r.id }}, this.checked)">
       </td>
@@ -393,7 +405,12 @@
     <p class="muted" id="edit-plt-who" style="margin-top:0"></p>
     <form id="form-edit-plt" onsubmit="return FajosRowEdit.submit({formId:'form-edit-plt', modalId:'modal-edit-plt', urlBase:'/api/produccion/linea/'})">
       <div class="form-grid">
-        <div><label>Folio</label><input name="folio"></div>
+        <div><label>Folio</label>
+          <input name="folio" id="linea-folio" autocomplete="off"
+                 onchange="sugerirFolioMeta(this)" onblur="sugerirFolioMeta(this)"
+                 placeholder="Si ya existió, rellena modelo/material">
+          <div class="muted" id="linea-folio-hint" style="font-size:0.78rem"></div>
+        </div>
         <div>
           <label>Modelo <span class="muted">(lista o libre)</span></label>
           <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
@@ -403,17 +420,15 @@
                     title="Guarda este modelo en el catálogo">＋ Modelo al catálogo</button>
           </div>
         </div>
-        <div>
-          <label>Material <span class="muted">(lista o libre)</span></label>
-          <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
-                 placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
-          <div class="mat-chips" aria-label="Materiales del catálogo"></div>
-          <div class="cat-actions">
-            <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
-                    title="Guarda este material y $/g en el catálogo">＋ Material al catálogo</button>
+        <div class="full mat-tarifa-pair" style="display:grid;grid-template-columns:1fr 7rem;gap:0.6rem;align-items:end">
+          <div>
+            <label>Material <span class="muted">(define precio de catálogo)</span></label>
+            <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                   onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
           </div>
+          
         </div>
-        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" min="0"></div>
+        
         <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
         <div><label>Dom</label><input name="gm_dom" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
         <div><label>Lun</label><input name="gm_lun" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
@@ -426,6 +441,8 @@
           <span>Efectivo est.: <strong id="edit-plt-te">$0.00</strong></span>
         </div>
         <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
+        <div class="full"><label><input type="checkbox" name="sync_folio" value="1" id="edit-sync-folio">
+          Aplicar modelo/material/$ a <strong>todas</strong> las filas con el mismo folio</label></div>
       </div>
       <div class="actions">
         <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-plt')">Cancelar</button>
@@ -449,7 +466,12 @@
             {% endfor %}
           </select>
         </div>
-        <div><label>Folio</label><input name="folio"></div>
+        <div><label>Folio</label>
+          <input name="folio" id="linea-folio" autocomplete="off"
+                 onchange="sugerirFolioMeta(this)" onblur="sugerirFolioMeta(this)"
+                 placeholder="Reabre si estaba cerrado">
+          <div class="muted" id="linea-folio-hint" style="font-size:0.78rem"></div>
+        </div>
         <div>
           <label>Modelo <span class="muted">(lista o libre)</span></label>
           <input name="modelo" list="dl-modelos" class="mod-input" autocomplete="off"
@@ -459,17 +481,27 @@
                     title="Guarda este modelo en el catálogo">＋ Modelo al catálogo</button>
           </div>
         </div>
-        <div>
-          <label>Material <span class="muted">(lista o libre)</span></label>
-          <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
-                 placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
-          <div class="mat-chips" aria-label="Materiales del catálogo"></div>
-          <div class="cat-actions">
-            <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
-                    title="Guarda este material y $/g en el catálogo">＋ Material al catálogo</button>
+        <div class="full mat-tarifa-pair" style="display:grid;grid-template-columns:1fr 7rem;gap:0.6rem;align-items:end">
+          <div>
+            <label>Material <span class="muted">(lista o libre · define precio)</span></label>
+            <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                   placeholder="AG3 u otro…" onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
+            <div class="cat-actions">
+              <button type="button" class="btn btn-secondary btn-xs btn-save-mat-cat"
+                      title="Guarda material + precio actual en el catálogo">＋ Material al catálogo</button>
+            </div>
           </div>
+          
         </div>
-        <div><label>$/Gr</label><input name="tarifa_gr" type="number" step="0.1" value="12"></div>
+        <div class="full"><label class="muted">Avance (gramos, opcional)</label></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="1" min="0" inputmode="decimal"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="1" min="0" inputmode="decimal"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="1" min="0" inputmode="decimal"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="1" min="0" inputmode="decimal"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="1" min="0" inputmode="decimal"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="1" min="0" inputmode="decimal"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="1" min="0" inputmode="decimal"></div>
+        
       </div>
       <div class="actions">
         <button type="button" class="btn btn-secondary" onclick="closeModal('modal-linea')">Cancelar</button>
@@ -519,6 +551,7 @@ function onMaterialChange_legacy_unused(sel) {
 
 <script src="/static/semana_ops.js?v=3122"></script>
 <script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "plt";</script>
+<script src="/static/row_select.js?v=3231"></script>
 
 <script src="/static/row_menu.js?v=31913"></script>
 <script src="/static/row_edit.js?v=3112"></script>
@@ -926,13 +959,17 @@ async function addLinea(e) {
   body.set('modelo', fd.get('modelo') || '');
   body.set('material', fd.get('material') || 'AG3');
   body.set('tarifa_gr', fd.get('tarifa_gr') || '12');
+  ['gm_sab','gm_dom','gm_lun','gm_mar','gm_mie','gm_jue','gm_vie'].forEach(function (k) {
+    const v = fd.get(k);
+    if (v !== null && String(v).trim() !== '') body.set(k, String(v));
+  });
   const res = await fetch('/api/produccion/' + SEMANA_ID, { method: 'POST', body });
   const data = await res.json().catch(() => ({}));
   if (res.ok && data.ok) {
-    showToast('Fila agregada');
+    showToast(data.reopened ? 'Folio reabierto / actualizado' : 'Fila agregada');
     closeModal('modal-linea');
     setTimeout(() => location.reload(), 400);
-  } else showToast(data.user_message || data.message || 'Error', true);
+  } else showToast(data.user_message || data.message || data.error || 'Error', true);
   return false;
 }
 
@@ -1026,19 +1063,26 @@ async function saveGramCell(inp) {
 
 function applyTableFilters() {
   const q = ((document.getElementById('flt-texto') || {}).value || '').trim().toLowerCase();
-  const sinFirma = (document.getElementById('flt-sin-firma') || {}).checked;
-  const sinHoy = (document.getElementById('flt-sin-hoy') || {}).checked;
+  const sinFirma = !!(document.getElementById('flt-sin-firma') || {}).checked;
+  const sinHoy = !!(document.getElementById('flt-sin-hoy') || {}).checked;
+  const colHoy = (typeof COL_HOY !== 'undefined' && COL_HOY) ? COL_HOY : '';
   document.querySelectorAll('tr[data-prod-id]').forEach(tr => {
     let show = true;
-    if (q && !tr.textContent.toLowerCase().includes(q)) show = false;
+    if (q) {
+      const blob = (tr.textContent || '').toLowerCase();
+      if (!blob.includes(q)) show = false;
+    }
     if (sinFirma) {
-      const box = tr.querySelector('input[type=checkbox]');
+      // Solo la casilla de firma (no la de selección de fila)
+      const box = tr.querySelector('input.chk-firmado')
+        || tr.querySelector('td.col-fir input[type=checkbox]')
+        || tr.querySelector('td:last-child input[type=checkbox]');
       if (box && box.checked) show = false;
     }
-    if (sinHoy) {
-      const inp = tr.querySelector('input.cell-gm[data-dia="' + COL_HOY + '"]');
-      const v = inp ? parseFloat(inp.value || '0') : 0;
-      if (v > 0) show = false;
+    if (sinHoy && colHoy) {
+      const inp = tr.querySelector('input.cell-gm[data-dia="' + colHoy + '"]');
+      const v = inp ? parseFloat(String(inp.value || '0').replace(',', '.')) : 0;
+      if (!isNaN(v) && v > 0) show = false;
     }
     tr.style.display = show ? '' : 'none';
   });
@@ -1199,6 +1243,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 })();
 </script>
 
+
+<script>
+(function () {
+  const form = document.getElementById('form-edit-plt');
+  if (!form) return;
+  form.addEventListener('submit', function () {
+    /* FajosRowEdit handles submit; after reload sync is in patch if we extend it */
+  });
+})();
+document.addEventListener('fajos:row-saved', async function (ev) {
+  const d = ev.detail || {};
+  const form = document.getElementById('form-edit-plt');
+  if (!form) return;
+  const sync = form.querySelector('[name="sync_folio"]');
+  if (!sync || !sync.checked) return;
+  const folio = (form.folio && form.folio.value) || d.folio;
+  if (!folio) return;
+  const fd = new FormData();
+  fd.set('folio', folio);
+  if (form.modelo) fd.set('modelo', form.modelo.value || '');
+  if (form.material) fd.set('material', form.material.value || '');
+  if (form.tarifa_gr) fd.set('tarifa_gr', form.tarifa_gr.value || '');
+  if (window.SEMANA_ID) fd.set('semana_id', String(SEMANA_ID));
+  try {
+    await fetch('/api/produccion/folio-sync', { method: 'POST', body: fd });
+  } catch (e) {}
+});
+</script>
 {% endblock %}
 
 

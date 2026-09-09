@@ -179,7 +179,7 @@ Regla fija: **filas en 0 no se exportan** (Pita y formales equivalentes). Antes 
 - Preferencia de mantener el icono en la barra de tareas.
 - Muestra **versión** e **IP local** para otros equipos en la red.
 
-`start.bat` arranca de forma silenciosa cuando es posible (sin consolas innecesarias).
+`start.bat` / `start_startup.vbs` arrancan sin consola. **Inicio con Windows** usa `wscript` + `start_startup.vbs` (no un `.bat`, que abriría cmd).
 
 ---
 

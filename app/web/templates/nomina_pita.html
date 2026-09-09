@@ -155,7 +155,6 @@ function openEditPit(id, data) {
 }
 </script>
 
-
 <script>
 /* duplicarSemana → semana_ops.js */
 </script>
@@ -260,7 +259,10 @@ document.addEventListener('DOMContentLoaded', function () {
     b.disabled = true;
   });
 });
+</script>
 
+
+<script>
 async function exportFormalPita(semanaId) {
   try {
     const res = await fetch('/api/export/nomina-pita/' + semanaId + '/preview');
@@ -294,3 +296,4 @@ async function exportFormalPita(semanaId) {
 </script>
 
 {% endblock %}
+

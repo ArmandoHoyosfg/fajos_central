@@ -3,35 +3,63 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Historial de cambios</h1>
-    <p class="muted">Semana {{ semana.codigo if semana else semana_id }} · últimos movimientos de gramos y campos</p>
+    <h1>Historial de la semana</h1>
+    <p class="muted">
+      Semana <strong>{{ semana.codigo if semana else semana_id }}</strong>.
+      Aquí ves <em>quién cambió qué</em> (gramos, firmas, datos de la fila).
+    </p>
   </div>
   <div class="toolbar">
-    <a class="btn btn-secondary" href="/produccion?semana_id={{ semana_id }}">← Plata</a>
+    <a class="btn btn-secondary" href="/produccion?semana_id={{ semana_id }}">← Volver a Plata</a>
   </div>
 </div>
+
+<div class="card" style="margin-bottom:1rem;padding:0.85rem 1rem">
+  <strong>¿Cómo se lee?</strong>
+  <ul class="muted" style="margin:0.4rem 0 0 1.1rem;padding:0">
+    <li><strong>Cuándo</strong> — fecha y hora del cambio.</li>
+    <li><strong>Trabajador / Folio</strong> — a quién afecta.</li>
+    <li><strong>Qué cambió</strong> — por ejemplo gramos del lunes o la firma.</li>
+    <li><strong>Antes → Después</strong> — valor viejo y nuevo (vacío = se borró o estaba vacío).</li>
+  </ul>
+</div>
+
 {% if not rows %}
-<p class="muted">Aún no hay movimientos registrados en esta semana (o la tabla de historial no existe — ejecuta <code>db/schema/002_historial.sql</code>).</p>
+<p class="muted">Todavía no hay cambios registrados en esta semana.
+Si acabas de capturar y no aparece nada, guarda de nuevo un gramo o revisa la conexión a la base de datos.</p>
 {% else %}
 <div class="table-wrap table-compact">
 <table>
   <thead>
     <tr>
-      <th>Cuándo</th><th>Nombre</th><th>Ubic</th><th>Folio</th>
-      <th>Campo</th><th>Antes</th><th>Después</th><th>Origen</th>
+      <th>Cuándo</th>
+      <th>Trabajador</th>
+      <th>Ubic</th>
+      <th>Folio</th>
+      <th>Qué cambió</th>
+      <th>Antes</th>
+      <th>Después</th>
+      <th>Desde</th>
     </tr>
   </thead>
   <tbody>
   {% for h in rows %}
+    {% set campo = (h.campo or '')|string %}
+    {% set labels = {
+      'gm_sab':'Gramos sábado','gm_dom':'Gramos domingo','gm_lun':'Gramos lunes',
+      'gm_mar':'Gramos martes','gm_mie':'Gramos miércoles','gm_jue':'Gramos jueves','gm_vie':'Gramos viernes',
+      'tarifa_gr':'Precio $/g','material':'Material','modelo':'Modelo','folio':'Folio',
+      'firmado':'Firma','nombre':'Nombre','ubic':'Ubicación','notas':'Notas'
+    } %}
     <tr>
       <td>{{ h.creado_en }}</td>
       <td>{{ h.nombre or '—' }}</td>
       <td>{{ h.ubic or '—' }}</td>
       <td>{{ h.folio or '—' }}</td>
-      <td><code>{{ h.campo }}</code></td>
-      <td>{{ h.valor_anterior if h.valor_anterior is not none else '—' }}</td>
-      <td>{{ h.valor_nuevo if h.valor_nuevo is not none else '—' }}</td>
-      <td>{{ h.origen or '' }}{% if h.usuario %} · {{ h.usuario }}{% endif %}</td>
+      <td>{{ labels.get(campo, campo) }}</td>
+      <td>{% if h.valor_anterior is none or h.valor_anterior == '' %}—{% else %}{{ h.valor_anterior }}{% endif %}</td>
+      <td>{% if h.valor_nuevo is none or h.valor_nuevo == '' %}—{% else %}{{ h.valor_nuevo }}{% endif %}</td>
+      <td>{{ h.origen or 'app' }}{% if h.usuario %} · {{ h.usuario }}{% endif %}</td>
     </tr>
   {% endfor %}
   </tbody>

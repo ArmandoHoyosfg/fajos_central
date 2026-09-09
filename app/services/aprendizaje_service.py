@@ -416,9 +416,19 @@ class AprendizajeService:
                 except Exception:
                     pass
 
-            # 1) Marcar línea de producción (siempre si hay prod_id)
+            # 1) Marcar línea(s) de producción
+            #    - la indicada
+            #    - y cualquier otra de la misma semana con mismo trabajador+folio
             if prod_id:
                 try:
+                    cur.execute(
+                        """
+                        SELECT semana_id, trabajador_id, folio, nombre, ubic
+                          FROM produccion_plata WHERE id=%s
+                        """,
+                        (prod_id,),
+                    )
+                    base = cur.fetchone() or {}
                     cur.execute(
                         """
                         UPDATE produccion_plata
@@ -428,6 +438,44 @@ class AprendizajeService:
                         (prod_id, "%[terminado]%"),
                     )
                     marked_prod = True
+                    # Hermanas misma semana + mismo folio + mismo trabajador
+                    folio_b = (base.get("folio") or "").strip()
+                    sid = base.get("semana_id")
+                    trab = base.get("trabajador_id")
+                    if sid and folio_b:
+                        if trab:
+                            cur.execute(
+                                """
+                                UPDATE produccion_plata
+                                   SET notas = TRIM(CONCAT(COALESCE(notas,''), ' [terminado]'))
+                                 WHERE semana_id=%s AND trabajador_id=%s
+                                   AND UPPER(TRIM(folio))=UPPER(%s)
+                                   AND id<>%s
+                                   AND (notas IS NULL OR notas NOT LIKE %s)
+                                """,
+                                (sid, trab, folio_b, prod_id, "%[terminado]%"),
+                            )
+                        else:
+                            cur.execute(
+                                """
+                                UPDATE produccion_plata
+                                   SET notas = TRIM(CONCAT(COALESCE(notas,''), ' [terminado]'))
+                                 WHERE semana_id=%s
+                                   AND UPPER(TRIM(nombre))=UPPER(%s)
+                                   AND ubic=%s
+                                   AND UPPER(TRIM(folio))=UPPER(%s)
+                                   AND id<>%s
+                                   AND (notas IS NULL OR notas NOT LIKE %s)
+                                """,
+                                (
+                                    sid,
+                                    base.get("nombre") or "",
+                                    base.get("ubic"),
+                                    folio_b,
+                                    prod_id,
+                                    "%[terminado]%",
+                                ),
+                            )
                 except Exception as e:
                     return {"ok": False, "error": f"No se pudo marcar la línea: {e}"}
 
@@ -477,16 +525,16 @@ class AprendizajeService:
     def marcar_folios_terminados_lote(
         self,
         semana_id: int | None = None,
-        min_semanas: int = 3,
+        min_semanas: int = 2,
         prod_ids: list[int] | None = None,
     ) -> dict:
         """
         Termina en lote folios sin avance.
         - Si prod_ids: solo esos.
         - Si no: todos los inactivos con semanas_inactivo >= min_semanas.
-        min_semanas por defecto 3 (= más de 2 semanas).
+        min_semanas por defecto 2 (dos semanas o más sin avance).
         """
-        min_semanas = max(1, int(min_semanas or 3))
+        min_semanas = max(1, int(min_semanas or 2))
         inactivos = self.detectar_folios_inactivos(semana_id)
         if prod_ids:
             want = {int(x) for x in prod_ids if x}

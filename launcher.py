@@ -1140,7 +1140,7 @@ class LauncherApp(tk.Tk):
         try:
             if self.var_startup.get():
                 self._create_startup_shortcut()
-                messagebox.showinfo("Inicio", "Se agregó Fajos Central al inicio de Windows.")
+                messagebox.showinfo("Inicio", "Se agregó Fajos Central al inicio de Windows (sin consola).\nSi antes veías una ventana negra, desactiva y vuelve a activar esta opción.")
             else:
                 p = self._startup_lnk_path()
                 if p.exists():
@@ -1151,39 +1151,53 @@ class LauncherApp(tk.Tk):
             messagebox.showerror("Inicio", str(e))
 
     def _create_startup_shortcut(self) -> None:
+        """Acceso en Startup sin consola: wscript → start_startup.vbs → pythonw."""
         startup = self._startup_lnk_path()
         startup.parent.mkdir(parents=True, exist_ok=True)
 
-        def esc(s: str) -> str:
-            return s.replace("'", "''")
+        def esc_ps(s: str) -> str:
+            """Escape for PowerShell single-quoted string."""
+            return str(s).replace("'", "''")
 
-        start_bat = ROOT / "start.bat"
         ico = ROOT / "app" / "web" / "static" / "logo.ico"
-        parts = [
-            "$W = New-Object -ComObject WScript.Shell",
-            "$S = $W.CreateShortcut('%s')" % esc(str(startup)),
-        ]
-        if start_bat.exists():
-            parts.append("$S.TargetPath = '%s'" % esc(str(start_bat)))
-            parts.append("$S.Arguments = ''")
+        vbs = ROOT / "start_startup.vbs"
+        silent = ROOT / "start_silent.vbs"
+        venv_w = ROOT / ".venv" / "Scripts" / "pythonw.exe"
+        launcher = ROOT / "launcher.py"
+
+        # Construir TargetPath + Arguments sin romper comillas de Python
+        if vbs.exists():
+            target = "wscript.exe"
+            arguments = "//nologo " + str(vbs)
+        elif silent.exists() and venv_w.exists():
+            target = "wscript.exe"
+            arguments = "//nologo {0} {1} {2}".format(silent, venv_w, launcher)
+        elif venv_w.exists():
+            target = str(venv_w)
+            arguments = str(launcher)
         else:
-            venv_w = ROOT / ".venv" / "Scripts" / "pythonw.exe"
-            venv_c = ROOT / ".venv" / "Scripts" / "python.exe"
-            if venv_w.exists():
-                target = str(venv_w)
-            elif venv_c.exists():
-                target = str(venv_c)
-            else:
-                target = sys.executable
-            args = '"' + str(ROOT / "launcher.py") + '"'
-            parts.append("$S.TargetPath = '%s'" % esc(target))
-            parts.append("$S.Arguments = '%s'" % esc(args))
-        parts.append("$S.WorkingDirectory = '%s'" % esc(str(ROOT)))
-        parts.append("$S.Description = 'Fajos Central'")
+            exe = sys.executable
+            if exe.lower().endswith("python.exe"):
+                cand = Path(exe).with_name("pythonw.exe")
+                if cand.exists():
+                    exe = str(cand)
+            target = exe
+            arguments = str(launcher)
+
+        # Shortcut WindowStyle: 1=normal, 3=max, 7=minimized
+        lines = [
+            "$W = New-Object -ComObject WScript.Shell",
+            "$S = $W.CreateShortcut('{0}')".format(esc_ps(startup)),
+            "$S.TargetPath = '{0}'".format(esc_ps(target)),
+            "$S.Arguments = '{0}'".format(esc_ps(arguments)),
+            "$S.WorkingDirectory = '{0}'".format(esc_ps(ROOT)),
+            "$S.WindowStyle = 7",
+            "$S.Description = 'Fajos Central (sin consola)'",
+        ]
         if ico.exists():
-            parts.append("$S.IconLocation = '%s,0'" % esc(str(ico)))
-        parts.append("$S.Save()")
-        ps = "; ".join(parts)
+            lines.append("$S.IconLocation = '{0},0'".format(esc_ps(ico)))
+        lines.append("$S.Save()")
+        ps = "; ".join(lines)
         subprocess.run(
             ["powershell", "-NoProfile", "-Command", ps],
             check=True,
@@ -1191,6 +1205,7 @@ class LauncherApp(tk.Tk):
             text=True,
             timeout=20,
         )
+
 
     def _run_backup(self, silent: bool = False) -> dict:
         try:

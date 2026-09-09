@@ -5,6 +5,74 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.23.2] — 2026-09-09
+
+### Folios terminados no aparecen en Plata
+- Filtro reforzado: notas `[terminado]` **o** trabajo `activo=0`
+- Al cerrar un folio se marcan también líneas hermanas (misma semana/trabajador/folio)
+- Texto del panel: dejan claro que no salen en la tabla
+
+## [3.23.1] — 2026-09-09
+
+### Fixes captura Plata + historial + precios
+- `toggleSelAll` / cierre por selección en `row_select.js` (global)
+- Filtros «solo sin firmar» y «sin gramos hoy» (ya no confunden con checkbox de fila)
+- Material + $/Gr juntos; tarifa desde catálogo (editable)
+- Historial de precios por material/modelo (`historial_precios`)
+- Página Historial con textos claros para usuarios no técnicos
+
+## [3.23.0] — 2026-09-08
+
+### Folios: lote por selección, reapertura y datos unificados
+- Cerrar por **selección** (solo ≥2 semanas sin avance) o lote global
+- Al **agregar fila** con trabajador+folio ya cerrado → **reabre** y permite gramos
+- Mismo folio: sugerencia de modelo/material/$ y opción de sincronizar al editar
+- Nueva fila: campos de avance (Sáb–Vie)
+
+## [3.22.9] — 2026-09-07
+
+### Fix ModuleNotFoundError app.export_service
+- `app/__init__.py` no debe reexportar servicios (rompía `python launcher.py`)
+- `__version__` solo en el paquete `app`
+
+## [3.22.8] — 2026-09-07
+
+### Fix SyntaxError en launcher (acceso de inicio)
+- Comillas rotas en `_create_startup_shortcut` impedían abrir el launcher
+- Reescritura segura del acceso: `wscript` + `start_startup.vbs`
+
+## [3.22.7] — 2026-09-07
+
+### Arranque con Windows sin consola
+- El acceso de **Inicio** ya no apunta a `start.bat` (Windows abría `cmd`)
+- Usa `wscript.exe` + `start_startup.vbs` → `pythonw` + `launcher.py`
+- `start.bat` delega de inmediato al VBS y cierra
+
+## [3.22.6] — 2026-09-05
+
+### Exportaciones sincronizadas (sin folios cerrados)
+- **Captura manual**, **formal**, CSV/PDF/JSON y **suministro** excluyen folios terminados (`[terminado]` / trabajo inactivo)
+- Helper unificado `filtrar_lineas_export` / `linea_activa`
+
+## [3.22.5] — 2026-09-05
+
+### Torcedores: cálculo de sueldo fiable
+- El puesto «Torcedor» a menudo está en el **catálogo** y vacío en `nomina_taller`; al editar solo pitas no se detectaba
+- Al guardar pitas se **fuerza** `sueldo = pitas × $3.20` y se actualiza la fila en pantalla (también si la API no devolvía sueldo)
+
+## [3.22.4] — 2026-09-05
+
+### Torcedores: sueldo automático por pitas
+- Al guardar **pitas** en Taller → `sueldo = pitas × precio` (defecto **$3.20**)
+- Corregido: el PATCH solo enviaba pitas sin puesto y no recalculaba
+- UI actualiza sueldo y total en la fila; cálculo en vivo en formularios de alta/edición
+
+## [3.22.3] — 2026-09-05
+
+### Fix: exportadores Pita/Taller
+- `exportFormalPita`, `exportFormalTaller` y `tllPuestoHint` estaban **después** de `{% endblock %}` del bloque scripts (no se servían al navegador)
+- Movidos dentro de `{% block scripts %}` (misma lógica y endpoints)
+
 ## [3.22.2] — 2026-09-01
 
 ### Fix botones Plata + migraciones

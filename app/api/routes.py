@@ -214,17 +214,41 @@ async def api_linea_terminar(prod_id: int):
 
 
 @router.post("/api/produccion/terminar-lote")
-async def api_terminar_lote(
-    semana_id: int | None = Form(None),
-    min_semanas: int = Form(3),
-):
-    """Termina todos los folios sin avance con N+ semanas inactivas."""
+async def api_terminar_lote(request: Request):
+    """Termina folios sin avance (≥ min_semanas). Opcional: solo prod_ids seleccionados."""
     from fastapi.responses import JSONResponse
     from app.services.aprendizaje_service import AprendizajeService
+    form = await request.form()
+    semana_id = form.get("semana_id")
+    try:
+        semana_id = int(semana_id) if semana_id not in (None, "") else None
+    except (TypeError, ValueError):
+        semana_id = None
+    try:
+        min_semanas = int(form.get("min_semanas") or 2)
+    except (TypeError, ValueError):
+        min_semanas = 2
+    prod_ids: list[int] = []
+    # prod_ids, prod_ids[], o lista separada por comas
+    raw_list = form.getlist("prod_ids") if hasattr(form, "getlist") else []
+    if not raw_list:
+        raw_list = form.getlist("prod_ids[]") if hasattr(form, "getlist") else []
+    for item in raw_list:
+        for part in str(item).split(","):
+            part = part.strip()
+            if part.isdigit():
+                prod_ids.append(int(part))
+    single = form.get("prod_ids")
+    if single and not prod_ids:
+        for part in str(single).split(","):
+            part = part.strip()
+            if part.isdigit():
+                prod_ids.append(int(part))
     try:
         result = AprendizajeService().marcar_folios_terminados_lote(
             semana_id=semana_id,
             min_semanas=min_semanas,
+            prod_ids=prod_ids or None,
         )
         return result
     except Exception as e:
@@ -241,6 +265,50 @@ async def api_linea_reactivar(prod_id: int):
     if not result.get("ok"):
         return JSONResponse(result, status_code=400)
     return result
+
+
+
+@router.get("/api/produccion/folio-meta")
+async def api_folio_meta(
+    folio: str,
+    semana_id: int | None = None,
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+):
+    """Características canónicas de un folio (modelo, material, tarifa)."""
+    folio = (folio or "").strip()
+    if not folio:
+        return {"ok": False, "error": "folio vacío"}
+    meta = repo.meta_por_folio(folio, semana_id=semana_id) or {}
+    if not meta.get("tarifa_gr") and meta.get("material"):
+        try:
+            from app.db.repository import HistorialPreciosRepo
+            sug = HistorialPreciosRepo().sugerir(meta.get("material"), meta.get("modelo"))
+            if sug is not None:
+                meta["tarifa_gr"] = sug
+                meta["tarifa_fuente"] = "historial"
+        except Exception:
+            pass
+    return {"ok": True, "folio": folio, **meta}
+
+
+@router.post("/api/produccion/folio-sync")
+async def api_folio_sync(
+    folio: str = Form(...),
+    modelo: str | None = Form(None),
+    material: str | None = Form(None),
+    tarifa_gr: float | None = Form(None),
+    semana_id: int | None = Form(None),
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+):
+    """Aplica modelo/material/tarifa a todas las líneas con el mismo folio."""
+    n = repo.sincronizar_folio(
+        folio=folio,
+        modelo=modelo,
+        material=material,
+        tarifa_gr=tarifa_gr,
+        semana_id=semana_id,
+    )
+    return {"ok": True, "actualizadas": n, "folio": folio}
 
 
 @router.get("/api/aprendizaje/resumen")
@@ -621,7 +689,7 @@ async def page_produccion(
         n_lote_inactivos = sum(
             1
             for x in folio_inactivos
-            if int(x.get("semanas_inactivo") or 0) >= 3 and x.get("prod_id")
+            if int(x.get("semanas_inactivo") or 0) >= 2 and x.get("prod_id")
         )
     except Exception:
         n_lote_inactivos = 0
@@ -1621,9 +1689,11 @@ async def api_add_produccion(
     trabajo_id: int | None = Form(None),
     repo: ProduccionRepo = Depends(get_produccion_repo),
 ):
+    """Alta de fila. Si ya existe (incluso terminada) la reabre y actualiza."""
     from app.core.normalize import canonical_name
-    new_id = repo.insertar(semana_id, {
-        "nombre": canonical_name(nombre),
+    nombre_c = canonical_name(nombre)
+    payload = {
+        "nombre": nombre_c,
         "ubic": ubic,
         "folio": folio,
         "modelo": modelo,
@@ -1638,8 +1708,92 @@ async def api_add_produccion(
         "gm_vie": gm_vie,
         "trabajador_id": trabajador_id,
         "trabajo_id": trabajo_id,
-    })
-    return {"id": new_id, "ok": True}
+    }
+    existing = None
+    try:
+        existing = repo.buscar_linea(
+            semana_id,
+            nombre_c,
+            int(ubic),
+            folio=folio,
+            material=material,
+            trabajador_id=trabajador_id,
+            prefer_visibles=False,  # incluir terminadas para reabrir
+        )
+    except Exception:
+        existing = None
+    if existing is None and folio:
+        # Fallback: mismo trabajador+folio en semana (cualquier material)
+        try:
+            for row in repo.listar_por_semana(semana_id, incluir_terminados=True):
+                same_t = (
+                    (trabajador_id and row.get("trabajador_id") == trabajador_id)
+                    or (
+                        str(row.get("nombre") or "").strip().upper() == nombre_c.upper()
+                        and int(row.get("ubic") or -1) == int(ubic)
+                    )
+                )
+                same_f = str(row.get("folio") or "").strip().upper() == str(folio or "").strip().upper()
+                if same_t and same_f:
+                    existing = row
+                    break
+        except Exception:
+            pass
+    if existing:
+        pid = int(existing["id"])
+        try:
+            repo.reabrir_linea_si_terminada(pid)
+        except Exception:
+            pass
+        upd = {
+            k: payload[k]
+            for k in ("folio", "modelo", "material", "tarifa_gr",
+                      "gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie")
+            if payload.get(k) is not None and str(payload.get(k)).strip() != ""
+        }
+        if upd:
+            try:
+                repo.actualizar_linea(pid, upd)
+            except Exception:
+                # gramos día a día si falla bloque
+                for d in ("gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie"):
+                    if d in upd and upd[d] is not None:
+                        try:
+                            repo.actualizar_gramos_dia(pid, d, float(upd[d]))
+                        except Exception:
+                            pass
+        try:
+            from app.db.repository import HistorialPreciosRepo
+            HistorialPreciosRepo().registrar(
+                payload.get("material") or "",
+                payload.get("tarifa_gr") or 0,
+                payload.get("modelo"),
+                fuente="reabrir_fila",
+                semana_id=semana_id,
+                prod_id=pid,
+            )
+        except Exception:
+            pass
+        return {
+            "id": pid,
+            "ok": True,
+            "reopened": True,
+            "message": "Fila existente reabierta/actualizada (folio antes cerrado o duplicado).",
+        }
+    new_id = repo.insertar(semana_id, payload)
+    try:
+        from app.db.repository import HistorialPreciosRepo
+        HistorialPreciosRepo().registrar(
+            payload.get("material") or "",
+            payload.get("tarifa_gr") or 0,
+            payload.get("modelo"),
+            fuente="alta_fila",
+            semana_id=semana_id,
+            prod_id=new_id,
+        )
+    except Exception:
+        pass
+    return {"id": new_id, "ok": True, "reopened": False}
 
 
 
@@ -1813,8 +1967,8 @@ async def api_export_captura_manual(
     if not semana:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    # Todas las líneas de la semana (también sin gramos) — es la nómina a capturar
-    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=True)
+    # Activas (también sin gramos); excluye folios terminados/cerrados
+    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=False)
     content, media_type, filename = export_svc.export_captura_manual(
         lineas,
         codigo_semana=str(semana.get("codigo") or ""),
@@ -1870,9 +2024,10 @@ async def api_export(
     if not semana:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=True)
-    # Formal (y siempre limpio): solo filas con gramos en al menos un día
-    lineas = [r for r in lineas if linea_tiene_gramos(r)]
+    # Activas + con gramos; folios terminados fuera de cualquier export
+    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=False)
+    from app.services.export_service import filtrar_lineas_export
+    lineas = filtrar_lineas_export(lineas, solo_con_gramos=True)
     if formal:
         def _key(row: dict):
             try:
@@ -2228,7 +2383,7 @@ async def api_patch_taller(
     request: Request,
     repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
 ):
-    """Actualiza solo los campos enviados en el formulario."""
+    """Actualiza campos. Torcedor: al guardar pitas → sueldo = pitas × precio (def. 3.2)."""
     form = await request.form()
     data = {}
     if "puesto" in form:
@@ -2252,7 +2407,17 @@ async def api_patch_taller(
     if not data:
         return {"ok": True, "id": row_id, "unchanged": True}
     repo.actualizar(row_id, data)
-    return {"ok": True, "id": row_id, "updated": list(data.keys())}
+    row = repo.obtener(row_id) or {}
+    return {
+        "ok": True,
+        "id": row_id,
+        "updated": list(data.keys()),
+        "sueldo": row.get("sueldo"),
+        "extras": row.get("extras"),
+        "total": row.get("total"),
+        "pitas": row.get("pitas"),
+        "precio_pita": row.get("precio_pita"),
+    }
 
 
 @router.get("/api/export/master")

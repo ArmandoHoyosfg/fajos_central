@@ -46,7 +46,7 @@
       return false;
     }
     closeBackdrop(opts.modalId);
-    location.reload();
+    try { document.dispatchEvent(new CustomEvent('fajos:row-saved', { detail: data || {} })); } catch(e) {} location.reload();
     return false;
   }
 

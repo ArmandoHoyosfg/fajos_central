@@ -120,7 +120,7 @@
  // capture phase: gana a otros handlers
 
   global.terminarLoteInactivos = async function (semanaId, minSemanas, countHint) {
-    minSemanas = minSemanas || 3;
+    minSemanas = minSemanas || 2;
     var n = countHint || "?";
     if (!window.confirm(
       "¿Terminar en lote " + n + " folio(s) con " + minSemanas + "+ semanas sin avance?\n\n" +
