@@ -477,16 +477,16 @@ class AprendizajeService:
     def marcar_folios_terminados_lote(
         self,
         semana_id: int | None = None,
-        min_semanas: int = 3,
+        min_semanas: int = 2,
         prod_ids: list[int] | None = None,
     ) -> dict:
         """
         Termina en lote folios sin avance.
         - Si prod_ids: solo esos.
         - Si no: todos los inactivos con semanas_inactivo >= min_semanas.
-        min_semanas por defecto 3 (= más de 2 semanas).
+        min_semanas por defecto 2 (dos semanas o más sin avance).
         """
-        min_semanas = max(1, int(min_semanas or 3))
+        min_semanas = max(1, int(min_semanas or 2))
         inactivos = self.detectar_folios_inactivos(semana_id)
         if prod_ids:
             want = {int(x) for x in prod_ids if x}

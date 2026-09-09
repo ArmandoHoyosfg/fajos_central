@@ -933,6 +933,77 @@ class ProduccionRepo(BaseRepo):
             return cur.lastrowid
 
 
+
+    def meta_por_folio(self, folio: str, semana_id: int | None = None) -> dict | None:
+        """Última línea conocida del folio → modelo, material, tarifa."""
+        folio = (folio or "").strip()
+        if not folio:
+            return None
+        with self.db.cursor() as cur:
+            if semana_id:
+                cur.execute(
+                    """
+                    SELECT modelo, material, tarifa_gr, folio
+                    FROM produccion_plata
+                    WHERE UPPER(TRIM(folio)) = UPPER(%s) AND semana_id = %s
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (folio, int(semana_id)),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT modelo, material, tarifa_gr, folio
+                    FROM produccion_plata
+                    WHERE UPPER(TRIM(folio)) = UPPER(%s)
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (folio,),
+                )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "modelo": row.get("modelo"),
+                "material": row.get("material"),
+                "tarifa_gr": float(row["tarifa_gr"]) if row.get("tarifa_gr") is not None else None,
+            }
+
+    def sincronizar_folio(
+        self,
+        folio: str,
+        *,
+        modelo: str | None = None,
+        material: str | None = None,
+        tarifa_gr: float | None = None,
+        semana_id: int | None = None,
+    ) -> int:
+        """Actualiza modelo/material/tarifa en todas las líneas del mismo folio."""
+        folio = (folio or "").strip()
+        if not folio:
+            return 0
+        fields, params = [], []
+        if modelo is not None and str(modelo).strip() != "":
+            fields.append("modelo=%s")
+            params.append(str(modelo).strip())
+        if material is not None and str(material).strip() != "":
+            fields.append("material=%s")
+            params.append(str(material).strip())
+        if tarifa_gr is not None and str(tarifa_gr).strip() != "":
+            fields.append("tarifa_gr=%s")
+            params.append(float(tarifa_gr))
+        if not fields:
+            return 0
+        sql = f"UPDATE produccion_plata SET {', '.join(fields)} WHERE UPPER(TRIM(folio)) = UPPER(%s)"
+        params.append(folio)
+        if semana_id:
+            sql += " AND semana_id=%s"
+            params.append(int(semana_id))
+        with self.db.cursor() as cur:
+            cur.execute(sql, params)
+            return int(cur.rowcount or 0)
+
+
     def duplicar_trabajos_a_semana(self, semana_origen_id: int, semana_destino_id: int) -> dict:
         """
         Copia trabajos activos con línea de producción (folio/modelo/material) a otra semana.

@@ -5,6 +5,14 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.23.0] — 2026-09-08
+
+### Folios: lote por selección, reapertura y datos unificados
+- Cerrar por **selección** (solo ≥2 semanas sin avance) o lote global
+- Al **agregar fila** con trabajador+folio ya cerrado → **reabre** y permite gramos
+- Mismo folio: sugerencia de modelo/material/$ y opción de sincronizar al editar
+- Nueva fila: campos de avance (Sáb–Vie)
+
 ## [3.22.9] — 2026-09-07
 
 ### Fix ModuleNotFoundError app.export_service
