@@ -257,6 +257,11 @@
             "gm_vie": r.gm_vie if r.gm_vie else "",
             "firmado": 1 if r.firmado else 0
           } %}
+      <td class="col-sel">
+        <input type="checkbox" class="row-sel" value="{{ r.id }}"
+               data-inact="{{ 1 if folio_inact_ids and r.id in folio_inact_ids else 0 }}"
+               title="Seleccionar para cerrar por lote">
+      </td>
       <td class="col-actions">
         {% if not semana_cerrada %}
         <div class="row-menu">
