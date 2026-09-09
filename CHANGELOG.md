@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.23.2] — 2026-09-09
+
+### Folios terminados no aparecen en Plata
+- Filtro reforzado: notas `[terminado]` **o** trabajo `activo=0`
+- Al cerrar un folio se marcan también líneas hermanas (misma semana/trabajador/folio)
+- Texto del panel: dejan claro que no salen en la tabla
+
 ## [3.23.1] — 2026-09-09
 
 ### Fixes captura Plata + historial + precios

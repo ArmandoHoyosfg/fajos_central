@@ -783,7 +783,12 @@ class ProduccionRepo(BaseRepo):
             return cur.fetchone()
 
     def listar_por_semana(self, semana_id: int, *, incluir_terminados: bool = False) -> list[dict]:
-        """Lista producción; por defecto oculta folios marcados terminados (trabajo inactivo)."""
+        """Lista producción; por defecto **no** muestra folios terminados/cerrados.
+
+        Criterio de ocultar (cualquiera):
+        - notas contienen [terminado]
+        - trabajo ligado con activo = 0
+        """
         sql = """
             SELECT p.id, p.semana_id, p.trabajador_id, p.trabajo_id,
                    COALESCE(tr.nombre_mostrar, p.nombre) AS nombre,
@@ -801,9 +806,12 @@ class ProduccionRepo(BaseRepo):
             WHERE p.semana_id = %s
         """
         if not incluir_terminados:
+            # Ocultar si notas tienen [terminado] O el trabajo está inactivo.
+            # (Antes: trabajo_id NULL pasaba el filtro de trabajo; solo notas bastaba,
+            #  pero reforzamos con exclusión explícita.)
             sql += """
-              AND (p.trabajo_id IS NULL OR tj.id IS NULL OR COALESCE(tj.activo, 1) = 1)
               AND (p.notas IS NULL OR p.notas NOT LIKE %s)
+              AND NOT (p.trabajo_id IS NOT NULL AND COALESCE(tj.activo, 1) = 0)
             """
             params: tuple = (semana_id, "%[terminado]%")
         else:
@@ -814,7 +822,14 @@ class ProduccionRepo(BaseRepo):
         with self.db.cursor() as cur:
             try:
                 cur.execute(sql, params)
-                return list(cur.fetchall() or [])
+                rows = list(cur.fetchall() or [])
+                if not incluir_terminados:
+                    rows = [
+                        r for r in rows
+                        if "[terminado]" not in str(r.get("notas") or "").lower()
+                        and int(r.get("trabajo_activo") if r.get("trabajo_activo") is not None else 1) != 0
+                    ]
+                return rows
             except Exception:
                 # Fallback sin join trabajos / sin filtro
                 cur.execute(
@@ -833,7 +848,8 @@ class ProduccionRepo(BaseRepo):
                 if not incluir_terminados:
                     rows = [
                         r for r in rows
-                        if "[terminado]" not in str(r.get("notas") or "")
+                        if "[terminado]" not in str(r.get("notas") or "").lower()
+                        and int(r.get("trabajo_activo") if r.get("trabajo_activo") is not None else 1) != 0
                     ]
                 return rows
 
