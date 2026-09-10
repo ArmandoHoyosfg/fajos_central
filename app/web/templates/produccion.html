@@ -424,12 +424,18 @@
           <div>
             <label>Material <span class="muted">(define precio de catálogo)</span></label>
             <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                   placeholder="AG3, DOL…"
                    onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
           </div>
-          
+          <div>
+            <label>$/Gr</label>
+            <input name="tarifa_gr" type="number" step="any" min="0" value="12"
+                   title="Se rellena del catálogo al elegir material; editable"
+                   oninput="if(window.CatalogAssist)CatalogAssist.markTarifaEdited(this)">
+          </div>
         </div>
-        
-        <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div class="full"><label class="muted">Avance (gramos)</label></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
         <div><label>Dom</label><input name="gm_dom" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
         <div><label>Lun</label><input name="gm_lun" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
         <div><label>Mar</label><input name="gm_mar" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
@@ -564,41 +570,37 @@ function onMaterialChange_legacy_unused(sel) {
 function openEditPlt(id, data) {
   const who = document.getElementById("edit-plt-who");
   if (who) who.textContent = (data.nombre || "") + " · ubic " + (data.ubic || "");
-  if (window.FajosRowEdit) {
-    FajosRowEdit.open({ modalId: "modal-edit-plt", formId: "form-edit-plt", id: id, data: data });
-  }
-  bindEditPltTotals();
   const form = document.getElementById("form-edit-plt");
-  if (!form) return;
-  if (form._recalcTotals) setTimeout(form._recalcTotals, 30);
-  // material: asegurar valor aunque no esté en options / datalist
-  if (data && data.material) {
-    const sel = form.elements.namedItem("material");
-    if (sel) {
-      const val = data.material;
-      if (sel.tagName === "SELECT") {
-        let found = false;
-        for (const o of sel.options) { if (o.value === val) { found = true; break; } }
-        if (!found) {
-          const opt = document.createElement("option");
-          opt.value = val; opt.textContent = val;
-          sel.appendChild(opt);
-        }
-        sel.value = val;
-      } else {
-        sel.value = val;
-      }
-      if (typeof onMaterialInput === "function") onMaterialInput(sel);
-    }
+  if (form && form.elements.namedItem("tarifa_gr")) {
+    form.elements.namedItem("tarifa_gr").dataset.userEdited = "0";
   }
-  if (data && data.modelo) {
-    const mod = form.elements.namedItem("modelo");
-    if (mod) {
-      mod.value = data.modelo;
-      if (typeof onModeloInput === "function") onModeloInput(mod);
+  if (window.FajosRowEdit) {
+    FajosRowEdit.open({
+      formId: "form-edit-plt",
+      modalId: "modal-edit-plt",
+      id: id,
+      data: data,
+    });
+  }
+  // Tras rellenar: si hay tarifa de la fila, no la pisa el catálogo
+  if (form) {
+    const tar = form.elements.namedItem("tarifa_gr");
+    const mat = form.elements.namedItem("material");
+    if (tar && data && data.tarifa_gr != null && String(data.tarifa_gr).trim() !== "") {
+      tar.value = data.tarifa_gr;
+      tar.dataset.userEdited = "1"; // conservar precio de la fila
     }
+    if (mat && window.CatalogAssist) {
+      CatalogAssist.onMaterialInput(mat); // hint catálogo / libre
+      // si no había tarifa en fila y el material está en catálogo, onMaterialInput ya la puso
+      if (tar && (!data.tarifa_gr && tar.dataset.userEdited !== "1")) {
+        /* ok */
+      }
+    }
+    if (typeof updateEditPltTotals === "function") updateEditPltTotals();
   }
 }
+
 </script>
 
 

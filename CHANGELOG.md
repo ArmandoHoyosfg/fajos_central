@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.23.4] — 2026-09-09
+
+### Editar fila: $/Gr junto a material
+- Campo **$/Gr** restaurado en modal Editar (junto a Material)
+- Precio de la fila se conserva; catálogo sugiere y rellena si aplica
+- Decimales (`step=any`) en gramos del editor
+
 ## [3.23.3] — 2026-09-09
 
 ### ＋ Fila: decimales y $/Gr
