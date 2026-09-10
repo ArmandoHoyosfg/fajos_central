@@ -104,10 +104,22 @@
   <button type="button" class="btn" onclick="openModal('modal-un-dia')" {% if semana_cerrada %}disabled{% endif %}>＋ Un día</button>
   <button type="button" class="btn btn-secondary" onclick="openModal('modal-linea')" {% if semana_cerrada %}disabled{% endif %}>＋ Fila</button>
 
-  <button type="button" class="btn btn-secondary" id="btn-cerrar-sel"
-          onclick="cerrarFoliosSeleccionados()" title="Cierra solo los marcados con 2+ semanas sin avance">
-    Cerrar seleccionados (≥2 sem)
-  </button>
+  <span id="sel-acciones-wrap" class="sel-acciones-wrap" style="position:relative;display:inline-flex;align-items:center;gap:0.35rem">
+    <button type="button" class="btn btn-secondary" id="btn-sel-acciones"
+            onclick="toggleAccionesMenu(event)"
+            aria-haspopup="true" aria-expanded="false"
+            title="Acciones sobre las filas marcadas con ✓">
+      Acciones…
+    </button>
+    <span id="sel-count" class="muted" style="font-size:0.82rem;min-width:6rem"></span>
+    <div id="sel-acciones-panel" class="row-menu-panel sel-acciones-panel" hidden
+         style="position:absolute;top:100%;left:0;z-index:40;min-width:14rem;margin-top:0.25rem"
+         onclick="event.stopPropagation()">
+      <button type="button" onclick="cerrarFoliosSeleccionados()">Cerrar seleccionados (≥2 sem sin avance)</button>
+      <button type="button" onclick="duplicarSeleccionadosEnDOL()">Duplicar seleccionados en DOL</button>
+      <button type="button" onclick="limpiarSeleccion()">Quitar selección</button>
+    </div>
+  </span>
 
   <button type="button" class="btn btn-secondary" onclick="cerrarSemana()" {% if semana_cerrada %}disabled{% endif %}>🔒 Cerrar semana</button>
   <button type="button" class="btn btn-secondary" onclick="reabrirSemana()" {% if not semana_cerrada %}disabled{% endif %}>🔓 Reabrir</button>
@@ -569,7 +581,7 @@ function onMaterialChange_legacy_unused(sel) {
 
 <script src="/static/semana_ops.js?v=3122"></script>
 <script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "plt";</script>
-<script src="/static/row_select.js?v=3231"></script>
+<script src="/static/row_select.js?v=3236"></script>
 
 <script src="/static/row_menu.js?v=31913"></script>
 <script src="/static/row_edit.js?v=3112"></script>

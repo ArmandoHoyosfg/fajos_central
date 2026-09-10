@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.23.6] — 2026-09-09
+
+### Acciones… sobre seleccionados
+- Botón **Acciones…** (reemplaza el de solo cerrar)
+- Menú: cerrar ≥2 sem, **duplicar en DOL** en lote, quitar selección
+- Contador de filas marcadas
+
 ## [3.23.5] — 2026-09-09
 
 ### Duplicar en DOL
