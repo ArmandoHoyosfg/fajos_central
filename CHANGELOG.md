@@ -5,6 +5,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.23.3] — 2026-09-09
+
+### ＋ Fila: decimales y $/Gr
+- Gramos con `step="any"` (permite 2.8, etc.)
+- Campo **$/Gr** restaurado junto a Material (catálogo + editable)
+
 ## [3.23.2] — 2026-09-09
 
 ### Folios terminados no aparecen en Plata
