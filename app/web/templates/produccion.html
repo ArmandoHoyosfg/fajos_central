@@ -272,6 +272,13 @@
           </button>
           <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
             <button type="button" onclick='openEditPlt({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
+            {% if (r.material or '')|upper != 'DOL' %}
+            <button type="button"
+                    onclick="duplicarEnMaterial({{ r.id }}, 'DOL'); FajosRowMenu.closeAll()"
+                    title="Misma fila (folio/modelo) con material DOL y gramos en blanco">
+              Duplicar en DOL
+            </button>
+            {% endif %}
             {% if r.folio %}
             <button type="button" class="btn-folio-terminar" data-action="terminar-folio" data-prod-id="{{ r.id }}" data-folio="{{ r.folio or '' }}" onclick="if(window.FajosRowMenu)FajosRowMenu.closeAll()">Marcar folio terminado</button>
             {% endif %}
@@ -1277,6 +1284,35 @@ document.addEventListener('fajos:row-saved', async function (ev) {
     await fetch('/api/produccion/folio-sync', { method: 'POST', body: fd });
   } catch (e) {}
 });
+</script>
+
+<script>
+
+async function duplicarEnMaterial(prodId, material) {
+  material = (material || 'DOL').toUpperCase();
+  if (!prodId) { showToast('Fila no identificada', true); return; }
+  if (!confirm('¿Duplicar esta fila en material ' + material + '?\n\n• Mismo trabajador, folio y modelo\n• Gramos en blanco para capturar aparte\n• Precio del catálogo de ' + material + ' (si existe)')) return;
+  try {
+    const fd = new FormData();
+    fd.set('material', material);
+    const res = await fetch('/api/produccion/linea/' + prodId + '/duplicar', {
+      method: 'POST',
+      body: fd,
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) {
+      showToast(data.error || data.message || ('Error HTTP ' + res.status), true);
+      return;
+    }
+    showToast(data.message || ('Duplicada en ' + material));
+    setTimeout(() => location.reload(), 450);
+  } catch (e) {
+    showToast('Error de red al duplicar', true);
+  }
+}
+
 </script>
 {% endblock %}
 

@@ -254,6 +254,132 @@ async def api_terminar_lote(request: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
+
+@router.post("/api/produccion/linea/{prod_id}/duplicar")
+async def api_duplicar_linea(
+    prod_id: int,
+    material: str = Form("DOL"),
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+):
+    """
+    Duplica una línea de Plata con otro material (p. ej. DOL).
+    Copia folio/modelo/trabajador; gramos en blanco; tarifa del catálogo si existe.
+    Si ya hay fila activa misma semana+trabajador+folio+material → la reutiliza.
+    """
+    from fastapi.responses import JSONResponse
+    from app.core.normalize import canonical_name
+
+    src = repo.obtener(prod_id)
+    if not src:
+        return JSONResponse({"ok": False, "error": "Línea no encontrada"}, status_code=404)
+
+    material = (material or "DOL").strip().upper() or "DOL"
+    semana_id = int(src["semana_id"])
+    nombre = canonical_name(src.get("nombre") or "")
+    try:
+        ubic = int(src.get("ubic") or 0)
+    except (TypeError, ValueError):
+        ubic = 0
+    folio = (src.get("folio") or "").strip() or None
+    modelo = src.get("modelo")
+    trabajador_id = src.get("trabajador_id")
+
+    # Tarifa: catálogo de materiales → historial → tarifa origen
+    tarifa = None
+    try:
+        from app.db.repository import CatalogosRepo
+        mats = CatalogosRepo().listar_materiales(solo_activos=True)
+        for m in mats or []:
+            if str(m.get("material") or "").strip().upper() == material:
+                tarifa = float(m.get("tarifa_por_gramo") or m.get("tarifa_gr") or 0) or None
+                break
+    except Exception:
+        pass
+    if tarifa is None:
+        try:
+            from app.db.repository import HistorialPreciosRepo
+            sug = HistorialPreciosRepo().sugerir(material, modelo)
+            if sug is not None:
+                tarifa = float(sug)
+        except Exception:
+            pass
+    if tarifa is None:
+        try:
+            tarifa = float(src.get("tarifa_gr") or 12)
+        except (TypeError, ValueError):
+            tarifa = 12.0
+
+    # ¿Ya existe misma combinación?
+    existing = None
+    try:
+        for row in repo.listar_por_semana(semana_id, incluir_terminados=True):
+            same_t = (
+                (trabajador_id and row.get("trabajador_id") == trabajador_id)
+                or (
+                    str(row.get("nombre") or "").strip().upper() == nombre.upper()
+                    and int(row.get("ubic") or -1) == ubic
+                )
+            )
+            same_f = str(row.get("folio") or "").strip().upper() == str(folio or "").strip().upper()
+            same_m = str(row.get("material") or "").strip().upper() == material
+            if same_t and same_f and same_m:
+                existing = row
+                break
+    except Exception:
+        existing = None
+
+    if existing:
+        pid = int(existing["id"])
+        try:
+            repo.reabrir_linea_si_terminada(pid)
+        except Exception:
+            pass
+        # Actualizar tarifa si venía vacía
+        try:
+            if existing.get("tarifa_gr") in (None, "", 0) and tarifa:
+                repo.actualizar_linea(pid, {"tarifa_gr": tarifa, "material": material})
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "id": pid,
+            "reused": True,
+            "material": material,
+            "message": f"Ya existía en {material}; se reactivó/reutilizó.",
+        }
+
+    # No clonar trabajo_id (material distinto = línea distinta)
+    new_id = repo.insertar(semana_id, {
+        "nombre": nombre,
+        "ubic": ubic,
+        "folio": folio,
+        "modelo": modelo,
+        "material": material,
+        "tarifa_gr": tarifa,
+        "trabajador_id": trabajador_id,
+        "trabajo_id": None,
+        "gm_sab": None, "gm_dom": None, "gm_lun": None,
+        "gm_mar": None, "gm_mie": None, "gm_jue": None, "gm_vie": None,
+    })
+    try:
+        from app.db.repository import HistorialPreciosRepo
+        HistorialPreciosRepo().registrar(
+            material, tarifa, modelo, fuente="duplicar_material",
+            semana_id=semana_id, prod_id=new_id,
+        )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "id": new_id,
+        "reused": False,
+        "material": material,
+        "tarifa_gr": tarifa,
+        "message": f"Fila duplicada en {material}.",
+    }
+
+
+
 @router.post("/api/produccion/linea/{prod_id}/reactivar")
 async def api_linea_reactivar(prod_id: int):
     from fastapi.responses import JSONResponse

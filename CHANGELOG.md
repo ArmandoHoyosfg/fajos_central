@@ -5,6 +5,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.23.5] — 2026-09-09
+
+### Duplicar en DOL
+- Menú ⋮ de cada fila (si no es ya DOL): **Duplicar en DOL**
+- Copia trabajador/folio/modelo; material DOL; gramos vacíos; tarifa de catálogo
+- Si ya existía la misma combinación, reutiliza/reactiva en lugar de duplicar
+
 ## [3.23.4] — 2026-09-09
 
 ### Editar fila: $/Gr junto a material
