@@ -326,11 +326,12 @@ function tllPuestoHint() {
 async function exportFormalTaller(semanaId) {
   try {
     const res = await fetch('/api/export/nomina-taller/' + semanaId + '/preview');
-    const d = await res.json();
+    const d = await res.json().catch(() => ({}));
     if (!res.ok) { alert(d.error || d.message || 'No se pudo revisar la exportación'); return; }
     const omit = d.omitidas || 0;
     const exp = d.exportables || 0;
     const tot = d.total || 0;
+    const money = (n) => '$' + Number(n || 0).toFixed(2);
     if (exp === 0) {
       alert(
         'No hay filas con monto > 0 para exportar.\n\n' +
@@ -343,10 +344,19 @@ async function exportFormalTaller(semanaId) {
     let msg = 'Exportar nómina formal Taller\n\n' +
       'Líneas en tabla: ' + tot + '\n' +
       'Se exportarán (monto > 0): ' + exp + '\n';
-    if (omit > 0) {
-      msg += 'Se omitirán (en $0): ' + omit + '\n';
+    if (omit > 0) msg += 'Se omitirán (en $0): ' + omit + '\n';
+    msg += '\nRESUMEN que irá al Excel:\n' +
+      '  Taller: ' + money(d.nomina_taller) + '\n' +
+      '  Plata:  ' + money(d.nomina_plata) + '\n' +
+      '  Pita:   ' + money(d.nomina_pita) + '\n' +
+      '  GRAN TOTAL: ' + money(d.gran_total) + '\n';
+    if (d.totales_incompletos) {
+      msg += '\n⚠ No se están exportando todos los totales: Plata y/o Pita están en $0.\n' +
+        'El GRAN TOTAL saldrá incompleto. Conviene exportar Plata y Pita antes.\n\n' +
+        '¿Exportar Taller de todos modos?';
+    } else {
+      msg += '\n¿Descargar Excel?';
     }
-    msg += '\nRegla: las filas en $0 no van al Excel.\n\n¿Descargar?';
     if (!confirm(msg)) return;
     window.location.href = '/api/export/nomina-taller/' + semanaId;
   } catch (e) {

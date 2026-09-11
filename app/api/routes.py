@@ -2421,20 +2421,8 @@ async def api_export_taller(
     nom_plata = float(t_plt.get("total_efectivo") or 0)
     nom_pita = float(t_pit.get("total") or 0)
     nom_taller = float(t_tll.get("total") or 0)
-    # Taller se engrapa al final: exige totales de Plata y Pita (salvo force=1)
-    if include_resumen and not force:
-        if nom_plata <= 0 and nom_pita <= 0:
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "error": "No se puede exportar Taller sin totales de Plata y/o Pita. "
-                             "Exporta primero Plata y Pita (o usa force=1 solo en emergencia).",
-                    "nomina_plata": nom_plata,
-                    "nomina_pita": nom_pita,
-                    "nomina_taller": nom_taller,
-                },
-                status_code=400,
-            )
+    # Aviso de totales incompletos se hace en el cliente (preview + confirm).
+    # force=1 queda disponible por compatibilidad; el export siempre continúa.
     resumen = None
     if include_resumen:
         resumen = {
@@ -2483,8 +2471,10 @@ async def api_export_pita_preview(
 async def api_export_taller_preview(
     semana_id: int,
     repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
+    pit: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+    plt: ProduccionRepo = Depends(get_produccion_repo),
 ):
-    """Cuenta filas totales vs exportables (monto > 0)."""
+    """Cuenta filas exportables y totales de las 3 nóminas (para avisar si faltan)."""
     todas = list(repo.listar_por_semana(semana_id))
     exportables = [
         r for r in todas
@@ -2492,12 +2482,29 @@ async def api_export_taller_preview(
         or float(r.get("sueldo") or 0) > 0
         or float(r.get("extras") or 0) > 0
     ]
+    t_plt = plt.totales_semana(semana_id)
+    t_pit = pit.totales(semana_id)
+    t_tll = repo.totales(semana_id)
+    nom_plata = float(t_plt.get("total_efectivo") or 0)
+    nom_pita = float(t_pit.get("total") or 0)
+    nom_taller = float(t_tll.get("total") or 0)
+    incompleto = nom_plata <= 0 or nom_pita <= 0
     return {
         "ok": True,
         "total": len(todas),
         "exportables": len(exportables),
         "omitidas": len(todas) - len(exportables),
         "regla": "Solo filas con sueldo/extras/total > 0",
+        "nomina_taller": nom_taller,
+        "nomina_plata": nom_plata,
+        "nomina_pita": nom_pita,
+        "gran_total": nom_taller + nom_plata + nom_pita,
+        "totales_incompletos": incompleto,
+        "aviso": (
+            "Faltan totales de Plata y/o Pita en el RESUMEN. "
+            "Conviene exportar esas nóminas primero; el GRAN TOTAL saldrá incompleto."
+            if incompleto else ""
+        ),
     }
 
 
