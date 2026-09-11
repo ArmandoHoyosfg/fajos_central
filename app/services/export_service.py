@@ -662,13 +662,27 @@ class ExportService:
         ws.page_margins.footer = 0.2
 
     def _dibujar_calendarios_semana(
-        self, ws, fecha_inicio, fecha_fin, *, start_col: int = 9, start_row: int = 1
+        self,
+        ws,
+        fecha_inicio,
+        fecha_fin,
+        *,
+        fecha_pago=None,
+        start_col: int = 9,
+        start_row: int = 1,
     ) -> None:
-        """Mini-calendario(s) del mes; días del periodo resaltados."""
+        """
+        Mini-calendario(s) del mes (Domingo → Sábado, uso habitual en MX).
+        - Verde: días del periodo de captura
+        - Amarillo: viernes (cierre/impresión)
+        - Naranja: sábado dentro del periodo
+        - Rojo negrita: día de pago (sábado de pago)
+        """
         from calendar import Calendar
         from datetime import date as _date
         from openpyxl.utils import get_column_letter
-        from app.utils.fechas_nomina import parse_fecha, dias_en_periodo, MESES
+        from openpyxl.styles import Border, Side
+        from app.utils.fechas_nomina import parse_fecha, dias_en_periodo, MESES, fecha_pago as calc_pago
 
         ini = parse_fecha(fecha_inicio)
         fin = parse_fecha(fecha_fin)
@@ -676,31 +690,48 @@ class ExportService:
             return
         if fin < ini:
             ini, fin = fin, ini
+        pago = parse_fecha(fecha_pago) if fecha_pago else calc_pago(ini, fin)
         dias_set = set(dias_en_periodo(ini, fin))
+
         months = []
-        y, m = ini.year, ini.month
-        while (y, m) <= (fin.year, fin.month):
-            months.append((y, m))
-            if m == 12:
-                y, m = y + 1, 1
+        y, mth = ini.year, ini.month
+        while (y, mth) <= (fin.year, fin.month):
+            months.append((y, mth))
+            if mth == 12:
+                y, mth = y + 1, 1
             else:
-                m += 1
+                mth += 1
+
+        thin = Border(
+            left=Side(style="thin", color="B0B0B0"),
+            right=Side(style="thin", color="B0B0B0"),
+            top=Side(style="thin", color="B0B0B0"),
+            bottom=Side(style="thin", color="B0B0B0"),
+        )
         fills = {
             "header": PatternFill("solid", fgColor="1F4E79"),
             "week": PatternFill("solid", fgColor="C6EFCE"),
             "vie": PatternFill("solid", fgColor="FFF2CC"),
             "sab": PatternFill("solid", fgColor="FCE4D6"),
-            "mute": PatternFill("solid", fgColor="F2F2F2"),
+            "pago": PatternFill("solid", fgColor="FFCDD2"),
+            "mute": PatternFill("solid", fgColor="F5F5F5"),
+            "out": PatternFill("solid", fgColor="FFFFFF"),
         }
-        cal = Calendar(firstweekday=0)
+        # Domingo primero (MX): D L M X J V S
+        cal = Calendar(firstweekday=6)
+        day_headers = ["D", "L", "M", "X", "J", "V", "S"]
+
         col0 = start_col
         row0 = start_row
-        # Dejar columna H vacía como separador
-        ws.column_dimensions[get_column_letter(start_col - 1)].width = 2
+        # Separador
+        if start_col > 1:
+            ws.column_dimensions[get_column_letter(start_col - 1)].width = 2.5
+
         for yi, mi in months[:2]:
-            title = f"{MESES[mi].capitalize()} {yi}"
-            cell = ws.cell(row0, col0, title)
+            # Título del mes
+            cell = ws.cell(row0, col0, f"{MESES[mi].capitalize()} {yi}")
             cell.font = Font(name="Calibri", bold=True, size=10, color="1F4E79")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
             try:
                 ws.merge_cells(
                     start_row=row0, start_column=col0,
@@ -708,37 +739,54 @@ class ExportService:
                 )
             except Exception:
                 pass
-            for i, dn in enumerate(["L", "M", "X", "J", "V", "S", "D"]):
+            ws.row_dimensions[row0].height = 16
+
+            # Encabezados D L M X J V S
+            for i, dn in enumerate(day_headers):
                 c = ws.cell(row0 + 1, col0 + i, dn)
                 c.font = Font(name="Calibri", bold=True, size=8, color="FFFFFF")
                 c.fill = fills["header"]
-                c.alignment = Alignment(horizontal="center")
+                c.alignment = Alignment(horizontal="center", vertical="center")
+                c.border = thin
+
             weeks = cal.monthdayscalendar(yi, mi)
             for wi, week in enumerate(weeks):
                 for di, day in enumerate(week):
-                    c = ws.cell(row0 + 2 + wi, col0 + di, day if day else "")
-                    c.alignment = Alignment(horizontal="center")
-                    c.font = Font(name="Calibri", size=8)
+                    c = ws.cell(row0 + 2 + wi, col0 + di)
+                    c.alignment = Alignment(horizontal="center", vertical="center")
+                    c.border = thin
                     if not day:
+                        c.value = ""
                         c.fill = fills["mute"]
                         continue
+                    c.value = day
                     d = _date(yi, mi, day)
-                    if d in dias_set:
-                        if d.weekday() == 4:
+                    # Día de pago: máxima prioridad visual
+                    if pago and d == pago:
+                        c.fill = fills["pago"]
+                        c.font = Font(name="Calibri", size=9, bold=True, color="C62828")
+                    elif d in dias_set:
+                        if d.weekday() == 4:  # viernes
                             c.fill = fills["vie"]
-                            c.font = Font(name="Calibri", size=8, bold=True)
-                        elif d.weekday() == 5:
+                            c.font = Font(name="Calibri", size=8, bold=True, color="333333")
+                        elif d.weekday() == 5:  # sábado en periodo
                             c.fill = fills["sab"]
-                            c.font = Font(name="Calibri", size=8, bold=True)
+                            c.font = Font(name="Calibri", size=8, bold=True, color="333333")
                         else:
                             c.fill = fills["week"]
-                            c.font = Font(name="Calibri", size=8, bold=True)
+                            c.font = Font(name="Calibri", size=8, bold=True, color="1B5E20")
+                    else:
+                        c.fill = fills["out"]
+                        c.font = Font(name="Calibri", size=8, color="999999")
+
             leg_row = row0 + 2 + len(weeks)
             leg = ws.cell(
-                leg_row, col0,
-                "Verde=periodo · Amarillo=viernes · Naranja=sábado",
+                leg_row,
+                col0,
+                "Verde=periodo  Amarillo=vie  Naranja=sáb  Rojo=día de pago",
             )
-            leg.font = Font(name="Calibri", size=7, color="666666")
+            leg.font = Font(name="Calibri", size=7, color="555555")
+            leg.alignment = Alignment(wrap_text=True, vertical="center")
             try:
                 ws.merge_cells(
                     start_row=leg_row, start_column=col0,
@@ -746,8 +794,10 @@ class ExportService:
                 )
             except Exception:
                 pass
+            ws.row_dimensions[leg_row].height = 22
+
             for i in range(7):
-                ws.column_dimensions[get_column_letter(col0 + i)].width = 3.6
+                ws.column_dimensions[get_column_letter(col0 + i)].width = 4.0
             row0 = leg_row + 2
 
 
@@ -772,13 +822,14 @@ class ExportService:
         ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="C45C26")
         ws.merge_cells("A2:G2")
         ws["A3"] = (
-            f"Semana {codigo_semana}  ·  Periodo: {ley['periodo_captura'] or '—'}  ·  "
-            f"{ley['cierre']}  ·  {ley['pago']}  ·  Torcedores = pitas × $3.20"
+            f"Semana {codigo_semana} · Periodo: {ley['periodo_captura'] or '—'} · "
+            f"{ley['cierre']} · Torcedores = pitas × $3.20"
         )
         ws["A3"].font = Font(name="Calibri", size=9, color="666666")
         ws["A3"].alignment = Alignment(wrap_text=True, vertical="center")
         ws.merge_cells("A3:G3")
-        ws.row_dimensions[3].height = 28
+        ws.row_dimensions[3].height = 24
+        # Día de pago visible en fila de encabezado (columna G ya es Firma header area — usar nota bajo título)
 
         headers = [c[1] for c in self.TLL_COLUMNS]
         for col, h in enumerate(headers, 1):
@@ -883,7 +934,12 @@ class ExportService:
         # Mini-calendario(s) a la derecha (espacio en oficio horizontal)
         try:
             self._dibujar_calendarios_semana(
-                ws, meta.get("fecha_inicio"), meta.get("fecha_fin"), start_col=9, start_row=1
+                ws,
+                meta.get("fecha_inicio"),
+                meta.get("fecha_fin"),
+                fecha_pago=ley.get("fecha_pago"),
+                start_col=9,
+                start_row=1,
             )
         except Exception:
             pass
