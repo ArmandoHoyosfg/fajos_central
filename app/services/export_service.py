@@ -120,6 +120,7 @@ class ExportService:
         *,
         codigo_semana: str = "",
         filename_stem: str = "nomina",
+        meta_semana: dict | None = None,
     ) -> tuple[bytes, str, str]:
         """
         Devuelve (contenido_bytes, media_type, filename).
@@ -134,7 +135,7 @@ class ExportService:
         lineas = filtrar_lineas_export(lineas, solo_con_gramos=True)
         try:
             if fmt == "xlsx":
-                data = self._to_xlsx(lineas, codigo_semana)
+                data = self._to_xlsx(lineas, codigo_semana, meta_semana=meta_semana)
                 return data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", f"{filename_stem}.xlsx"
             if fmt == "csv":
                 data = self._to_csv(lineas)
@@ -156,40 +157,43 @@ class ExportService:
             ) from e
         raise ValidationAppError(f"Formato no implementado: {fmt}")
 
-    def _to_xlsx(self, lineas: list[dict], codigo_semana: str) -> bytes:
+    def _to_xlsx(
+        self,
+        lineas: list[dict],
+        codigo_semana: str,
+        *,
+        meta_semana: dict | None = None,
+    ) -> bytes:
         from datetime import date, datetime
         from collections import defaultdict
+        from app.utils.fechas_nomina import leyenda_nomina
 
         hoy = date.today()
         generado = datetime.now().strftime("%d/%m/%Y %H:%M")
-        meses = {
-            1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
-            5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
-            9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
-        }
+        meta = meta_semana or {}
+        ley = leyenda_nomina(meta.get("fecha_inicio"), meta.get("fecha_fin"), codigo=codigo_semana)
 
         wb = Workbook()
         ws = wb.active
         ws.title = "Nomina-Formal"
 
         ws.merge_cells("A1:P1")
-        ws["A1"] = "TALLER DE FAJOS CENTRAL"
-        ws["A1"].font = Font(name="Calibri", bold=True, size=16, color="1F4E79")
+        ws["A1"] = "TALLER DE FAJOS CENTRAL — NÓMINA PLATA (PLT)"
+        ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
 
         ws.merge_cells("A2:P2")
-        ws["A2"] = "NÓMINA FORMAL SEMANAL — PRODUCCIÓN PLATA (PLT)"
-        ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="2E75B6")
+        ws["A2"] = ley["titulo_pago"] if ley.get("titulo_pago") else "NÓMINA FORMAL SEMANAL — PRODUCCIÓN PLATA (PLT)"
+        ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="C45C26")
 
-        ws["A3"] = "Semana"
-        ws["B3"] = codigo_semana or "—"
-        ws["C3"] = "Mes"
-        ws["D3"] = meses.get(hoy.month, "")
-        ws["E3"] = "Año"
-        ws["F3"] = hoy.year
-        ws["G3"] = "Emitido"
-        ws["H3"] = generado
-        for col in range(1, 9):
-            ws.cell(row=3, column=col).font = Font(name="Calibri", size=9, bold=(col % 2 == 1))
+        ws.merge_cells("A3:P3")
+        ws["A3"] = (
+            f"Semana {codigo_semana or '—'}  ·  Periodo: {ley.get('periodo_captura') or '—'}  ·  "
+            f"{ley.get('cierre') or 'Cierre e impresión: viernes'}  ·  "
+            f"{ley.get('pago') or 'Día de pago: sábado'}  ·  Emitido: {generado}"
+        )
+        ws["A3"].font = Font(name="Calibri", size=9, color="666666")
+        ws["A3"].alignment = Alignment(wrap_text=True, vertical="center")
+        ws.row_dimensions[3].height = 28
 
         ws["A4"] = "Material:"
         ws["A4"].font = Font(name="Calibri", size=8, italic=True, color="666666")
@@ -317,10 +321,7 @@ class ExportService:
         }
         for col, w in widths.items():
             ws.column_dimensions[col].width = w
-        ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToPage = True
-        ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
+        self._print_oficio_landscape(ws)
         ws.print_title_rows = "1:5"
         try:
             ws.oddFooter.center.text = f"Nómina formal {codigo_semana} · {generado}"
@@ -642,6 +643,114 @@ class ExportService:
             logger.exception("Error exportando resumen")
             raise ExportError("Fallo al exportar resumen.", cause=e) from e
 
+
+    def _print_oficio_landscape(self, ws) -> None:
+        """Tamaño oficio, horizontal, márgenes estrechos (impresión típica)."""
+        ws.page_setup.orientation = "landscape"
+        try:
+            ws.page_setup.paperSize = ws.PAPERSIZE_LEGAL
+        except Exception:
+            pass
+        ws.page_setup.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.page_margins.left = 0.35
+        ws.page_margins.right = 0.35
+        ws.page_margins.top = 0.35
+        ws.page_margins.bottom = 0.35
+        ws.page_margins.header = 0.2
+        ws.page_margins.footer = 0.2
+
+    def _dibujar_calendarios_semana(
+        self, ws, fecha_inicio, fecha_fin, *, start_col: int = 9, start_row: int = 1
+    ) -> None:
+        """Mini-calendario(s) del mes; días del periodo resaltados."""
+        from calendar import Calendar
+        from datetime import date as _date
+        from openpyxl.utils import get_column_letter
+        from app.utils.fechas_nomina import parse_fecha, dias_en_periodo, MESES
+
+        ini = parse_fecha(fecha_inicio)
+        fin = parse_fecha(fecha_fin)
+        if not ini or not fin:
+            return
+        if fin < ini:
+            ini, fin = fin, ini
+        dias_set = set(dias_en_periodo(ini, fin))
+        months = []
+        y, m = ini.year, ini.month
+        while (y, m) <= (fin.year, fin.month):
+            months.append((y, m))
+            if m == 12:
+                y, m = y + 1, 1
+            else:
+                m += 1
+        fills = {
+            "header": PatternFill("solid", fgColor="1F4E79"),
+            "week": PatternFill("solid", fgColor="C6EFCE"),
+            "vie": PatternFill("solid", fgColor="FFF2CC"),
+            "sab": PatternFill("solid", fgColor="FCE4D6"),
+            "mute": PatternFill("solid", fgColor="F2F2F2"),
+        }
+        cal = Calendar(firstweekday=0)
+        col0 = start_col
+        row0 = start_row
+        # Dejar columna H vacía como separador
+        ws.column_dimensions[get_column_letter(start_col - 1)].width = 2
+        for yi, mi in months[:2]:
+            title = f"{MESES[mi].capitalize()} {yi}"
+            cell = ws.cell(row0, col0, title)
+            cell.font = Font(name="Calibri", bold=True, size=10, color="1F4E79")
+            try:
+                ws.merge_cells(
+                    start_row=row0, start_column=col0,
+                    end_row=row0, end_column=col0 + 6,
+                )
+            except Exception:
+                pass
+            for i, dn in enumerate(["L", "M", "X", "J", "V", "S", "D"]):
+                c = ws.cell(row0 + 1, col0 + i, dn)
+                c.font = Font(name="Calibri", bold=True, size=8, color="FFFFFF")
+                c.fill = fills["header"]
+                c.alignment = Alignment(horizontal="center")
+            weeks = cal.monthdayscalendar(yi, mi)
+            for wi, week in enumerate(weeks):
+                for di, day in enumerate(week):
+                    c = ws.cell(row0 + 2 + wi, col0 + di, day if day else "")
+                    c.alignment = Alignment(horizontal="center")
+                    c.font = Font(name="Calibri", size=8)
+                    if not day:
+                        c.fill = fills["mute"]
+                        continue
+                    d = _date(yi, mi, day)
+                    if d in dias_set:
+                        if d.weekday() == 4:
+                            c.fill = fills["vie"]
+                            c.font = Font(name="Calibri", size=8, bold=True)
+                        elif d.weekday() == 5:
+                            c.fill = fills["sab"]
+                            c.font = Font(name="Calibri", size=8, bold=True)
+                        else:
+                            c.fill = fills["week"]
+                            c.font = Font(name="Calibri", size=8, bold=True)
+            leg_row = row0 + 2 + len(weeks)
+            leg = ws.cell(
+                leg_row, col0,
+                "Verde=periodo · Amarillo=viernes · Naranja=sábado",
+            )
+            leg.font = Font(name="Calibri", size=7, color="666666")
+            try:
+                ws.merge_cells(
+                    start_row=leg_row, start_column=col0,
+                    end_row=leg_row, end_column=col0 + 6,
+                )
+            except Exception:
+                pass
+            for i in range(7):
+                ws.column_dimensions[get_column_letter(col0 + i)].width = 3.6
+            row0 = leg_row + 2
+
+
     def _xlsx_taller(
         self, lineas: list[dict], codigo_semana: str, resumen: dict | None,
         *, meta_semana: dict | None = None,
@@ -663,12 +772,13 @@ class ExportService:
         ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="C45C26")
         ws.merge_cells("A2:G2")
         ws["A3"] = (
-            f"Semana {codigo_semana}  ·  Periodo captura: {ley['periodo_captura'] or '—'}  ·  "
-            f"{ley['cierre']}  ·  {ley['pago']}  ·  Torcedores = pitas × $3.20  ·  "
-            f"Gen. {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            f"Semana {codigo_semana}  ·  Periodo: {ley['periodo_captura'] or '—'}  ·  "
+            f"{ley['cierre']}  ·  {ley['pago']}  ·  Torcedores = pitas × $3.20"
         )
         ws["A3"].font = Font(name="Calibri", size=9, color="666666")
+        ws["A3"].alignment = Alignment(wrap_text=True, vertical="center")
         ws.merge_cells("A3:G3")
+        ws.row_dimensions[3].height = 28
 
         headers = [c[1] for c in self.TLL_COLUMNS]
         for col, h in enumerate(headers, 1):
@@ -704,7 +814,7 @@ class ExportService:
                 sueldo if sueldo else None,
                 extras if extras else 0,
                 f'=IF(AND(OR(D{row_i}="",D{row_i}=0),OR(E{row_i}="",E{row_i}=0)),"",IF(D{row_i}="",0,D{row_i})+IF(E{row_i}="",0,E{row_i}))',
-                "______" if not r.get("firmado") else "✓",
+                "" if not r.get("firmado") else "✓",
             ]
             for col, v in enumerate(vals, 1):
                 cell = ws.cell(row_i, col, v if v is not None else "")
@@ -777,18 +887,7 @@ class ExportService:
             )
         except Exception:
             pass
-        ws.page_setup.orientation = "landscape"
-        try:
-            ws.page_setup.paperSize = ws.PAPERSIZE_LEGAL  # oficio
-        except Exception:
-            pass
-        ws.page_setup.fitToPage = True
-        ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
-        ws.page_margins.left = 0.4
-        ws.page_margins.right = 0.4
-        ws.page_margins.top = 0.4
-        ws.page_margins.bottom = 0.4
+        self._print_oficio_landscape(ws)
         ws.print_title_rows = "4:4"
         buf = BytesIO()
         wb.save(buf)
@@ -796,10 +895,15 @@ class ExportService:
 
 
     def _xlsx_pita(
-        self, lineas: list[dict], codigo_semana: str, resumen: dict | None
+        self, lineas: list[dict], codigo_semana: str, resumen: dict | None,
+        *, meta_semana: dict | None = None,
     ) -> bytes:
         from datetime import datetime
         from openpyxl.utils import get_column_letter
+        from app.utils.fechas_nomina import leyenda_nomina
+
+        meta = meta_semana or {}
+        ley = leyenda_nomina(meta.get("fecha_inicio"), meta.get("fecha_fin"), codigo=codigo_semana)
 
         wb = Workbook()
         ws = wb.active
@@ -807,12 +911,17 @@ class ExportService:
         ws["A1"] = "Taller de Fajos Central — NÓMINA PITA (PIT)"
         ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
         ws.merge_cells("A1:I1")
-        ws["A2"] = (
-            f"Semana: {codigo_semana}    |    Material tipo PITA NxN · Producto (Cinturón) · Pitas suele vacío    |    "
-            f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        )
-        ws["A2"].font = Font(name="Calibri", size=10, color="666666")
+        ws["A2"] = ley["titulo_pago"]
+        ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="C45C26")
         ws.merge_cells("A2:I2")
+        ws["A3"] = (
+            f"Semana {codigo_semana}  ·  Periodo: {ley['periodo_captura'] or '—'}  ·  "
+            f"{ley['cierre']}  ·  {ley['pago']}  ·  Material PITA NxN · Producto (Cinturón)"
+        )
+        ws["A3"].font = Font(name="Calibri", size=9, color="666666")
+        ws["A3"].alignment = Alignment(wrap_text=True, vertical="center")
+        ws.merge_cells("A3:I3")
+        ws.row_dimensions[3].height = 28
 
         headers = [c[1] for c in self.PIT_COLUMNS]
         for col, h in enumerate(headers, 1):
@@ -838,7 +947,7 @@ class ExportService:
                 r.get("producto") or "Cinturón",
                 pitas_v if pitas_v is not None else "",
                 ef if ef else None,
-                "______" if not r.get("firmado") else "✓",
+                "" if not r.get("firmado") else "✓",
             ]
             for col, v in enumerate(vals, 1):
                 cell = ws.cell(row_i, col, v if v is not None else "")
@@ -868,11 +977,8 @@ class ExportService:
         for i, w in enumerate(widths, 1):
             ws.column_dimensions[get_column_letter(i)].width = w
 
+        self._print_oficio_landscape(ws)
         ws.print_title_rows = "4:4"
-        ws.page_setup.orientation = "landscape"
-        ws.page_setup.fitToPage = True
-        ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
         ws.oddFooter.center.text = f"Nómina Pita {codigo_semana}"
 
         buf = BytesIO()

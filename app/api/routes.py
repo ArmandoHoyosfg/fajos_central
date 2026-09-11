@@ -782,21 +782,24 @@ async def page_estadisticas(
 
 @router.get("/api/export/estadisticas")
 async def api_export_estadisticas(
+    request: Request,
     vista: str = Query("trabajador"),
     q: str = Query(""),
 ):
     from app.services.stats_service import StatsService
     from openpyxl import Workbook
     from io import BytesIO
+    form_ids = request.query_params.getlist("semana_id")
+    selected_ids = [int(x) for x in form_ids if str(x).isdigit()]
     svc = StatsService()
     if vista == "folio":
-        rows = svc.stats_folio(q=q)
+        rows = svc.stats_folio(q=q, semana_ids=selected_ids or None)
         headers = ["Folio", "Gramos", "Efectivo", "Semanas", "Inicio", "Materiales", "Trabajadores"]
         def line(r):
             return [r["folio"], r["total_gramos"], r["total_efectivo"], r["n_semanas"],
                     r["inicio"], ", ".join(r["materiales"]), " · ".join(r["trabajadores"])]
     else:
-        rows = svc.stats_trabajador(q=q)
+        rows = svc.stats_trabajador(q=q, semana_ids=selected_ids or None)
         headers = ["Nombre", "Ubic", "Gramos", "Efectivo", "Semanas", "Folios", "Primera", "Última"]
         def line(r):
             return [r["nombre"], r["ubic"], r["total_gramos"], r["total_efectivo"],
@@ -2242,6 +2245,7 @@ async def api_export(
         lineas,
         fmt=fmt,  # type: ignore
         codigo_semana=semana["codigo"],
+        meta_semana={"fecha_inicio": semana.get("fecha_inicio"), "fecha_fin": semana.get("fecha_fin"), "codigo": semana.get("codigo")},
         filename_stem=stem,
     )
     if formal and fmt in ("xlsx", "pdf"):
@@ -2528,8 +2532,13 @@ async def api_export_pita(
         if float(r.get("efectivo") or 0) > 0
     ]
     codigo = sem.get("codigo") or str(semana_id)
+    meta = {
+        "fecha_inicio": sem.get("fecha_inicio"),
+        "fecha_fin": sem.get("fecha_fin"),
+        "codigo": codigo,
+    }
     data, media, fname = export_svc.export_nomina_pita(
-        lineas, codigo_semana=codigo, filename_stem=f"nomina_pita_{codigo}", resumen=None
+        lineas, codigo_semana=codigo, filename_stem=f"nomina_pita_{codigo}", resumen=None, meta_semana=meta
     )
     return Response(
         content=data,
