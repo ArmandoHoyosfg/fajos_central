@@ -584,10 +584,11 @@ class ExportService:
         codigo_semana: str = "",
         filename_stem: str = "nomina_taller",
         resumen: dict | None = None,
+        meta_semana: dict | None = None,
     ) -> tuple[bytes, str, str]:
-        """Excel formal Taller: Nombre, Ubic, Puesto, Sueldo, Extras, Total, Firma."""
+        """Excel formal Taller: Nombre, Ubic, Puesto, Sueldo, Extras, Total, Firma + resumen + calendario."""
         try:
-            data = self._xlsx_taller(lineas, codigo_semana, resumen)
+            data = self._xlsx_taller(lineas, codigo_semana, resumen, meta_semana=meta_semana)
             return (
                 data,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -604,10 +605,11 @@ class ExportService:
         codigo_semana: str = "",
         filename_stem: str = "nomina_pita",
         resumen: dict | None = None,
+        meta_semana: dict | None = None,
     ) -> tuple[bytes, str, str]:
         """Excel formal Pita: Nombre, Ubic, Modelo, Folio, Material, Producto, Pitas, Efectivo, Firma."""
         try:
-            data = self._xlsx_pita(lineas, codigo_semana, resumen)
+            data = self._xlsx_pita(lineas, codigo_semana, resumen, meta_semana=meta_semana)
             return (
                 data,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -641,10 +643,15 @@ class ExportService:
             raise ExportError("Fallo al exportar resumen.", cause=e) from e
 
     def _xlsx_taller(
-        self, lineas: list[dict], codigo_semana: str, resumen: dict | None
+        self, lineas: list[dict], codigo_semana: str, resumen: dict | None,
+        *, meta_semana: dict | None = None,
     ) -> bytes:
         from datetime import datetime
         from openpyxl.utils import get_column_letter
+        from app.utils.fechas_nomina import leyenda_nomina
+
+        meta = meta_semana or {}
+        ley = leyenda_nomina(meta.get("fecha_inicio"), meta.get("fecha_fin"), codigo=codigo_semana)
 
         wb = Workbook()
         ws = wb.active
@@ -652,12 +659,16 @@ class ExportService:
         ws["A1"] = "Taller de Fajos Central — NÓMINA TALLER (TLL)"
         ws["A1"].font = Font(name="Calibri", bold=True, size=14, color="1F4E79")
         ws.merge_cells("A1:G1")
-        ws["A2"] = (
-            f"Semana: {codigo_semana}    |    Sueldo + extras · Torcedores = pitas × $3.20    |    "
-            f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        )
-        ws["A2"].font = Font(name="Calibri", size=10, color="666666")
+        ws["A2"] = ley["titulo_pago"]
+        ws["A2"].font = Font(name="Calibri", bold=True, size=12, color="C45C26")
         ws.merge_cells("A2:G2")
+        ws["A3"] = (
+            f"Semana {codigo_semana}  ·  Periodo captura: {ley['periodo_captura'] or '—'}  ·  "
+            f"{ley['cierre']}  ·  {ley['pago']}  ·  Torcedores = pitas × $3.20  ·  "
+            f"Gen. {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        )
+        ws["A3"].font = Font(name="Calibri", size=9, color="666666")
+        ws.merge_cells("A3:G3")
 
         headers = [c[1] for c in self.TLL_COLUMNS]
         for col, h in enumerate(headers, 1):
@@ -759,10 +770,25 @@ class ExportService:
 
         for col, w in enumerate([28, 8, 14, 12, 10, 12, 10], 1):
             ws.column_dimensions[get_column_letter(col)].width = w
+        # Mini-calendario(s) a la derecha (espacio en oficio horizontal)
+        try:
+            self._dibujar_calendarios_semana(
+                ws, meta.get("fecha_inicio"), meta.get("fecha_fin"), start_col=9, start_row=1
+            )
+        except Exception:
+            pass
         ws.page_setup.orientation = "landscape"
+        try:
+            ws.page_setup.paperSize = ws.PAPERSIZE_LEGAL  # oficio
+        except Exception:
+            pass
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
+        ws.page_margins.left = 0.4
+        ws.page_margins.right = 0.4
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.4
         ws.print_title_rows = "4:4"
         buf = BytesIO()
         wb.save(buf)

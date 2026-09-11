@@ -739,7 +739,81 @@ async def page_buscar(
     return templates.TemplateResponse(
         request,
         "buscar.html",
-        _ctx(request, q=q, trabajadores=data["trabajadores"], semanas=data["semanas"]),
+        _ctx(
+            request,
+            q=q,
+            trabajadores=data.get("trabajadores") or [],
+            semanas=data.get("semanas") or [],
+            folios=data.get("folios") or [],
+        ),
+    )
+
+
+@router.get("/estadisticas", response_class=HTMLResponse)
+async def page_estadisticas(
+    request: Request,
+    vista: str = Query("trabajador"),
+    q: str = Query(""),
+):
+    from app.services.stats_service import StatsService
+    form_ids = request.query_params.getlist("semana_id")
+    selected_ids = [int(x) for x in form_ids if str(x).isdigit()]
+    svc = StatsService()
+    semanas = svc.listar_semanas()
+    if vista == "folio":
+        rows = svc.stats_folio(q=q, semana_ids=selected_ids or None)
+    else:
+        vista = "trabajador"
+        rows = svc.stats_trabajador(q=q, semana_ids=selected_ids or None)
+    return templates.TemplateResponse(
+        request,
+        "estadisticas.html",
+        _ctx(
+            request,
+            vista=vista,
+            q=q,
+            rows=rows,
+            semanas=semanas,
+            selected_ids=set(selected_ids),
+        ),
+    )
+
+
+@router.get("/api/export/estadisticas")
+async def api_export_estadisticas(
+    vista: str = Query("trabajador"),
+    q: str = Query(""),
+):
+    from app.services.stats_service import StatsService
+    from openpyxl import Workbook
+    from io import BytesIO
+    svc = StatsService()
+    if vista == "folio":
+        rows = svc.stats_folio(q=q)
+        headers = ["Folio", "Gramos", "Efectivo", "Semanas", "Inicio", "Materiales", "Trabajadores"]
+        def line(r):
+            return [r["folio"], r["total_gramos"], r["total_efectivo"], r["n_semanas"],
+                    r["inicio"], ", ".join(r["materiales"]), " · ".join(r["trabajadores"])]
+    else:
+        rows = svc.stats_trabajador(q=q)
+        headers = ["Nombre", "Ubic", "Gramos", "Efectivo", "Semanas", "Folios", "Primera", "Última"]
+        def line(r):
+            return [r["nombre"], r["ubic"], r["total_gramos"], r["total_efectivo"],
+                    r["n_semanas"], r["n_folios"], r["primera"], r["ultima"]]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Estadisticas"
+    for c, h in enumerate(headers, 1):
+        ws.cell(1, c, h)
+    for i, r in enumerate(rows, 2):
+        for c, v in enumerate(line(r), 1):
+            ws.cell(i, c, v)
+    buf = BytesIO()
+    wb.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="estadisticas.xlsx"'},
     )
 
 
@@ -2321,18 +2395,19 @@ async def api_resumen_semana(
 async def api_export_taller(
     semana_id: int,
     include_resumen: int = Query(1),
+    force: int = Query(0, description="1 = permitir sin totales Plata/Pita"),
     repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
     pit: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
     plt: ProduccionRepo = Depends(get_produccion_repo),
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
     export_svc: ExportService = Depends(get_export_service),
 ):
-    """Excel formal de nómina Taller (imprimible)."""
+    """Excel formal Taller (último al engrapar). Incluye RESUMEN de las 3 nóminas + calendario."""
+    from fastapi.responses import JSONResponse
     sem = sem_repo.obtener(semana_id)
     if not sem:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    # Regla fija: no exportar filas en 0 (solo líneas con sueldo/extras/total > 0)
     todas = list(repo.listar_por_semana(semana_id))
     lineas = [
         r for r in todas
@@ -2340,19 +2415,45 @@ async def api_export_taller(
         or float(r.get("sueldo") or 0) > 0
         or float(r.get("extras") or 0) > 0
     ]
+    t_plt = plt.totales_semana(semana_id)
+    t_pit = pit.totales(semana_id)
+    t_tll = repo.totales(semana_id)
+    nom_plata = float(t_plt.get("total_efectivo") or 0)
+    nom_pita = float(t_pit.get("total") or 0)
+    nom_taller = float(t_tll.get("total") or 0)
+    # Taller se engrapa al final: exige totales de Plata y Pita (salvo force=1)
+    if include_resumen and not force:
+        if nom_plata <= 0 and nom_pita <= 0:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": "No se puede exportar Taller sin totales de Plata y/o Pita. "
+                             "Exporta primero Plata y Pita (o usa force=1 solo en emergencia).",
+                    "nomina_plata": nom_plata,
+                    "nomina_pita": nom_pita,
+                    "nomina_taller": nom_taller,
+                },
+                status_code=400,
+            )
     resumen = None
     if include_resumen:
-        t_plt = plt.totales_semana(semana_id)
-        t_pit = pit.totales(semana_id)
-        t_tll = repo.totales(semana_id)
         resumen = {
-            "nomina_taller": float(t_tll.get("total") or 0),
-            "nomina_plata": float(t_plt.get("total_efectivo") or 0),
-            "nomina_pita": float(t_pit.get("total") or 0),
+            "nomina_taller": nom_taller,
+            "nomina_plata": nom_plata,
+            "nomina_pita": nom_pita,
         }
     codigo = sem.get("codigo") or str(semana_id)
+    meta = {
+        "fecha_inicio": sem.get("fecha_inicio"),
+        "fecha_fin": sem.get("fecha_fin"),
+        "codigo": codigo,
+    }
     data, media, fname = export_svc.export_nomina_taller(
-        lineas, codigo_semana=codigo, filename_stem=f"nomina_taller_{codigo}", resumen=resumen
+        lineas,
+        codigo_semana=codigo,
+        filename_stem=f"nomina_taller_{codigo}",
+        resumen=resumen,
+        meta_semana=meta,
     )
     return Response(
         content=data,
