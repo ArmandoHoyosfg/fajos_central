@@ -9,7 +9,7 @@
 </div>
 
 <form class="search-box" action="/buscar" method="get" style="max-width:520px;margin-bottom:1.25rem">
-  <input type="search" name="q" value="{{ q }}" placeholder="Nombre, ubic, código de semana..." autofocus>
+  <input type="search" name="q" value="{{ q or '' }}" placeholder="Nombre, ubic, código de semana..." autofocus>
   <button type="submit"><i data-lucide="search"></i></button>
 </form>
 

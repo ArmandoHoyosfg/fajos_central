@@ -735,7 +735,8 @@ async def page_buscar(
     q: str | None = None,
     svc: DashboardService = Depends(get_dashboard_service),
 ):
-    data = svc.buscar(q or "")
+    q = (q or "").strip()
+    data = svc.buscar(q)
     return templates.TemplateResponse(
         request,
         "buscar.html",
