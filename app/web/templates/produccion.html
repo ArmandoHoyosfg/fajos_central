@@ -455,12 +455,12 @@
         </div>
         <div class="full"><label class="muted">Avance (gramos)</label></div>
         <div><label>Sáb</label><input name="gm_sab" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Dom</label><input name="gm_dom" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Lun</label><input name="gm_lun" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Mar</label><input name="gm_mar" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Mié</label><input name="gm_mie" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Jue</label><input name="gm_jue" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Vie</label><input name="gm_vie" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
         <div class="full edit-totals-bar" id="edit-plt-totals">
           <span>Total gramos: <strong id="edit-plt-tg">0</strong> g</span>
           <span>Efectivo est.: <strong id="edit-plt-te">$0.00</strong></span>
@@ -616,7 +616,10 @@ function openEditPlt(id, data) {
         /* ok */
       }
     }
-    if (typeof updateEditPltTotals === "function") updateEditPltTotals();
+    bindEditPltTotals();
+    updateEditPltTotals();
+    // Segunda pasada por si el catálogo ajusta tarifa un tick después
+    setTimeout(updateEditPltTotals, 0);
   }
 }
 
@@ -906,28 +909,33 @@ function resetDiaGramPartials() {
   if (diaSel) diaSel.addEventListener('change', recalcDiaGramPreview);
   recalcDiaGramPreview();
 }
+function updateEditPltTotals() {
+  const form = document.getElementById('form-edit-plt');
+  if (!form) return;
+  let g = 0;
+  form.querySelectorAll('input[name^="gm_"]').forEach(inp => {
+    const v = parseFloat(String(inp.value || '').replace(',', '.'));
+    if (!isNaN(v) && v > 0) g += v;
+  });
+  g = Math.round(g * 1000) / 1000;
+  const tarEl = form.elements.namedItem('tarifa_gr');
+  const tarifa = parseFloat(String((tarEl && tarEl.value) || '0').replace(',', '.')) || 0;
+  const ef = Math.round(g * tarifa * 100) / 100;
+  const tg = document.getElementById('edit-plt-tg');
+  const te = document.getElementById('edit-plt-te');
+  if (tg) tg.textContent = (g % 1 === 0 ? String(g) : String(g));
+  if (te) te.textContent = '$' + ef.toFixed(2);
+}
+
 function bindEditPltTotals() {
   const form = document.getElementById('form-edit-plt');
   if (!form || form.dataset.totalsBound) return;
   form.dataset.totalsBound = '1';
-  const recalc = () => {
-    let g = 0;
-    form.querySelectorAll('.edit-gm, input[name^="gm_"]').forEach(inp => {
-      if (!(inp.name || '').startsWith('gm_')) return;
-      const v = parseFloat(inp.value);
-      if (!isNaN(v)) g += v;
-    });
-    g = Math.round(g * 1000) / 1000;
-    const tarifa = parseFloat((form.elements.namedItem('tarifa_gr') || {}).value || '0') || 0;
-    const ef = Math.round(g * tarifa * 100) / 100;
-    const tg = document.getElementById('edit-plt-tg');
-    const te = document.getElementById('edit-plt-te');
-    if (tg) tg.textContent = String(g);
-    if (te) te.textContent = '$' + ef.toFixed(2);
-  };
-  form.addEventListener('input', recalc);
-  form._recalcTotals = recalc;
+  form.addEventListener('input', updateEditPltTotals);
+  form.addEventListener('change', updateEditPltTotals);
 }
+document.addEventListener('DOMContentLoaded', bindEditPltTotals);
+
 
 
 async function submitUnDia(e) {
