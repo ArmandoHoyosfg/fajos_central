@@ -362,7 +362,10 @@ async function guardarSueldoModo(id, sel) {
   }
   const inp = document.querySelector('.sueldo-base-inp[data-id="' + id + '"]');
   if (inp) inp.disabled = (modo !== 'fijo');
-  showToast(modo === 'fijo' ? 'Marcado como sueldo fijo' : 'Marcado como variable');
+  try {
+    await fetch('/api/trabajadores/' + id + '/sincronizar', { method: 'POST', body: new FormData() });
+  } catch (e) {}
+  showToast(modo === 'fijo' ? 'Sueldo fijo · sincronizado a Taller' : 'Marcado como variable');
 }
 async function guardarSueldoBase(id, inp) {
   const body = new FormData();
@@ -374,7 +377,11 @@ async function guardarSueldoBase(id, inp) {
     showToast(data.user_message || data.message || 'No se guardó el sueldo base', true);
     return;
   }
-  showToast('Sueldo base actualizado');
+  // Asegura propagación a Taller (filas no firmadas)
+  try {
+    await fetch('/api/trabajadores/' + id + '/sincronizar', { method: 'POST', body: new FormData() });
+  } catch (e) {}
+  showToast('Sueldo base guardado y aplicado a Taller (no firmados)');
 }
 
 async function descartarDup(idA, idB) {
