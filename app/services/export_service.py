@@ -1564,13 +1564,14 @@ class ExportService:
             except (TypeError, ValueError):
                 tarifa_f = None
             if blank_folio:
+                # Fila extra: solo nombre+ubic; sin folio/modelo/mat ni $/Gr
                 vals = [
                     r.get("nombre") or "",
                     r.get("ubic"),
                     "",
                     "",
                     "",
-                    tarifa_f if tarifa_f is not None else "",
+                    "",
                 ]
             else:
                 vals = [
@@ -1611,7 +1612,7 @@ class ExportService:
                     _write_row(item, blank_folio=False)
                 # Una fila en blanco por trabajador (otro folio)
                 _write_row(
-                    {"nombre": display_nombre, "ubic": ubic, "tarifa_gr": items[0].get("tarifa_gr")},
+                    {"nombre": display_nombre, "ubic": ubic},
                     blank_folio=True,
                 )
 
