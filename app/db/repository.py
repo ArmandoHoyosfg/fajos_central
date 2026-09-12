@@ -199,7 +199,7 @@ class TrabajadoresRepo(BaseRepo):
         nombre = t.get("nombre_mostrar")
         ubic = t.get("ubic")
         puesto = t.get("puesto")
-        counts = {"plata": 0, "pita": 0, "taller": 0, "orphans": 0, "by_name": 0}
+        counts = {"plata": 0, "pita": 0, "taller": 0, "taller_sueldo": 0, "orphans": 0, "by_name": 0}
         with self.db.cursor() as cur:
             # --- Plata por id ---
             cur.execute(
@@ -256,7 +256,7 @@ class TrabajadoresRepo(BaseRepo):
                 )
                 counts["by_name"] += max(0, cur.rowcount or 0)
 
-            # --- Taller ---
+            # --- Taller: nombre, ubic, puesto ---
             cur.execute(
                 """
                 UPDATE nomina_taller
@@ -266,6 +266,32 @@ class TrabajadoresRepo(BaseRepo):
                 (nombre, ubic, puesto, trabajador_id),
             )
             counts["taller"] = max(0, cur.rowcount or 0)
+
+            # --- Taller: sueldo fijo desde catálogo (solo no firmados) ---
+            modo = str(t.get("sueldo_modo") or "variable").strip().lower()
+            base = t.get("sueldo_base")
+            counts["taller_sueldo"] = 0
+            if modo == "fijo" and base is not None and str(base).strip() != "":
+                try:
+                    base_f = float(base)
+                    cur.execute(
+                        """
+                        UPDATE nomina_taller
+                           SET sueldo = %s,
+                               total = %s + COALESCE(extras, 0),
+                               puesto = COALESCE(%s, puesto)
+                         WHERE trabajador_id = %s
+                           AND COALESCE(firmado, 0) = 0
+                           AND (
+                                COALESCE(sueldo, 0) = 0
+                                OR ABS(COALESCE(sueldo, 0) - %s) > 0.009
+                           )
+                        """,
+                        (base_f, base_f, puesto, trabajador_id, base_f),
+                    )
+                    counts["taller_sueldo"] = max(0, cur.rowcount or 0)
+                except (TypeError, ValueError):
+                    pass
 
             # --- Huérfanas con nombre+ubic anteriores ---
             if nombre_ant is not None and ubic_ant is not None:
@@ -1913,10 +1939,31 @@ class NominaTallerRepo(BaseRepo):
             r.setdefault("pitas", None)
             r.setdefault("precio_pita", self.PRECIO_PITA_DEFAULT)
             r["es_torcedor"] = self.es_torcedor(r.get("puesto"))
-            # Si es fijo y la línea tiene sueldo 0 pero hay base, sugerir base en UI (no forzar overwrite)
+            # Fijo: si sueldo en 0, aplicar base del catálogo (memoria + BD)
             try:
-                if r["sueldo_modo"] == "fijo" and float(r.get("sueldo") or 0) == 0 and r.get("sueldo_base") is not None:
-                    r["sueldo_sugerido"] = float(r["sueldo_base"])
+                if r["sueldo_modo"] == "fijo" and r.get("sueldo_base") is not None:
+                    base_f = float(r["sueldo_base"])
+                    cur_sueldo = float(r.get("sueldo") or 0)
+                    if cur_sueldo == 0 and base_f > 0:
+                        r["sueldo"] = base_f
+                        extras = float(r.get("extras") or 0)
+                        r["total"] = base_f + extras
+                        r["sueldo_sugerido"] = base_f
+                        try:
+                            with self.db.cursor() as cur:
+                                cur.execute(
+                                    """
+                                    UPDATE nomina_taller
+                                       SET sueldo = %s,
+                                           total = %s + COALESCE(extras, 0)
+                                     WHERE id = %s
+                                       AND COALESCE(firmado, 0) = 0
+                                       AND COALESCE(sueldo, 0) = 0
+                                    """,
+                                    (base_f, base_f, int(r["id"])),
+                                )
+                        except Exception:
+                            pass
             except (TypeError, ValueError):
                 pass
         return rows
