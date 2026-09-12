@@ -257,8 +257,16 @@ class ExportService:
                     cell.number_format = '"$"#,##0.00'
                 if key in ("total_gramos", "tarifa_gr") or key.startswith("gm_"):
                     cell.number_format = "0.0"
-            firm = ws.cell(row=r, column=len(self.COLUMNS) + 1, value="")
+            firmado = row.get("firmado")
+            if firmado in (True, 1, "1", "true", "True", "sí", "si", "✓"):
+                firm_val = "✓"
+            else:
+                firm_val = ""
+            firm = ws.cell(row=r, column=len(self.COLUMNS) + 1, value=firm_val)
             firm.border = self.THIN
+            firm.alignment = Alignment(horizontal="center", vertical="center")
+            if firm_val:
+                firm.font = Font(name="Calibri", bold=True, size=12, color="1B5E20")
             if fill is not None:
                 firm.fill = fill
 
