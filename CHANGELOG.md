@@ -1,3 +1,11 @@
+## [3.25.5] — 2026-09-12
+
+### Captura manual compacta
+- Exclusión reforzada de folios terminados/cerrados
+- Sin fórmulas ni fila de totales / pie pesado
+- Fuente 9, columnas y márgenes estrechos, fit a 1 hoja
+- Leyenda de pago (sábado) en encabezado compacto
+
 # Changelog
 
 Todos los cambios relevantes de este proyecto se documentan en este archivo.

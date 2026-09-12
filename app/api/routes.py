@@ -2173,9 +2173,17 @@ async def api_export_captura_manual(
         raise NotFoundError("Semana no encontrada")
     # Activas (también sin gramos); excluye folios terminados/cerrados
     lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=False)
+    # Doble filtro por si listar aún trae alguna cerrada
+    from app.services.export_service import filtrar_lineas_export
+    lineas = filtrar_lineas_export(lineas, solo_con_gramos=False)
     content, media_type, filename = export_svc.export_captura_manual(
         lineas,
         codigo_semana=str(semana.get("codigo") or ""),
+        meta_semana={
+            "fecha_inicio": semana.get("fecha_inicio"),
+            "fecha_fin": semana.get("fecha_fin"),
+            "codigo": semana.get("codigo"),
+        },
     )
     return Response(
         content=content,
