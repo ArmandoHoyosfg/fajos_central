@@ -639,7 +639,7 @@ class TrabajadoresRepo(BaseRepo):
 
     def sincronizar_todos_denormalizados(self) -> dict:
         """Repara todas las líneas ligadas a un trabajador_id válido."""
-        total = {"plata": 0, "pita": 0, "taller": 0, "trabajadores": 0}
+        total = {"plata": 0, "pita": 0, "taller": 0, "taller_sueldo": 0, "trabajadores": 0}
         with self.db.cursor() as cur:
             cur.execute("SELECT id FROM trabajadores")
             ids = [int(r["id"]) for r in (cur.fetchall() or [])]
@@ -649,6 +649,7 @@ class TrabajadoresRepo(BaseRepo):
                 total["plata"] += c.get("plata", 0)
                 total["pita"] += c.get("pita", 0)
                 total["taller"] += c.get("taller", 0)
+                total["taller_sueldo"] += c.get("taller_sueldo", 0)
                 total["trabajadores"] += 1
             except Exception:
                 logger.exception("sync all id=%s", tid)
