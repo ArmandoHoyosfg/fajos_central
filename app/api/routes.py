@@ -1619,6 +1619,7 @@ async def api_crear_trabajador(
         "sueldo_base": base,
         "fecha_incorporacion": fecha_incorporacion or None,
         "notas": notas,
+        "activo": activo if "activo" in dir() else None,
     })
     return {"id": new_id, "ok": True}
 

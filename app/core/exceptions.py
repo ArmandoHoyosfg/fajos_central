@@ -74,6 +74,30 @@ class DatabaseError(AppError):
     http_status = 503
     user_message = "No se pudo completar la operación en la base de datos."
 
+    def __init__(self, message: str | None = None, *, details: dict | None = None, cause: Exception | None = None):
+        details = dict(details or {})
+        # Mensaje más útil para el usuario (sin stack)
+        mysql_msg = str(details.get("msg") or "")
+        friendly = message or self.user_message
+        if cause is not None and not mysql_msg:
+            mysql_msg = str(cause)
+            details.setdefault("msg", mysql_msg)
+        low = mysql_msg.lower()
+        if "duplicate" in low or "1062" in low:
+            friendly = "Ya existe un registro igual (nombre + ubicación u otro dato único)."
+        elif "unknown column" in low:
+            friendly = "Falta una columna en la base de datos. Abre Dev → migraciones o reinicia el servidor."
+        elif "incorrect date" in low or "date" in low and "value" in low:
+            friendly = "La fecha no es válida. Usa el formato AAAA-MM-DD."
+        elif "cannot be null" in low:
+            friendly = "Falta un dato obligatorio en la base de datos."
+        elif mysql_msg:
+            # recorta ruido técnico
+            short = mysql_msg.split("\n")[0][:180]
+            friendly = f"{self.user_message} ({short})"
+        super().__init__(message or friendly, details=details, cause=cause)
+        self.user_message = friendly
+
 
 class ExportError(AppError):
     code = "EXPORT_ERROR"
