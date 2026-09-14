@@ -17,7 +17,7 @@
 <div class="plt-capture-bar trab-actions-bar" id="trab-actions-bar">
   <button type="button" class="btn" onclick="openEditId(null)">＋ Nuevo</button>
   <a class="btn btn-secondary" href="/trabajadores/qr-lote">QR de todos</a>
-  <button type="button" class="btn btn-secondary" onclick="syncTodos()" title="Propaga nombre y ubicación del catálogo a Plata, Pita y Taller">Sincronizar nóminas</button>
+  <button type="button" class="btn btn-secondary" onclick="syncTodos()" title="Propaga nombre/ubic/puesto a nóminas y sueldo base (fijo) a Taller no firmado">Sincronizar nóminas</button>
   <a class="btn btn-secondary" href="/api/export/trabajadores" title="Descargar catálogo en Excel">Excel</a>
   <a class="btn btn-secondary" href="/api/export/trabajadores?activos=1" title="Solo activos">Excel activos</a>
   {% if duplicados %}
@@ -362,7 +362,10 @@ async function guardarSueldoModo(id, sel) {
   }
   const inp = document.querySelector('.sueldo-base-inp[data-id="' + id + '"]');
   if (inp) inp.disabled = (modo !== 'fijo');
-  showToast(modo === 'fijo' ? 'Marcado como sueldo fijo' : 'Marcado como variable');
+  try {
+    await fetch('/api/trabajadores/' + id + '/sincronizar', { method: 'POST', body: new FormData() });
+  } catch (e) {}
+  showToast(modo === 'fijo' ? 'Sueldo fijo · sincronizado a Taller' : 'Marcado como variable');
 }
 async function guardarSueldoBase(id, inp) {
   const body = new FormData();
@@ -374,7 +377,11 @@ async function guardarSueldoBase(id, inp) {
     showToast(data.user_message || data.message || 'No se guardó el sueldo base', true);
     return;
   }
-  showToast('Sueldo base actualizado');
+  // Asegura propagación a Taller (filas no firmadas)
+  try {
+    await fetch('/api/trabajadores/' + id + '/sincronizar', { method: 'POST', body: new FormData() });
+  } catch (e) {}
+  showToast('Sueldo base guardado y aplicado a Taller (no firmados)');
 }
 
 async function descartarDup(idA, idB) {
@@ -425,7 +432,7 @@ async function unirFichas(e) {
 }
 
 async function syncTodos() {
-  if (!confirm('¿Propagar nombre y ubicación de TODOS los trabajadores a las nóminas (Plata, Pita, Taller)?\n\nNo borra gramos ni montos; solo alinea nombre/ubic.')) return;
+  if (!confirm('¿Sincronizar catálogo → nóminas?\n\n• Nombre, ubicación y puesto en Plata, Pita y Taller\n• Sueldo fijo: actualiza filas de Taller no firmadas con el sueldo base del catálogo\n\nNo borra gramos de Plata/Pita.')) return;
   try {
     const res = await fetch('/api/trabajadores/sincronizar-todo', { method: 'POST', body: new FormData() });
     const d = await res.json().catch(() => ({}));

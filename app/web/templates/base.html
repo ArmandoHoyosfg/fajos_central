@@ -43,6 +43,7 @@
       <a href="/buscar" class="{% if request.url.path.startswith('/buscar') %}active{% endif %}">
         <i data-lucide="search"></i> Buscar
       </a>
+      <a href="/estadisticas" class="{% if request.url.path.startswith('/estadisticas') %}active{% endif %}">Estadísticas</a>
       <a href="/trabajadores" class="{% if '/trabajadores' in request.url.path %}active{% endif %}">
         <i data-lucide="users"></i> Trabajadores
       </a>

@@ -69,13 +69,18 @@
     var k = findKey(map, key);
     if (k != null && map[k] != null && map[k] !== "") {
       el.dataset.fromCatalog = "1";
-      if (t && t.dataset.userEdited !== "1") {
-        t.value = map[k];
+      var catPrice = map[k];
+      if (t) {
+        var empty = String(t.value || "").trim() === "";
+        // Rellenar si vacío o si el usuario no bloqueó edición manual
+        if (empty || t.dataset.userEdited !== "1") {
+          t.value = catPrice;
+        }
       }
-      setHint(el, "Catálogo · $" + map[k] + "/g", "ok");
+      setHint(el, "Catálogo · $" + catPrice + "/g" + (t && t.dataset.userEdited === "1" && String(t.value) !== String(catPrice) ? " (precio de fila conservado)" : ""), "ok");
     } else {
       el.dataset.fromCatalog = "0";
-      setHint(el, "Valor libre (no está en catálogo)", "free");
+      setHint(el, "Valor libre (no está en catálogo) — puedes guardar precio abajo", "free");
     }
   }
 

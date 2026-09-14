@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Estadísticas — Fajos Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Estadísticas históricas</h1>
+    <p class="muted">Totales por trabajador o folio. Elige semanas a incluir. Útil para ver desde cuándo se trabaja un folio.</p>
+  </div>
+</div>
+
+<form method="get" action="/estadisticas" class="card" style="padding:1rem;margin-bottom:1rem">
+  <div class="form-grid" style="align-items:end">
+    <div>
+      <label>Vista</label>
+      <select name="vista">
+        <option value="trabajador" {% if vista=='trabajador' %}selected{% endif %}>Por trabajador</option>
+        <option value="folio" {% if vista=='folio' %}selected{% endif %}>Por folio</option>
+      </select>
+    </div>
+    <div class="full">
+      <label>Buscar</label>
+      <input name="q" value="{{ q or '' }}" placeholder="Nombre, ubic o folio…">
+    </div>
+  </div>
+  <details style="margin:0.75rem 0" open>
+    <summary><strong>Semanas a incluir</strong> <span class="muted">(vacío = todas)</span></summary>
+    <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.5rem;max-height:9rem;overflow:auto">
+      {% for s in semanas %}
+      <label style="white-space:nowrap;font-size:0.88rem">
+        <input type="checkbox" name="semana_id" value="{{ s.id }}"
+          {% if not selected_ids or s.id in selected_ids %}checked{% endif %}>
+        {{ s.codigo }} <span class="muted">({{ s.fecha_inicio }} → {{ s.fecha_fin }})</span>
+      </label>
+      {% endfor %}
+    </div>
+  </details>
+  <button type="submit" class="btn">Actualizar</button>
+  <button type="button" class="btn btn-secondary" id="btn-export-stats" onclick="exportStats()">Exportar Excel</button>
+<script>
+function exportStats() {
+  const params = new URLSearchParams(window.location.search);
+  // keep vista/q and all semana_id checkboxes currently checked
+  const form = document.querySelector('form[action="/estadisticas"]');
+  const qs = new URLSearchParams();
+  qs.set('vista', (form && form.vista && form.vista.value) || 'trabajador');
+  qs.set('q', (form && form.q && form.q.value) || '');
+  if (form) {
+    form.querySelectorAll('input[name="semana_id"]:checked').forEach(cb => qs.append('semana_id', cb.value));
+  }
+  window.location.href = '/api/export/estadisticas?' + qs.toString();
+}
+</script>
+</form>
+
+{% if vista == 'trabajador' %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Trabajador</th><th>Ubic</th><th>Gramos</th><th>$</th>
+      <th>Semanas</th><th>Folios</th><th>Primera semana</th><th>Última</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><a href="/buscar?q={{ r.nombre|urlencode }}">{{ r.nombre }}</a></td>
+      <td>{{ r.ubic }}</td>
+      <td>{{ r.total_gramos }}</td>
+      <td>${{ '%.2f'|format(r.total_efectivo) }}</td>
+      <td>{{ r.n_semanas }}</td>
+      <td title="{{ r.folios|join(', ') }}">{{ r.n_folios }}</td>
+      <td>{{ r.primera }}</td>
+      <td>{{ r.ultima }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">Sin datos para el filtro.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{# Barras simples de top 10 #}
+{% if rows %}
+<div class="card" style="margin-top:1rem;padding:1rem">
+  <strong>Top gramos (vista actual)</strong>
+  {% set top = rows[:10] %}
+  {% set maxg = top[0].total_gramos if top and top[0].total_gramos else 1 %}
+  {% for r in top %}
+  <div style="display:grid;grid-template-columns:8rem 1fr 4rem;gap:0.4rem;align-items:center;margin:0.25rem 0;font-size:0.85rem">
+    <span title="{{ r.nombre }}">{{ r.nombre[:14] }}</span>
+    <div style="background:#e8eef5;border-radius:4px;height:0.65rem;overflow:hidden">
+      <div style="height:100%;width:{{ (100 * r.total_gramos / maxg)|int }}%;background:#1F4E79;border-radius:4px"></div>
+    </div>
+    <span>{{ r.total_gramos }} g</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if rows %}
+<div class="card" style="margin-top:1rem;padding:1rem">
+  <strong>Top efectivo (vista actual)</strong>
+  {% set top2 = rows|sort(attribute='total_efectivo', reverse=True) %}
+  {% set top2 = top2[:10] %}
+  {% set maxe = top2[0].total_efectivo if top2 and top2[0].total_efectivo else 1 %}
+  {% for r in top2 %}
+  <div style="display:grid;grid-template-columns:8rem 1fr 5rem;gap:0.4rem;align-items:center;margin:0.25rem 0;font-size:0.85rem">
+    <span title="{{ r.nombre if r.nombre is defined else r.folio }}">{% if r.nombre is defined %}{{ r.nombre[:14] }}{% else %}{{ r.folio }}{% endif %}</span>
+    <div style="background:#e8eef5;border-radius:4px;height:0.65rem;overflow:hidden">
+      <div style="height:100%;width:{{ (100 * r.total_efectivo / maxe)|int }}%;background:#C45C26;border-radius:4px"></div>
+    </div>
+    <span>${{ '%.0f'|format(r.total_efectivo) }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Folio</th><th>Gramos</th><th>$</th><th>Semanas</th>
+      <th>Inicio (1ª semana con avance)</th><th>Materiales</th><th>Trabajadores</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><strong>{{ r.folio }}</strong></td>
+      <td>{{ r.total_gramos }}</td>
+      <td>${{ '%.2f'|format(r.total_efectivo) }}</td>
+      <td>{{ r.n_semanas }}</td>
+      <td>{{ r.inicio }}</td>
+      <td>{{ r.materiales|join(', ') }}</td>
+      <td style="font-size:0.82rem">{{ r.trabajadores|join(' · ') }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">Sin datos.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

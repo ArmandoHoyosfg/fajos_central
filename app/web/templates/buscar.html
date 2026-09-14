@@ -9,7 +9,7 @@
 </div>
 
 <form class="search-box" action="/buscar" method="get" style="max-width:520px;margin-bottom:1.25rem">
-  <input type="search" name="q" value="{{ q }}" placeholder="Nombre, ubic, código de semana..." autofocus>
+  <input type="search" name="q" value="{{ q or '' }}" placeholder="Nombre, ubic, código de semana..." autofocus>
   <button type="submit"><i data-lucide="search"></i></button>
 </form>
 
@@ -47,7 +47,36 @@
   <p class="empty">Ningún trabajador coincide.</p>
   {% endif %}
 
-  <h2><i data-lucide="calendar" style="width:18px;height:18px;vertical-align:middle"></i> Semanas ({{ semanas|length }})</h2>
+  
+  <h2>Folios ({{ folios|length if folios else 0 }})</h2>
+  {% if folios %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Folio</th><th>Trabajador</th><th>Ubic</th><th>Mat</th><th>Modelo</th><th>Semana</th><th>g</th><th></th></tr></thead>
+    <tbody>
+    {% for f in folios %}
+      <tr>
+        <td><strong>{{ f.folio }}</strong></td>
+        <td>{{ f.nombre }}</td>
+        <td>{{ f.ubic }}</td>
+        <td>{{ f.material or '—' }}</td>
+        <td>{{ f.modelo or '—' }}</td>
+        <td>{{ f.semana }}</td>
+        <td>{{ f.gramos or '' }}</td>
+        <td>
+          <a class="btn btn-sm btn-secondary" href="/produccion?semana_id={{ f.semana_id }}">Ver</a>
+          <a class="btn btn-sm" href="/estadisticas?vista=folio&q={{ f.folio|urlencode }}">Stats</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% elif q %}
+  <p class="empty">Ningún folio coincide.</p>
+  {% endif %}
+
+<h2><i data-lucide="calendar" style="width:18px;height:18px;vertical-align:middle"></i> Semanas ({{ semanas|length }})</h2>
   {% if semanas %}
   <div class="table-wrap">
   <table>

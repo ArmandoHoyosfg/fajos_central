@@ -104,10 +104,22 @@
   <button type="button" class="btn" onclick="openModal('modal-un-dia')" {% if semana_cerrada %}disabled{% endif %}>＋ Un día</button>
   <button type="button" class="btn btn-secondary" onclick="openModal('modal-linea')" {% if semana_cerrada %}disabled{% endif %}>＋ Fila</button>
 
-  <button type="button" class="btn btn-secondary" id="btn-cerrar-sel"
-          onclick="cerrarFoliosSeleccionados()" title="Cierra solo los marcados con 2+ semanas sin avance">
-    Cerrar seleccionados (≥2 sem)
-  </button>
+  <span id="sel-acciones-wrap" class="sel-acciones-wrap" style="position:relative;display:inline-flex;align-items:center;gap:0.35rem">
+    <button type="button" class="btn btn-secondary" id="btn-sel-acciones"
+            onclick="toggleAccionesMenu(event)"
+            aria-haspopup="true" aria-expanded="false"
+            title="Acciones sobre las filas marcadas con ✓">
+      Acciones…
+    </button>
+    <span id="sel-count" class="muted" style="font-size:0.82rem;min-width:6rem"></span>
+    <div id="sel-acciones-panel" class="row-menu-panel sel-acciones-panel" hidden
+         style="position:absolute;top:100%;left:0;z-index:40;min-width:14rem;margin-top:0.25rem"
+         onclick="event.stopPropagation()">
+      <button type="button" onclick="cerrarFoliosSeleccionados()">Cerrar seleccionados (≥2 sem sin avance)</button>
+      <button type="button" onclick="duplicarSeleccionadosEnDOL()">Duplicar seleccionados en DOL</button>
+      <button type="button" onclick="limpiarSeleccion()">Quitar selección</button>
+    </div>
+  </span>
 
   <button type="button" class="btn btn-secondary" onclick="cerrarSemana()" {% if semana_cerrada %}disabled{% endif %}>🔒 Cerrar semana</button>
   <button type="button" class="btn btn-secondary" onclick="reabrirSemana()" {% if not semana_cerrada %}disabled{% endif %}>🔓 Reabrir</button>
@@ -202,7 +214,7 @@
 
 
 <div class="filter-row" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin:0.75rem 0;">
-  <input type="search" id="flt-texto" placeholder="Filtrar nombre, folio, material…" style="min-width:200px;">
+  <input type="search" id="flt-texto" placeholder="Filtrar: nombre, ubic, folio, modelo o material…rial…" style="min-width:200px;">
   <label><input type="checkbox" id="flt-sin-firma"> Solo sin firmar</label>
   <label><input type="checkbox" id="flt-sin-hoy"> Solo sin gramos hoy</label>
   <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.8rem" data-sort-reset="table.sortable" title="Quitar orden de columnas">Reset orden</button>
@@ -272,6 +284,13 @@
           </button>
           <div class="row-menu-panel" hidden onclick="event.stopPropagation()">
             <button type="button" onclick='openEditPlt({{ r.id }}, {{ row_data|tojson }}); FajosRowMenu.closeAll()'>Editar fila…</button>
+            {% if (r.material or '')|upper != 'DOL' %}
+            <button type="button"
+                    onclick="duplicarEnMaterial({{ r.id }}, 'DOL'); FajosRowMenu.closeAll()"
+                    title="Misma fila (folio/modelo) con material DOL y gramos en blanco">
+              Duplicar en DOL
+            </button>
+            {% endif %}
             {% if r.folio %}
             <button type="button" class="btn-folio-terminar" data-action="terminar-folio" data-prod-id="{{ r.id }}" data-folio="{{ r.folio or '' }}" onclick="if(window.FajosRowMenu)FajosRowMenu.closeAll()">Marcar folio terminado</button>
             {% endif %}
@@ -294,7 +313,7 @@
         {% if semana_cerrada %}
           {{ r[d] or '' }}
         {% else %}
-          <input class="cell-gm" type="number" step="0.1" min="0"
+          <input class="cell-gm" type="number" step="any" min="0"
                  data-id="{{ r.id }}" data-dia="{{ d }}"
                  data-hoy="{% if d == col_hoy %}1{% else %}0{% endif %}"
                  value="{{ r[d] if r[d] else '' }}" title="{{ d }}">
@@ -353,7 +372,7 @@
           <label>Gramos del día <span class="muted">(varios avances se suman)</span></label>
           <div id="dia-gram-list" class="gram-multi-list">
             <div class="gram-multi-row">
-              <input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance 1" inputmode="decimal">
+              <input type="number" class="gram-partial" step="any" min="0" placeholder="Avance 1" inputmode="decimal">
               <button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button>
             </div>
           </div>
@@ -424,18 +443,24 @@
           <div>
             <label>Material <span class="muted">(define precio de catálogo)</span></label>
             <input name="material" list="dl-materiales" class="mat-input" autocomplete="off"
+                   placeholder="AG3, DOL…"
                    onchange="onMaterialInput(this)" oninput="onMaterialInput(this)">
           </div>
-          
+          <div>
+            <label>$/Gr</label>
+            <input name="tarifa_gr" type="number" step="any" min="0" value="12"
+                   title="Se rellena del catálogo al elegir material; editable"
+                   oninput="if(window.CatalogAssist)CatalogAssist.markTarifaEdited(this)">
+          </div>
         </div>
-        
-        <div><label>Sáb</label><input name="gm_sab" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Dom</label><input name="gm_dom" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Lun</label><input name="gm_lun" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Mar</label><input name="gm_mar" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Mié</label><input name="gm_mie" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Jue</label><input name="gm_jue" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
-        <div><label>Vie</label><input name="gm_vie" type="number" step="0.1" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div class="full"><label class="muted">Avance (gramos)</label></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="any" min="0" class="edit-gm" inputmode="decimal"></div>
         <div class="full edit-totals-bar" id="edit-plt-totals">
           <span>Total gramos: <strong id="edit-plt-tg">0</strong> g</span>
           <span>Efectivo est.: <strong id="edit-plt-te">$0.00</strong></span>
@@ -491,16 +516,21 @@
                       title="Guarda material + precio actual en el catálogo">＋ Material al catálogo</button>
             </div>
           </div>
-          
+          <div>
+            <label>$/Gr</label>
+            <input name="tarifa_gr" type="number" step="any" min="0" value="12"
+                   title="Se rellena desde el catálogo al elegir material; puedes cambiarlo"
+                   oninput="if(window.CatalogAssist)CatalogAssist.markTarifaEdited(this)">
+          </div>
         </div>
         <div class="full"><label class="muted">Avance (gramos, opcional)</label></div>
-        <div><label>Sáb</label><input name="gm_sab" type="number" step="1" min="0" inputmode="decimal"></div>
-        <div><label>Dom</label><input name="gm_dom" type="number" step="1" min="0" inputmode="decimal"></div>
-        <div><label>Lun</label><input name="gm_lun" type="number" step="1" min="0" inputmode="decimal"></div>
-        <div><label>Mar</label><input name="gm_mar" type="number" step="1" min="0" inputmode="decimal"></div>
-        <div><label>Mié</label><input name="gm_mie" type="number" step="1" min="0" inputmode="decimal"></div>
-        <div><label>Jue</label><input name="gm_jue" type="number" step="1" min="0" inputmode="decimal"></div>
-        <div><label>Vie</label><input name="gm_vie" type="number" step="1" min="0" inputmode="decimal"></div>
+        <div><label>Sáb</label><input name="gm_sab" type="number" step="any" min="0" inputmode="decimal"></div>
+        <div><label>Dom</label><input name="gm_dom" type="number" step="any" min="0" inputmode="decimal"></div>
+        <div><label>Lun</label><input name="gm_lun" type="number" step="any" min="0" inputmode="decimal"></div>
+        <div><label>Mar</label><input name="gm_mar" type="number" step="any" min="0" inputmode="decimal"></div>
+        <div><label>Mié</label><input name="gm_mie" type="number" step="any" min="0" inputmode="decimal"></div>
+        <div><label>Jue</label><input name="gm_jue" type="number" step="any" min="0" inputmode="decimal"></div>
+        <div><label>Vie</label><input name="gm_vie" type="number" step="any" min="0" inputmode="decimal"></div>
         
       </div>
       <div class="actions">
@@ -551,7 +581,7 @@ function onMaterialChange_legacy_unused(sel) {
 
 <script src="/static/semana_ops.js?v=3122"></script>
 <script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "plt";</script>
-<script src="/static/row_select.js?v=3231"></script>
+<script src="/static/row_select.js?v=3236"></script>
 
 <script src="/static/row_menu.js?v=31913"></script>
 <script src="/static/row_edit.js?v=3112"></script>
@@ -559,41 +589,40 @@ function onMaterialChange_legacy_unused(sel) {
 function openEditPlt(id, data) {
   const who = document.getElementById("edit-plt-who");
   if (who) who.textContent = (data.nombre || "") + " · ubic " + (data.ubic || "");
-  if (window.FajosRowEdit) {
-    FajosRowEdit.open({ modalId: "modal-edit-plt", formId: "form-edit-plt", id: id, data: data });
-  }
-  bindEditPltTotals();
   const form = document.getElementById("form-edit-plt");
-  if (!form) return;
-  if (form._recalcTotals) setTimeout(form._recalcTotals, 30);
-  // material: asegurar valor aunque no esté en options / datalist
-  if (data && data.material) {
-    const sel = form.elements.namedItem("material");
-    if (sel) {
-      const val = data.material;
-      if (sel.tagName === "SELECT") {
-        let found = false;
-        for (const o of sel.options) { if (o.value === val) { found = true; break; } }
-        if (!found) {
-          const opt = document.createElement("option");
-          opt.value = val; opt.textContent = val;
-          sel.appendChild(opt);
-        }
-        sel.value = val;
-      } else {
-        sel.value = val;
-      }
-      if (typeof onMaterialInput === "function") onMaterialInput(sel);
-    }
+  if (form && form.elements.namedItem("tarifa_gr")) {
+    form.elements.namedItem("tarifa_gr").dataset.userEdited = "0";
   }
-  if (data && data.modelo) {
-    const mod = form.elements.namedItem("modelo");
-    if (mod) {
-      mod.value = data.modelo;
-      if (typeof onModeloInput === "function") onModeloInput(mod);
+  if (window.FajosRowEdit) {
+    FajosRowEdit.open({
+      formId: "form-edit-plt",
+      modalId: "modal-edit-plt",
+      id: id,
+      data: data,
+    });
+  }
+  // Tras rellenar: si hay tarifa de la fila, no la pisa el catálogo
+  if (form) {
+    const tar = form.elements.namedItem("tarifa_gr");
+    const mat = form.elements.namedItem("material");
+    if (tar && data && data.tarifa_gr != null && String(data.tarifa_gr).trim() !== "") {
+      tar.value = data.tarifa_gr;
+      tar.dataset.userEdited = "1"; // conservar precio de la fila
     }
+    if (mat && window.CatalogAssist) {
+      CatalogAssist.onMaterialInput(mat); // hint catálogo / libre
+      // si no había tarifa en fila y el material está en catálogo, onMaterialInput ya la puso
+      if (tar && (!data.tarifa_gr && tar.dataset.userEdited !== "1")) {
+        /* ok */
+      }
+    }
+    bindEditPltTotals();
+    updateEditPltTotals();
+    // Segunda pasada por si el catálogo ajusta tarifa un tick después
+    setTimeout(updateEditPltTotals, 0);
   }
 }
+
 </script>
 
 
@@ -771,7 +800,7 @@ function addGramPartial() {
   const n = list.querySelectorAll('.gram-partial').length + 1;
   const row = document.createElement('div');
   row.className = 'gram-multi-row';
-  row.innerHTML = '<input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance ' + n + '" inputmode="decimal">' +
+  row.innerHTML = '<input type="number" class="gram-partial" step="any" min="0" placeholder="Avance ' + n + '" inputmode="decimal">' +
     '<button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar">×</button>';
   list.appendChild(row);
   list.querySelectorAll('.gram-rm').forEach(b => { b.hidden = list.querySelectorAll('.gram-partial').length <= 1; });
@@ -871,7 +900,7 @@ function recalcDiaGramPreview() {
 function resetDiaGramPartials() {
   const list = document.getElementById('dia-gram-list');
   if (!list) return;
-  list.innerHTML = '<div class="gram-multi-row"><input type="number" class="gram-partial" step="0.1" min="0" placeholder="Avance 1" inputmode="decimal"><button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button></div>';
+  list.innerHTML = '<div class="gram-multi-row"><input type="number" class="gram-partial" step="any" min="0" placeholder="Avance 1" inputmode="decimal"><button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="removeGramPartial(this)" title="Quitar" hidden>×</button></div>';
   const inp = list.querySelector('.gram-partial');
   if (inp) inp.addEventListener('input', recalcDiaGramPreview);
   const cb = document.getElementById('dia-sumar-existente');
@@ -880,28 +909,33 @@ function resetDiaGramPartials() {
   if (diaSel) diaSel.addEventListener('change', recalcDiaGramPreview);
   recalcDiaGramPreview();
 }
+function updateEditPltTotals() {
+  const form = document.getElementById('form-edit-plt');
+  if (!form) return;
+  let g = 0;
+  form.querySelectorAll('input[name^="gm_"]').forEach(inp => {
+    const v = parseFloat(String(inp.value || '').replace(',', '.'));
+    if (!isNaN(v) && v > 0) g += v;
+  });
+  g = Math.round(g * 1000) / 1000;
+  const tarEl = form.elements.namedItem('tarifa_gr');
+  const tarifa = parseFloat(String((tarEl && tarEl.value) || '0').replace(',', '.')) || 0;
+  const ef = Math.round(g * tarifa * 100) / 100;
+  const tg = document.getElementById('edit-plt-tg');
+  const te = document.getElementById('edit-plt-te');
+  if (tg) tg.textContent = (g % 1 === 0 ? String(g) : String(g));
+  if (te) te.textContent = '$' + ef.toFixed(2);
+}
+
 function bindEditPltTotals() {
   const form = document.getElementById('form-edit-plt');
   if (!form || form.dataset.totalsBound) return;
   form.dataset.totalsBound = '1';
-  const recalc = () => {
-    let g = 0;
-    form.querySelectorAll('.edit-gm, input[name^="gm_"]').forEach(inp => {
-      if (!(inp.name || '').startsWith('gm_')) return;
-      const v = parseFloat(inp.value);
-      if (!isNaN(v)) g += v;
-    });
-    g = Math.round(g * 1000) / 1000;
-    const tarifa = parseFloat((form.elements.namedItem('tarifa_gr') || {}).value || '0') || 0;
-    const ef = Math.round(g * tarifa * 100) / 100;
-    const tg = document.getElementById('edit-plt-tg');
-    const te = document.getElementById('edit-plt-te');
-    if (tg) tg.textContent = String(g);
-    if (te) te.textContent = '$' + ef.toFixed(2);
-  };
-  form.addEventListener('input', recalc);
-  form._recalcTotals = recalc;
+  form.addEventListener('input', updateEditPltTotals);
+  form.addEventListener('change', updateEditPltTotals);
 }
+document.addEventListener('DOMContentLoaded', bindEditPltTotals);
+
 
 
 async function submitUnDia(e) {
@@ -1270,6 +1304,35 @@ document.addEventListener('fajos:row-saved', async function (ev) {
     await fetch('/api/produccion/folio-sync', { method: 'POST', body: fd });
   } catch (e) {}
 });
+</script>
+
+<script>
+
+async function duplicarEnMaterial(prodId, material) {
+  material = (material || 'DOL').toUpperCase();
+  if (!prodId) { showToast('Fila no identificada', true); return; }
+  if (!confirm('¿Duplicar esta fila en material ' + material + '?\n\n• Mismo trabajador, folio y modelo\n• Gramos en blanco para capturar aparte\n• Precio del catálogo de ' + material + ' (si existe)')) return;
+  try {
+    const fd = new FormData();
+    fd.set('material', material);
+    const res = await fetch('/api/produccion/linea/' + prodId + '/duplicar', {
+      method: 'POST',
+      body: fd,
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) {
+      showToast(data.error || data.message || ('Error HTTP ' + res.status), true);
+      return;
+    }
+    showToast(data.message || ('Duplicada en ' + material));
+    setTimeout(() => location.reload(), 450);
+  } catch (e) {
+    showToast('Error de red al duplicar', true);
+  }
+}
+
 </script>
 {% endblock %}
 

@@ -63,11 +63,10 @@ class DashboardService:
     def buscar(self, q: str) -> dict:
         q = (q or "").strip()
         if not q:
-            return {"trabajadores": [], "semanas": [], "db_ok": check_db()}
+            return {"trabajadores": [], "semanas": [], "folios": [], "db_ok": check_db()}
         if not check_db():
-            return {"trabajadores": [], "semanas": [], "db_ok": False}
+            return {"trabajadores": [], "semanas": [], "folios": [], "db_ok": False}
         trab = self.trabajadores.listar(solo_activos=False, busqueda=q)
-        # filtrar semanas por código o notas
         todas = self.semanas.listar()
         ql = q.lower()
         sem = [
@@ -77,4 +76,42 @@ class DashboardService:
             or ql in str(s.get("fecha_inicio") or "")
             or ql in str(s.get("fecha_fin") or "")
         ]
-        return {"trabajadores": trab, "semanas": sem[:30], "db_ok": True}
+        folios = []
+        seen = set()
+        try:
+            from app.db.repository import ProduccionRepo
+            prod = ProduccionRepo()
+            for s in todas[:12]:
+                for r in prod.listar_por_semana(int(s["id"]), incluir_terminados=True) or []:
+                    folio = (r.get("folio") or "").strip()
+                    if not folio:
+                        continue
+                    if ql not in folio.lower() and ql not in str(r.get("nombre") or "").lower():
+                        continue
+                    key = folio.upper()
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    folios.append({
+                        "folio": folio,
+                        "nombre": r.get("nombre"),
+                        "ubic": r.get("ubic"),
+                        "material": r.get("material"),
+                        "modelo": r.get("modelo"),
+                        "semana": s.get("codigo"),
+                        "semana_id": s.get("id"),
+                        "gramos": r.get("total_gramos"),
+                    })
+                    if len(folios) >= 40:
+                        break
+                if len(folios) >= 40:
+                    break
+        except Exception:
+            folios = []
+        return {
+            "trabajadores": trab,
+            "semanas": sem[:30],
+            "folios": folios,
+            "db_ok": True,
+        }
+

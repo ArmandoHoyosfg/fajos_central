@@ -19,6 +19,27 @@ class BaseRepo:
         self.db = db or get_db()
 
 
+
+def _parse_fecha_sql(v):
+    """Normaliza fechas de formularios a YYYY-MM-DD o None."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    # ISO
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    # DD/MM/YYYY or DD-MM-YYYY
+    for sep in ("/", "-"):
+        parts = s.split(sep)
+        if len(parts) == 3 and len(parts[2]) == 4:
+            d, m, y = parts[0].zfill(2), parts[1].zfill(2), parts[2]
+            if d.isdigit() and m.isdigit() and y.isdigit():
+                return f"{y}-{m}-{d}"
+    return s[:10]
+
+
 class TrabajadoresRepo(BaseRepo):
     def listar(
         self,
@@ -89,33 +110,89 @@ class TrabajadoresRepo(BaseRepo):
                 "La ubicación es obligatoria.",
                 details={"field": "ubic"},
             )
-        sql = """
+        try:
+            ubic = int(data["ubic"])
+        except (TypeError, ValueError):
+            raise ValidationAppError("La ubicación debe ser un número.", details={"field": "ubic"})
+        nombre = str(data["nombre_mostrar"]).strip()
+        nombre_full = (data.get("nombre_completo") or nombre or "").strip() or nombre
+        tipo = (data.get("tipo") or "PLT").strip() or "PLT"
+        puesto = (data.get("puesto") or None)
+        if puesto is not None:
+            puesto = str(puesto).strip() or None
+        modo = str(data.get("sueldo_modo") or "variable").strip().lower()
+        if modo not in ("fijo", "variable"):
+            modo = "variable"
+        base = None
+        if data.get("sueldo_base") not in (None, ""):
+            try:
+                base = float(data["sueldo_base"])
+            except (TypeError, ValueError):
+                raise ValidationAppError("Sueldo base inválido.", details={"field": "sueldo_base"})
+        fecha = _parse_fecha_sql(data.get("fecha_incorporacion"))
+        notas = data.get("notas") or None
+        activo = 1
+        if data.get("activo") is not None and str(data.get("activo")).strip() != "":
+            try:
+                activo = 1 if int(data.get("activo")) else 0
+            except (TypeError, ValueError):
+                activo = 1
+
+        # Evitar duplicado obvio nombre+ubic activos
+        with self.db.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id FROM trabajadores
+                 WHERE nombre_mostrar = %s AND ubic = %s AND activo = 1
+                 LIMIT 1
+                """,
+                (nombre, ubic),
+            )
+            exists = cur.fetchone()
+            if exists:
+                raise ValidationAppError(
+                    f"Ya existe un trabajador activo «{nombre}» en ubic {ubic} (id={exists.get('id')}).",
+                    details={"field": "nombre_mostrar", "id": exists.get("id")},
+                )
+
+        params_full = (nombre, nombre_full, ubic, tipo, puesto, modo, base, activo, fecha, notas, None)
+        sql_full = """
             INSERT INTO trabajadores
                 (nombre_mostrar, nombre_completo, ubic, tipo, puesto, sueldo_modo, sueldo_base,
                  activo, fecha_incorporacion, notas, codigo_qr)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
+        sql_mid = """
+            INSERT INTO trabajadores
+                (nombre_mostrar, nombre_completo, ubic, tipo, puesto, sueldo_modo, sueldo_base,
+                 activo, fecha_incorporacion, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params_mid = (nombre, nombre_full, ubic, tipo, puesto, modo, base, activo, fecha, notas)
+        sql_legacy = """
+            INSERT INTO trabajadores
+                (nombre_mostrar, nombre_completo, ubic, tipo, puesto, activo, fecha_incorporacion, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params_legacy = (nombre, nombre_full, ubic, tipo, puesto, activo, fecha, notas)
+
         try:
             with self.db.cursor() as cur:
-                cur.execute(
-                    sql,
-                    (
-                        data["nombre_mostrar"],
-                        data.get("nombre_completo") or data["nombre_mostrar"],
-                        data["ubic"],
-                        data.get("tipo") or "PLT",
-                        data.get("puesto"),
-                        (str(data.get("sueldo_modo") or "variable").lower()
-                         if str(data.get("sueldo_modo") or "variable").lower() in ("fijo", "variable")
-                         else "variable"),
-                        (float(data["sueldo_base"])
-                         if data.get("sueldo_base") not in (None, "")
-                         else None),
-                        data.get("fecha_incorporacion"),
-                        data.get("notas"),
-                        data.get("codigo_qr"),
-                    ),
-                )
+                try:
+                    cur.execute(sql_full, params_full)
+                except Exception as e1:
+                    msg = str(e1).lower()
+                    if "unknown column" in msg or "sueldo_modo" in msg or "codigo_qr" in msg:
+                        try:
+                            cur.execute(sql_mid, params_mid)
+                        except Exception as e2:
+                            msg2 = str(e2).lower()
+                            if "unknown column" in msg2 or "sueldo" in msg2:
+                                cur.execute(sql_legacy, params_legacy)
+                            else:
+                                raise
+                    else:
+                        raise
                 new_id = cur.lastrowid
             logger.info("Trabajador creado id=%s nombre=%s", new_id, data["nombre_mostrar"])
             try:
@@ -137,6 +214,13 @@ class TrabajadoresRepo(BaseRepo):
     def actualizar(self, trabajador_id: int, data: dict) -> dict:
         """Actualiza catálogo y propaga nombre/ubic/puesto a nóminas denormalizadas."""
         antes = self.obtener(trabajador_id)
+        if "fecha_incorporacion" in data:
+            data["fecha_incorporacion"] = _parse_fecha_sql(data.get("fecha_incorporacion"))
+        if "ubic" in data and data["ubic"] not in (None, ""):
+            try:
+                data["ubic"] = int(data["ubic"])
+            except (TypeError, ValueError):
+                raise ValidationAppError("La ubicación debe ser un número.", details={"field": "ubic"})
         fields = []
         params: list[Any] = []
         mapping = {
@@ -199,7 +283,7 @@ class TrabajadoresRepo(BaseRepo):
         nombre = t.get("nombre_mostrar")
         ubic = t.get("ubic")
         puesto = t.get("puesto")
-        counts = {"plata": 0, "pita": 0, "taller": 0, "orphans": 0, "by_name": 0}
+        counts = {"plata": 0, "pita": 0, "taller": 0, "taller_sueldo": 0, "orphans": 0, "by_name": 0}
         with self.db.cursor() as cur:
             # --- Plata por id ---
             cur.execute(
@@ -256,7 +340,7 @@ class TrabajadoresRepo(BaseRepo):
                 )
                 counts["by_name"] += max(0, cur.rowcount or 0)
 
-            # --- Taller ---
+            # --- Taller: nombre, ubic, puesto ---
             cur.execute(
                 """
                 UPDATE nomina_taller
@@ -266,6 +350,32 @@ class TrabajadoresRepo(BaseRepo):
                 (nombre, ubic, puesto, trabajador_id),
             )
             counts["taller"] = max(0, cur.rowcount or 0)
+
+            # --- Taller: sueldo fijo desde catálogo (solo no firmados) ---
+            modo = str(t.get("sueldo_modo") or "variable").strip().lower()
+            base = t.get("sueldo_base")
+            counts["taller_sueldo"] = 0
+            if modo == "fijo" and base is not None and str(base).strip() != "":
+                try:
+                    base_f = float(base)
+                    cur.execute(
+                        """
+                        UPDATE nomina_taller
+                           SET sueldo = %s,
+                               total = %s + COALESCE(extras, 0),
+                               puesto = COALESCE(%s, puesto)
+                         WHERE trabajador_id = %s
+                           AND COALESCE(firmado, 0) = 0
+                           AND (
+                                COALESCE(sueldo, 0) = 0
+                                OR ABS(COALESCE(sueldo, 0) - %s) > 0.009
+                           )
+                        """,
+                        (base_f, base_f, puesto, trabajador_id, base_f),
+                    )
+                    counts["taller_sueldo"] = max(0, cur.rowcount or 0)
+                except (TypeError, ValueError):
+                    pass
 
             # --- Huérfanas con nombre+ubic anteriores ---
             if nombre_ant is not None and ubic_ant is not None:
@@ -613,7 +723,7 @@ class TrabajadoresRepo(BaseRepo):
 
     def sincronizar_todos_denormalizados(self) -> dict:
         """Repara todas las líneas ligadas a un trabajador_id válido."""
-        total = {"plata": 0, "pita": 0, "taller": 0, "trabajadores": 0}
+        total = {"plata": 0, "pita": 0, "taller": 0, "taller_sueldo": 0, "trabajadores": 0}
         with self.db.cursor() as cur:
             cur.execute("SELECT id FROM trabajadores")
             ids = [int(r["id"]) for r in (cur.fetchall() or [])]
@@ -623,6 +733,7 @@ class TrabajadoresRepo(BaseRepo):
                 total["plata"] += c.get("plata", 0)
                 total["pita"] += c.get("pita", 0)
                 total["taller"] += c.get("taller", 0)
+                total["taller_sueldo"] += c.get("taller_sueldo", 0)
                 total["trabajadores"] += 1
             except Exception:
                 logger.exception("sync all id=%s", tid)
@@ -1913,10 +2024,31 @@ class NominaTallerRepo(BaseRepo):
             r.setdefault("pitas", None)
             r.setdefault("precio_pita", self.PRECIO_PITA_DEFAULT)
             r["es_torcedor"] = self.es_torcedor(r.get("puesto"))
-            # Si es fijo y la línea tiene sueldo 0 pero hay base, sugerir base en UI (no forzar overwrite)
+            # Fijo: si sueldo en 0, aplicar base del catálogo (memoria + BD)
             try:
-                if r["sueldo_modo"] == "fijo" and float(r.get("sueldo") or 0) == 0 and r.get("sueldo_base") is not None:
-                    r["sueldo_sugerido"] = float(r["sueldo_base"])
+                if r["sueldo_modo"] == "fijo" and r.get("sueldo_base") is not None:
+                    base_f = float(r["sueldo_base"])
+                    cur_sueldo = float(r.get("sueldo") or 0)
+                    if cur_sueldo == 0 and base_f > 0:
+                        r["sueldo"] = base_f
+                        extras = float(r.get("extras") or 0)
+                        r["total"] = base_f + extras
+                        r["sueldo_sugerido"] = base_f
+                        try:
+                            with self.db.cursor() as cur:
+                                cur.execute(
+                                    """
+                                    UPDATE nomina_taller
+                                       SET sueldo = %s,
+                                           total = %s + COALESCE(extras, 0)
+                                     WHERE id = %s
+                                       AND COALESCE(firmado, 0) = 0
+                                       AND COALESCE(sueldo, 0) = 0
+                                    """,
+                                    (base_f, base_f, int(r["id"])),
+                                )
+                        except Exception:
+                            pass
             except (TypeError, ValueError):
                 pass
         return rows

@@ -2,7 +2,7 @@
 
 > Archivo de checkpoint legible por humanos e IAs.
 > Actualizar este archivo en cada hito relevante del proyecto.
-> Última actualización: 2026-08-17 | Versión app: **2.3.0**
+> Última actualización: 2026-09-22 | Versión app: **3.25.6**
 > **Entorno del usuario (obligatorio tener en cuenta):** Windows 10/11 + **PowerShell 7** + HeidiSQL/MariaDB.
 
 ---
@@ -195,8 +195,12 @@ API docs: `/docs`
 | 2.1.1 | Scripts PowerShell 7; log de servidor en Windows |
 | 2.2.0 | Import seguro Excel; captura web producción; schema suministro |
 | 2.3.0 | UI dark-first + logo; HTTPS local opcional con redirección |
+| 3.x | Evolución continua: migraciones al arranque, motor de consistencia, Dev panel, launcher bandeja, export multi-formato, tests |
 
 Tags git: `v2.0.0`, `v2.1.0`, `v2.1.1`
+
+> **Nota 2026-09-22:** La versión real del proyecto es **3.25.6** (ver `app/__init__.py` y `VERSION`).
+> La tabla anterior refleja solo los hitos documentados hasta 2.3.0. Para el historial completo ver `CHANGELOG.md`.
 
 ---
 
@@ -231,6 +235,7 @@ Tags git: `v2.0.0`, `v2.1.0`, `v2.1.1`
 4. Entorno del usuario: **Windows + PowerShell 7 + HeidiSQL/MariaDB** (ver sección 0). No asumir bash, Linux ni macOS como entorno principal.
 5. Repo remoto: `https://github.com/ArmandoHoyosfg/fajos_central.git`
 6. Tras cambios relevantes: actualizar `VERSION`, `CHANGELOG.md` y **esta sección 6–8**.
+7. **La versión de referencia es la de `app/__init__.py`** (`__version__`). `VERSION`, `README.md` y este archivo deben coincidir con ella. Si hay discrepancia, `app/__init__.py` gana.
 
 ### Contexto de conversación (resumen)
 - Se optimizó un Excel de nóminas multi-hoja caótico.
@@ -238,6 +243,68 @@ Tags git: `v2.0.0`, `v2.1.0`, `v2.1.1`
 - Se migró a MariaDB + Python + web FastAPI.
 - Usuario prefiere robustez, UI intuitiva, tests y reportes de error claros.
 - Formulario real diario enviado: hoja SUMINISTRO 15-08-26 (AG3/DOL, folios ST/P/F, observaciones).
+
+---
+
+## 10. Checkpoint de sesión — 2026-09-22
+
+**Versión actual:** 3.25.6
+**Objetivo de la sesión:** Refactor estructural en bloques de trabajo ≤ 1 hora, con timer de calibración.
+
+### Bloques planeados (en orden de ejecución)
+
+| # | Bloque | Estado | Tiempo real | Notas |
+|---|--------|--------|-------------|-------|
+| 0 | Calibración + timer (`scripts/task_timer.py`) | ✅ | ~15 min* | Script probado, registra en `logs/task_timer_*.jsonl` |
+| 1 | Refrescar `PROJECT_STATE.md` | ✅ | **~60 min** | Versión + fecha + tabla de hitos + instrucción #7 + sección 10 |
+| 2 | Unificar versión (README / VERSION / `__init__.py`) | ✅ | **~45 min** | README 3.22.0→3.25.6; CHANGELOG reordenado + entry 3.25.6; VERSION ya coincidía |
+| 3 | Mover `cierre_dia` al sistema de migraciones | ⏳ | — | Eliminar `CREATE TABLE` de `dia_service.py` |
+| 4 | Dividir `routes.py` en routers por dominio | ⏳ | — | El más valioso; requiere pytest en verde antes/después |
+| 5 | Verificación final + cierre | ⏳ | — | pytest completo + timer + git status |
+
+> \* **Tiempo real** = desde que el usuario envía el mensaje hasta que termina la respuesta de la IA.
+> Incluye: procesamiento del prompt, lectura de archivos, planificación, edición, verificación, debug y respuesta final.
+> NO es lo mismo que el "duración" del script `task_timer.py` (que solo mide el proceso Python).
+
+### Calibración de esta máquina (medida 2026-09-22)
+
+**A. Overhead de procesos Python (tiempo de I/O real en la máquina):**
+| Métrica | Tiempo |
+|---------|--------|
+| Import dependencias (fastapi+pydantic+pandas) | ~2.2 s |
+| Import `app.main` completo | ~0.7 s |
+| pytest `--collect-only` (19 tests) | ~0.8 s |
+| Overhead de arranque Python por proceso | ~0.2 s |
+
+**B. Tiempo real de bloques de trabajo (medido por el usuario, 2026-09-22):**
+| Bloque | Tipo de trabajo | Tiempo real (usuario → IA → usuario) |
+|--------|----------------|---------------------------------------|
+| 0 | Crear script + debug (encoding Win) + calibración | ~15 min |
+| 1 | Refrescar docs (leer + 4 edits + verificación + 2 debug encoding) | **~60 min** |
+
+> **⚠️ Lección crítica de calibración (2026-09-22):**
+> El tiempo real de un bloque de trabajo en esta máquina es **10–20× mayor** que la suma de los procesos Python.
+> El overhead dominante NO es la CPU de la máquina, sino:
+> - **Procesamiento del prompt por la IA** (lectura, razonamiento, planificación)
+> - **Lectura de archivos** (cada `read_file_lines` tiene latencia de red/almacenamiento)
+> - **Ediciones** (cada `edit_file_tool` / `replace_file` implica round-trip)
+> - **Verificaciones** (cada `shell_command` arranca un proceso Python completo: ~0.2–3 s)
+> - **Debug iterativo** (los errores de encoding en Windows costaron 2 iteraciones extra en cada bloque)
+>
+> **Regla de calibración actualizada:**
+> - Bloque de **solo docs** (1 archivo, pocos edits): **~45–90 min**
+> - Bloque de **código + verificación** (import + pytest): **~60–120 min**
+> - Bloque de **refactor estructural** (mover código entre archivos): **~90–180 min**
+>
+> **Recomendación de planificación:**
+> - No asumir que un bloque "pequeño" dura 5–10 min. En esta máquina, **todo bloque real dura mínimo 30–45 min**.
+> - Para sesiones de 1 hora, planificar **1 solo bloque** bien definido, no varios.
+> - Incluir siempre **margen de 2×** en la estimación.
+> - El encoding de Windows (cp1252) es una fuente constante de debug: siempre usar `python -X utf8` o el timer (que ya fuerza UTF-8).
+
+> **Uso del timer:** `python scripts/task_timer.py --task "Nombre del bloque" --body --save logs`
+> Registros: `logs/task_timer_YYYYmmdd.jsonl`
+> **Nota:** el timer mide solo el proceso Python, NO el tiempo total del bloque. Para el tiempo real, usar la hora del reloj del usuario.
 
 ---
 

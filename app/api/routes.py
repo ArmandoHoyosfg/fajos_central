@@ -254,6 +254,132 @@ async def api_terminar_lote(request: Request):
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
+
+@router.post("/api/produccion/linea/{prod_id}/duplicar")
+async def api_duplicar_linea(
+    prod_id: int,
+    material: str = Form("DOL"),
+    repo: ProduccionRepo = Depends(get_produccion_repo),
+):
+    """
+    Duplica una línea de Plata con otro material (p. ej. DOL).
+    Copia folio/modelo/trabajador; gramos en blanco; tarifa del catálogo si existe.
+    Si ya hay fila activa misma semana+trabajador+folio+material → la reutiliza.
+    """
+    from fastapi.responses import JSONResponse
+    from app.core.normalize import canonical_name
+
+    src = repo.obtener(prod_id)
+    if not src:
+        return JSONResponse({"ok": False, "error": "Línea no encontrada"}, status_code=404)
+
+    material = (material or "DOL").strip().upper() or "DOL"
+    semana_id = int(src["semana_id"])
+    nombre = canonical_name(src.get("nombre") or "")
+    try:
+        ubic = int(src.get("ubic") or 0)
+    except (TypeError, ValueError):
+        ubic = 0
+    folio = (src.get("folio") or "").strip() or None
+    modelo = src.get("modelo")
+    trabajador_id = src.get("trabajador_id")
+
+    # Tarifa: catálogo de materiales → historial → tarifa origen
+    tarifa = None
+    try:
+        from app.db.repository import CatalogosRepo
+        mats = CatalogosRepo().listar_materiales(solo_activos=True)
+        for m in mats or []:
+            if str(m.get("material") or "").strip().upper() == material:
+                tarifa = float(m.get("tarifa_por_gramo") or m.get("tarifa_gr") or 0) or None
+                break
+    except Exception:
+        pass
+    if tarifa is None:
+        try:
+            from app.db.repository import HistorialPreciosRepo
+            sug = HistorialPreciosRepo().sugerir(material, modelo)
+            if sug is not None:
+                tarifa = float(sug)
+        except Exception:
+            pass
+    if tarifa is None:
+        try:
+            tarifa = float(src.get("tarifa_gr") or 12)
+        except (TypeError, ValueError):
+            tarifa = 12.0
+
+    # ¿Ya existe misma combinación?
+    existing = None
+    try:
+        for row in repo.listar_por_semana(semana_id, incluir_terminados=True):
+            same_t = (
+                (trabajador_id and row.get("trabajador_id") == trabajador_id)
+                or (
+                    str(row.get("nombre") or "").strip().upper() == nombre.upper()
+                    and int(row.get("ubic") or -1) == ubic
+                )
+            )
+            same_f = str(row.get("folio") or "").strip().upper() == str(folio or "").strip().upper()
+            same_m = str(row.get("material") or "").strip().upper() == material
+            if same_t and same_f and same_m:
+                existing = row
+                break
+    except Exception:
+        existing = None
+
+    if existing:
+        pid = int(existing["id"])
+        try:
+            repo.reabrir_linea_si_terminada(pid)
+        except Exception:
+            pass
+        # Actualizar tarifa si venía vacía
+        try:
+            if existing.get("tarifa_gr") in (None, "", 0) and tarifa:
+                repo.actualizar_linea(pid, {"tarifa_gr": tarifa, "material": material})
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "id": pid,
+            "reused": True,
+            "material": material,
+            "message": f"Ya existía en {material}; se reactivó/reutilizó.",
+        }
+
+    # No clonar trabajo_id (material distinto = línea distinta)
+    new_id = repo.insertar(semana_id, {
+        "nombre": nombre,
+        "ubic": ubic,
+        "folio": folio,
+        "modelo": modelo,
+        "material": material,
+        "tarifa_gr": tarifa,
+        "trabajador_id": trabajador_id,
+        "trabajo_id": None,
+        "gm_sab": None, "gm_dom": None, "gm_lun": None,
+        "gm_mar": None, "gm_mie": None, "gm_jue": None, "gm_vie": None,
+    })
+    try:
+        from app.db.repository import HistorialPreciosRepo
+        HistorialPreciosRepo().registrar(
+            material, tarifa, modelo, fuente="duplicar_material",
+            semana_id=semana_id, prod_id=new_id,
+        )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "id": new_id,
+        "reused": False,
+        "material": material,
+        "tarifa_gr": tarifa,
+        "message": f"Fila duplicada en {material}.",
+    }
+
+
+
 @router.post("/api/produccion/linea/{prod_id}/reactivar")
 async def api_linea_reactivar(prod_id: int):
     from fastapi.responses import JSONResponse
@@ -609,11 +735,89 @@ async def page_buscar(
     q: str | None = None,
     svc: DashboardService = Depends(get_dashboard_service),
 ):
-    data = svc.buscar(q or "")
+    q = (q or "").strip()
+    data = svc.buscar(q)
     return templates.TemplateResponse(
         request,
         "buscar.html",
-        _ctx(request, q=q, trabajadores=data["trabajadores"], semanas=data["semanas"]),
+        _ctx(
+            request,
+            q=q,
+            trabajadores=data.get("trabajadores") or [],
+            semanas=data.get("semanas") or [],
+            folios=data.get("folios") or [],
+        ),
+    )
+
+
+@router.get("/estadisticas", response_class=HTMLResponse)
+async def page_estadisticas(
+    request: Request,
+    vista: str = Query("trabajador"),
+    q: str = Query(""),
+):
+    from app.services.stats_service import StatsService
+    form_ids = request.query_params.getlist("semana_id")
+    selected_ids = [int(x) for x in form_ids if str(x).isdigit()]
+    svc = StatsService()
+    semanas = svc.listar_semanas()
+    if vista == "folio":
+        rows = svc.stats_folio(q=q, semana_ids=selected_ids or None)
+    else:
+        vista = "trabajador"
+        rows = svc.stats_trabajador(q=q, semana_ids=selected_ids or None)
+    return templates.TemplateResponse(
+        request,
+        "estadisticas.html",
+        _ctx(
+            request,
+            vista=vista,
+            q=q,
+            rows=rows,
+            semanas=semanas,
+            selected_ids=set(selected_ids),
+        ),
+    )
+
+
+@router.get("/api/export/estadisticas")
+async def api_export_estadisticas(
+    request: Request,
+    vista: str = Query("trabajador"),
+    q: str = Query(""),
+):
+    from app.services.stats_service import StatsService
+    from openpyxl import Workbook
+    from io import BytesIO
+    form_ids = request.query_params.getlist("semana_id")
+    selected_ids = [int(x) for x in form_ids if str(x).isdigit()]
+    svc = StatsService()
+    if vista == "folio":
+        rows = svc.stats_folio(q=q, semana_ids=selected_ids or None)
+        headers = ["Folio", "Gramos", "Efectivo", "Semanas", "Inicio", "Materiales", "Trabajadores"]
+        def line(r):
+            return [r["folio"], r["total_gramos"], r["total_efectivo"], r["n_semanas"],
+                    r["inicio"], ", ".join(r["materiales"]), " · ".join(r["trabajadores"])]
+    else:
+        rows = svc.stats_trabajador(q=q, semana_ids=selected_ids or None)
+        headers = ["Nombre", "Ubic", "Gramos", "Efectivo", "Semanas", "Folios", "Primera", "Última"]
+        def line(r):
+            return [r["nombre"], r["ubic"], r["total_gramos"], r["total_efectivo"],
+                    r["n_semanas"], r["n_folios"], r["primera"], r["ultima"]]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Estadisticas"
+    for c, h in enumerate(headers, 1):
+        ws.cell(1, c, h)
+    for i, r in enumerate(rows, 2):
+        for c, v in enumerate(line(r), 1):
+            ws.cell(i, c, v)
+    buf = BytesIO()
+    wb.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="estadisticas.xlsx"'},
     )
 
 
@@ -1969,9 +2173,17 @@ async def api_export_captura_manual(
         raise NotFoundError("Semana no encontrada")
     # Activas (también sin gramos); excluye folios terminados/cerrados
     lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=False)
+    # Doble filtro por si listar aún trae alguna cerrada
+    from app.services.export_service import filtrar_lineas_export
+    lineas = filtrar_lineas_export(lineas, solo_con_gramos=False)
     content, media_type, filename = export_svc.export_captura_manual(
         lineas,
         codigo_semana=str(semana.get("codigo") or ""),
+        meta_semana={
+            "fecha_inicio": semana.get("fecha_inicio"),
+            "fecha_fin": semana.get("fecha_fin"),
+            "codigo": semana.get("codigo"),
+        },
     )
     return Response(
         content=content,
@@ -2041,6 +2253,7 @@ async def api_export(
         lineas,
         fmt=fmt,  # type: ignore
         codigo_semana=semana["codigo"],
+        meta_semana={"fecha_inicio": semana.get("fecha_inicio"), "fecha_fin": semana.get("fecha_fin"), "codigo": semana.get("codigo")},
         filename_stem=stem,
     )
     if formal and fmt in ("xlsx", "pdf"):
@@ -2195,18 +2408,19 @@ async def api_resumen_semana(
 async def api_export_taller(
     semana_id: int,
     include_resumen: int = Query(1),
+    force: int = Query(0, description="1 = permitir sin totales Plata/Pita"),
     repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
     pit: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
     plt: ProduccionRepo = Depends(get_produccion_repo),
     sem_repo: SemanasRepo = Depends(get_semanas_repo),
     export_svc: ExportService = Depends(get_export_service),
 ):
-    """Excel formal de nómina Taller (imprimible)."""
+    """Excel formal Taller (último al engrapar). Incluye RESUMEN de las 3 nóminas + calendario."""
+    from fastapi.responses import JSONResponse
     sem = sem_repo.obtener(semana_id)
     if not sem:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    # Regla fija: no exportar filas en 0 (solo líneas con sueldo/extras/total > 0)
     todas = list(repo.listar_por_semana(semana_id))
     lineas = [
         r for r in todas
@@ -2214,19 +2428,33 @@ async def api_export_taller(
         or float(r.get("sueldo") or 0) > 0
         or float(r.get("extras") or 0) > 0
     ]
+    t_plt = plt.totales_semana(semana_id)
+    t_pit = pit.totales(semana_id)
+    t_tll = repo.totales(semana_id)
+    nom_plata = float(t_plt.get("total_efectivo") or 0)
+    nom_pita = float(t_pit.get("total") or 0)
+    nom_taller = float(t_tll.get("total") or 0)
+    # Aviso de totales incompletos se hace en el cliente (preview + confirm).
+    # force=1 queda disponible por compatibilidad; el export siempre continúa.
     resumen = None
     if include_resumen:
-        t_plt = plt.totales_semana(semana_id)
-        t_pit = pit.totales(semana_id)
-        t_tll = repo.totales(semana_id)
         resumen = {
-            "nomina_taller": float(t_tll.get("total") or 0),
-            "nomina_plata": float(t_plt.get("total_efectivo") or 0),
-            "nomina_pita": float(t_pit.get("total") or 0),
+            "nomina_taller": nom_taller,
+            "nomina_plata": nom_plata,
+            "nomina_pita": nom_pita,
         }
     codigo = sem.get("codigo") or str(semana_id)
+    meta = {
+        "fecha_inicio": sem.get("fecha_inicio"),
+        "fecha_fin": sem.get("fecha_fin"),
+        "codigo": codigo,
+    }
     data, media, fname = export_svc.export_nomina_taller(
-        lineas, codigo_semana=codigo, filename_stem=f"nomina_taller_{codigo}", resumen=resumen
+        lineas,
+        codigo_semana=codigo,
+        filename_stem=f"nomina_taller_{codigo}",
+        resumen=resumen,
+        meta_semana=meta,
     )
     return Response(
         content=data,
@@ -2256,8 +2484,10 @@ async def api_export_pita_preview(
 async def api_export_taller_preview(
     semana_id: int,
     repo: NominaTallerRepo = Depends(get_nomina_taller_repo),
+    pit: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
+    plt: ProduccionRepo = Depends(get_produccion_repo),
 ):
-    """Cuenta filas totales vs exportables (monto > 0)."""
+    """Cuenta filas exportables y totales de las 3 nóminas (para avisar si faltan)."""
     todas = list(repo.listar_por_semana(semana_id))
     exportables = [
         r for r in todas
@@ -2265,12 +2495,29 @@ async def api_export_taller_preview(
         or float(r.get("sueldo") or 0) > 0
         or float(r.get("extras") or 0) > 0
     ]
+    t_plt = plt.totales_semana(semana_id)
+    t_pit = pit.totales(semana_id)
+    t_tll = repo.totales(semana_id)
+    nom_plata = float(t_plt.get("total_efectivo") or 0)
+    nom_pita = float(t_pit.get("total") or 0)
+    nom_taller = float(t_tll.get("total") or 0)
+    incompleto = nom_plata <= 0 or nom_pita <= 0
     return {
         "ok": True,
         "total": len(todas),
         "exportables": len(exportables),
         "omitidas": len(todas) - len(exportables),
         "regla": "Solo filas con sueldo/extras/total > 0",
+        "nomina_taller": nom_taller,
+        "nomina_plata": nom_plata,
+        "nomina_pita": nom_pita,
+        "gran_total": nom_taller + nom_plata + nom_pita,
+        "totales_incompletos": incompleto,
+        "aviso": (
+            "Faltan totales de Plata y/o Pita en el RESUMEN. "
+            "Conviene exportar esas nóminas primero; el GRAN TOTAL saldrá incompleto."
+            if incompleto else ""
+        ),
     }
 
 
@@ -2293,8 +2540,13 @@ async def api_export_pita(
         if float(r.get("efectivo") or 0) > 0
     ]
     codigo = sem.get("codigo") or str(semana_id)
+    meta = {
+        "fecha_inicio": sem.get("fecha_inicio"),
+        "fecha_fin": sem.get("fecha_fin"),
+        "codigo": codigo,
+    }
     data, media, fname = export_svc.export_nomina_pita(
-        lineas, codigo_semana=codigo, filename_stem=f"nomina_pita_{codigo}", resumen=None
+        lineas, codigo_semana=codigo, filename_stem=f"nomina_pita_{codigo}", resumen=None, meta_semana=meta
     )
     return Response(
         content=data,

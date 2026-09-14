@@ -5,6 +5,52 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
+> **Fuente de verdad de la versión:** `app/__init__.py` (`__version__`).
+> Este archivo debe coincidir con ella. Si hay discrepancia, `app/__init__.py` gana.
+
+## [3.25.6] — 2026-09-24
+
+### Refactor estructural (sesión de bloques)
+- **Bloque 0:** `scripts/task_timer.py` — cronómetro de tarea con registro JSONL (`logs/task_timer_*.jsonl`)
+- **Bloque 1:** `docs/PROJECT_STATE.md` refrescado (versión 3.25.6, fecha, tabla de bloques, calibración de máquina, lección de tiempos reales)
+- **Bloque 2:** Unificación de versión — `README.md` actualizado a 3.25.6; `CHANGELOG.md` reordenado (título primero, entry 3.25.6 añadida); `VERSION` ya coincidía
+- **Calibración:** se documentó que el tiempo real de un bloque es 10–20× mayor que la suma de procesos Python (overhead de IA + round-trips + debug de encoding Windows)
+
+## [3.25.5] — 2026-09-12
+
+### Captura manual compacta
+- Exclusión reforzada de folios terminados/cerrados
+- Sin fórmulas ni fila de totales / pie pesado
+- Fuente 9, columnas y márgenes estrechos, fit a 1 hoja
+- Leyenda de pago (sábado) en encabezado compacto
+
+## [3.23.6] — 2026-09-09
+
+### Acciones… sobre seleccionados
+- Botón **Acciones…** (reemplaza el de solo cerrar)
+- Menú: cerrar ≥2 sem, **duplicar en DOL** en lote, quitar selección
+- Contador de filas marcadas
+
+## [3.23.5] — 2026-09-09
+
+### Duplicar en DOL
+- Menú ⋮ de cada fila (si no es ya DOL): **Duplicar en DOL**
+- Copia trabajador/folio/modelo; material DOL; gramos vacíos; tarifa de catálogo
+- Si ya existía la misma combinación, reutiliza/reactiva en lugar de duplicar
+
+## [3.23.4] — 2026-09-09
+
+### Editar fila: $/Gr junto a material
+- Campo **$/Gr** restaurado en modal Editar (junto a Material)
+- Precio de la fila se conserva; catálogo sugiere y rellena si aplica
+- Decimales (`step=any`) en gramos del editor
+
+## [3.23.3] — 2026-09-09
+
+### ＋ Fila: decimales y $/Gr
+- Gramos con `step="any"` (permite 2.8, etc.)
+- Campo **$/Gr** restaurado junto a Material (catálogo + editable)
+
 ## [3.23.2] — 2026-09-09
 
 ### Folios terminados no aparecen en Plata

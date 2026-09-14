@@ -1,6 +1,6 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 3.22.0  
+**Versión:** 3.25.6  
 **Licencia:** [GPL-3.0-or-later](LICENSE)  
 **Entorno:** Windows 10/11 · PowerShell 7 · Python 3.12+ · MariaDB / HeidiSQL  
 
