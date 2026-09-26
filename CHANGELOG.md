@@ -1,3 +1,10 @@
+## [3.38.2] — 2026-09-26
+
+### Nav, filtros Plata y botones compactos
+- Enlace **API** solo en DEV.
+- Filtros: Sin firmar · con avance / Sin firmar · sin avance / Sin gramos hoy.
+- Botones y nav más compactos.
+
 ## [3.38.1] — 2026-09-26
 
 ### Gráficas fluidas + 4 tipos

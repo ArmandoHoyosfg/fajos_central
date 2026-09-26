@@ -67,9 +67,13 @@ a:hover { text-decoration: underline; }
 .brand:hover { text-decoration: none; color: var(--accent); }
 .nav { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
 .nav a {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  color: var(--muted); padding: 0.4rem 0.75rem;
-  border-radius: 8px; font-size: 0.9rem; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 0.28rem;
+  padding: 0.28rem 0.5rem;
+  border-radius: 7px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.84rem;
+  white-space: nowrap;
 }
 .nav a:hover, .nav a.active {
   background: var(--surface); color: var(--text); text-decoration: none;
@@ -131,7 +135,7 @@ h2 { font-size: 1.1rem; margin: 1.5rem 0 0.65rem; font-weight: 600; }
   display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
   background: var(--accent); color: #1e1e2e;
   border: none; border-radius: 8px;
-  padding: 0.45rem 0.9rem; font-weight: 600; font-size: 0.88rem;
+  padding: 0.32rem 0.7rem; font-weight: 600; font-size: 0.84rem;
   cursor: pointer; text-decoration: none; font-family: inherit;
 }
 .btn:hover { background: var(--accent-dim); text-decoration: none; color: #1e1e2e; }
@@ -760,10 +764,11 @@ main.page-enter {
 
 /* Botones más grandes / fáciles de tocar */
 .btn, a.btn, button.btn {
-  min-height: 2.4rem;
-  padding: 0.5rem 1rem;
+  min-height: 2rem;
+  padding: 0.32rem 0.7rem;
+  font-size: 0.84rem;
 }
-.btn-sm { min-height: 2rem; padding: 0.3rem 0.65rem; font-size: 0.85rem; }
+.btn-sm { min-height: 1.75rem; padding: 0.22rem 0.5rem; font-size: 0.78rem; }
 
 /* Empty state amigable */
 .empty-state {
@@ -2245,4 +2250,29 @@ th.col-actions, td.col-actions {
 }
 .chart-canvas-wrap--tall .chart-main {
   height: 200px;
+}
+
+.filter-row--compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+  align-items: center;
+  margin: 0.5rem 0 0.65rem;
+}
+.filter-row--compact .flt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.82rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--border, #333);
+  background: var(--surface, transparent);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.filter-row--compact .flt-chip:has(input:checked) {
+  border-color: var(--accent, #c9a227);
+  background: color-mix(in srgb, var(--accent, #c9a227) 12%, transparent);
 }
