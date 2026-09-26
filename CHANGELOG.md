@@ -1,3 +1,10 @@
+## [3.37.0] — 2026-09-26
+
+### Taller: $/pita por defecto desde catálogo (editable)
+- Default: material **PITA** en catálogo → historial → 3.20.
+- Formularios y celdas usan ese default; el usuario puede cambiarlo siempre.
+- Cálculo de sueldo torcedor usa el mismo default en servidor.
+
 ## [3.36.0] — 2026-09-26
 
 ### Fase 4 — Aprendizaje en Dashboard / Plata

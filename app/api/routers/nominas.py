@@ -61,6 +61,7 @@ async def page_nomina_taller(
         "nomina_taller.html",
         _ctx(
             request, semanas=semanas, semana_id=semana_id, lineas=lineas, totales=totales, trabajadores=trabajadores,
+            precio_pita_default=NominaTallerRepo.precio_pita_default(),
             semana_cerrada=bool(next((s for s in semanas if s.get("id") == semana_id), {}).get("cerrada")) if semana_id else False,
         ),
     )

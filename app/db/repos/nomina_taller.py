@@ -17,6 +17,36 @@ class NominaTallerRepo(BaseRepo):
 
     PRECIO_PITA_DEFAULT = 3.2
 
+    @classmethod
+    def precio_pita_default(cls) -> float:
+        """Catálogo PITA → historial PITA/torcedor → 3.20. Siempre editable en UI."""
+        # 1) Catálogo materiales
+        try:
+            from app.db.repository import CatalogosRepo
+            mats = CatalogosRepo().listar_materiales(solo_activos=True) or []
+            for m in mats:
+                nom = str(m.get("material") or "").strip().upper()
+                if nom == "PITA":
+                    t = m.get("tarifa_por_gramo")
+                    if t is None:
+                        t = m.get("tarifa_gr")
+                    if t is not None and float(t) > 0:
+                        return float(t)
+        except Exception:
+            pass
+        # 2) Historial
+        try:
+            from app.db.repository import HistorialPreciosRepo
+            sug = HistorialPreciosRepo().sugerir("PITA", "torcedor")
+            if sug is not None and float(sug) > 0:
+                return float(sug)
+            sug = HistorialPreciosRepo().sugerir("PITA", None)
+            if sug is not None and float(sug) > 0:
+                return float(sug)
+        except Exception:
+            pass
+        return float(cls.PRECIO_PITA_DEFAULT)
+
     @staticmethod
     def es_torcedor(puesto: str | None) -> bool:
         p = (puesto or "").strip().lower()
@@ -128,7 +158,7 @@ class NominaTallerRepo(BaseRepo):
                 r["sueldo_modo"] = "fijo" if modo == "fijo" else "variable"
                 r.setdefault("sueldo_base", None)
             r.setdefault("pitas", None)
-            r.setdefault("precio_pita", self.PRECIO_PITA_DEFAULT)
+            r.setdefault("precio_pita", self.precio_pita_default())
             r["es_torcedor"] = self.es_torcedor(r.get("puesto"))
             # Fijo: si sueldo en 0, aplicar base del catálogo (memoria + BD)
             try:
@@ -193,9 +223,9 @@ class NominaTallerRepo(BaseRepo):
             return data
         precio = data.get("precio_pita")
         try:
-            precio = float(precio) if precio is not None and str(precio).strip() != "" else self.PRECIO_PITA_DEFAULT
+            precio = float(precio) if precio is not None and str(precio).strip() != "" else self.precio_pita_default()
         except (TypeError, ValueError):
-            precio = self.PRECIO_PITA_DEFAULT
+            precio = self.precio_pita_default()
         data = dict(data)
         data["precio_pita"] = precio
         data["sueldo"] = round(pitas * precio, 2)
@@ -246,7 +276,7 @@ class NominaTallerRepo(BaseRepo):
                         float(data.get("sueldo") or 0),
                         float(data.get("extras") or 0),
                         data.get("pitas"),
-                        data.get("precio_pita") or self.PRECIO_PITA_DEFAULT,
+                        data.get("precio_pita") or self.precio_pita_default(),
                         1 if data.get("firmado") else 0,
                         data.get("notas"),
                     ),
@@ -330,7 +360,7 @@ class NominaTallerRepo(BaseRepo):
             if "puesto" not in data or not data.get("puesto"):
                 data["puesto"] = cur_row.get("puesto")
             if "precio_pita" not in data or data.get("precio_pita") is None:
-                data["precio_pita"] = cur_row.get("precio_pita") or self.PRECIO_PITA_DEFAULT
+                data["precio_pita"] = cur_row.get("precio_pita") or self.precio_pita_default()
             if "pitas" not in data and cur_row.get("pitas") is not None:
                 data["pitas"] = cur_row.get("pitas")
             # Si el puesto efectivo es torcedor O el usuario edita pitas en una fila
