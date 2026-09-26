@@ -1,3 +1,10 @@
+## [3.28.0] — 2026-09-25
+
+### D — repository modular + offline + IA local
+- `app/db/repos/*`: un archivo por repositorio; `repository.py` reexporta.
+- Íconos Lucide **offline**: `static/vendor/lucide.min.js` (sin unpkg).
+- `AGENTS.md`, `docs/MAPA_CODIGO.md`, `docs/IA_LOCAL.md` para modelos locales.
+
 ## [3.27.0] — 2026-09-25
 
 ### Deuda técnica C — routes modulares
