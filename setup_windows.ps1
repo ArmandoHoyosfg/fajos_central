@@ -13,6 +13,8 @@
   - Recrea .venv si apunta a un intérprete inexistente (ej. Python314 borrado)
   - Instala requirements.txt con python -m pip (evita pip.exe roto)
 #>
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 

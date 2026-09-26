@@ -1,3 +1,10 @@
+## [3.26.0] — 2026-09-25
+
+### Deuda técnica A+B
+- **Jinja `tojson`**: registro único en `app/web/jinja_ext.py` + `templating.py` (ya no monkey-patch en routes.py).
+- **UTF-8 en Windows**: `PYTHONUTF8=1` / `chcp 65001` en start.bat, start_dev.bat, start.ps1 y setup_windows.ps1.
+- **cierre_dia**: migración `db/schema/006_cierre_dia.sql`; `DiaService.ensure_cierre_table` solo verifica (sin CREATE en runtime).
+
 ## [3.25.7] — 2026-09-25
 
 ### Duplicar semana

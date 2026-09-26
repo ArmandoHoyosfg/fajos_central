@@ -1,6 +1,9 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
+chcp 65001 >nul
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 
 REM Si nos llaman desde un acceso / Startup, delegar YA a VBS (cierra esta consola).
 if /I not "%~1"=="_inner" (

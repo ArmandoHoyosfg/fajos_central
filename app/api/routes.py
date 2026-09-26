@@ -7,8 +7,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
-from fastapi.templating import Jinja2Templates
-from markupsafe import Markup
 from pathlib import Path
 
 from app.api.deps import (
@@ -27,19 +25,7 @@ from app.core.exceptions import AppError
 from app.db.repository import ProduccionRepo, ProduccionPitaRepo, NominaTallerRepo, SemanasRepo, TrabajadoresRepo, TrabajosRepo, CatalogosRepo
 from app.services.dashboard_service import DashboardService
 from app.services.export_service import ExportService, linea_tiene_gramos
-
-TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "web" / "templates"
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-
-def _jinja_tojson_safe(value):
-    """tojson que soporta Decimal/date (evita TypeError en templates)."""
-    from app.core.jsonutil import dumps_safe
-    return Markup(dumps_safe(value, ensure_ascii=False))
-
-templates.env.filters["tojson"] = _jinja_tojson_safe
-templates.env.policies["json.dumps_function"] = lambda obj, **kw: __import__(
-    "app.core.jsonutil", fromlist=["dumps_safe"]
-).dumps_safe(obj, **kw)
+from app.web.templating import templates
 
 
 router = APIRouter()

@@ -2,6 +2,9 @@
 REM Arranque CON consola visible (solo diagnostico / DEV)
 setlocal
 cd /d "%~dp0"
+chcp 65001 >nul
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 title Fajos Central DEV console
 set "VENV=%~dp0.venv\Scripts\python.exe"
 if exist "%VENV%" (
