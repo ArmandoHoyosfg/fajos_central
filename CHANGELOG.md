@@ -1,3 +1,10 @@
+## [3.32.0] — 2026-09-26
+
+### Fase 2 — Panel DEV por pestañas
+- Pestañas: **Salud**, **Datos**, **Acciones**, **Técnico**.
+- **Datos**: folios sin avance, reasignaciones, folios repetidos, fichas dobles, historial de uniones, huérfanos y desajustes — con textos orientados a la acción.
+- Badge en Datos con conteo de pendientes. Tab recordada en localStorage / `?tab=datos`.
+
 ## [3.31.0] — 2026-09-26
 
 ### Unir fichas: nombre completo, mezcla, historial y rollback

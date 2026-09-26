@@ -256,11 +256,22 @@ def render_debug_page(
     .dev-kpis .label {{ font-size:0.75rem; opacity:0.75; }}
     .dev-kpis .value {{ font-size:1.15rem; font-weight:700; margin-top:0.2rem; }}
     .dev-actions {{ display:flex; flex-wrap:wrap; gap:0.5rem; margin:1rem 0; }}
-    .dev-section {{ margin-top:1.75rem; }}
-    .dev-section h2 {{ font-size:1.05rem; margin-bottom:0.35rem; }}
+    .dev-section {{ margin-top:1.25rem; padding:1rem; border:1px solid var(--border, #333); border-radius:10px; background: rgba(0,0,0,0.12); }}
+    .dev-section h2 {{ font-size:1.05rem; margin:0 0 0.35rem; }}
     .dev-hint {{ font-size:0.85rem; opacity:0.8; margin-bottom:0.75rem; }}
     tr.row-warn td {{ background: rgba(249, 226, 175, 0.12); }}
     code {{ font-size:0.8rem; }}
+    .dev-tabs {{ display:flex; flex-wrap:wrap; gap:0.35rem; margin:1rem 0 0.75rem; padding:0.25rem; border-radius:10px; background: rgba(0,0,0,0.2); }}
+    .dev-tabs button {{ border:none; background:transparent; color:inherit; padding:0.45rem 0.9rem; border-radius:8px; cursor:pointer; font-size:0.9rem; opacity:0.8; }}
+    .dev-tabs button:hover {{ opacity:1; background: rgba(255,255,255,0.06); }}
+    .dev-tabs button.active {{ background: var(--accent, #c9a227); color:#1a1a1a; opacity:1; font-weight:600; }}
+    .dev-tab-panel {{ display:none; }}
+    .dev-tab-panel.active {{ display:block; }}
+    .dev-callout {{ padding:0.65rem 0.85rem; border-radius:8px; margin-bottom:0.75rem; font-size:0.88rem; border-left:3px solid var(--accent, #c9a227); background: rgba(201,162,39,0.1); }}
+    .dev-callout.warn {{ border-left-color:#f9e2af; background: rgba(249,226,175,0.08); }}
+    .dev-callout.ok {{ border-left-color:#a6e3a1; background: rgba(166,227,161,0.08); }}
+    .dev-badge-count {{ display:inline-block; min-width:1.25rem; padding:0.05rem 0.4rem; border-radius:999px; background: rgba(255,255,255,0.12); font-size:0.75rem; margin-left:0.25rem; }}
+    .dev-badge-count.hot {{ background: rgba(243,139,168,0.35); }}
   </style>
 </head>
 <body>
@@ -305,7 +316,7 @@ def render_debug_page(
     <div class="page-head">
       <div>
         <h1>Panel Dev</h1>
-        <p class="muted">Integridad, migraciones, semana actual y reparación.</p>
+        <p class="muted">Salud · calidad de datos (folios y fichas) · acciones · técnico.</p>
       </div>
       <div class="toolbar">
         <a class="btn btn-secondary" href="/">← Inicio</a>
@@ -330,39 +341,29 @@ def render_debug_page(
         <div class="value" style="font-size:0.95rem">{'Sí' if existe else 'No'}</div></div>
     </div>
 
-    <div class="dev-actions">
-      <form method="post" action="/dev/sync" style="display:inline">
-        <button type="submit" class="btn">Sincronizar catálogo → nóminas</button>
-      </form>
-      <form method="post" action="/dev/reparar-huerfanos" style="display:inline">
-        <button type="submit" class="btn btn-secondary">Reparar huérfanos</button>
-      </form>
-      <a class="btn btn-secondary" href="/dev">Refrescar</a>
-      <a class="btn btn-secondary" href="/docs" target="_blank" rel="noopener">API</a>
-    </div>
+    <nav class="dev-tabs" id="dev-tabs" role="tablist">
+      <button type="button" class="active" data-tab="salud" role="tab">Salud</button>
+      <button type="button" data-tab="datos" role="tab">Datos
+        <span class="dev-badge-count {'hot' if (len(folio_inact)+len(cands)+len(reasig)+n_fd)>0 else ''}">{len(folio_inact)+len(cands)+len(reasig)+n_fd}</span>
+      </button>
+      <button type="button" data-tab="acciones" role="tab">Acciones</button>
+      <button type="button" data-tab="tecnico" role="tab">Técnico</button>
+    </nav>
 
-    
-        <section class="dev-section" id="dev-console-section">
-      <h2>Consola en vivo <span class="muted" style="font-weight:400;font-size:0.85rem">(solo lectura)</span></h2>
-      <p class="dev-hint">Eventos del servidor y del navegador. Si un botón no responde, el error suele aparecer aquí.</p>
-      <div class="dev-console-toolbar">
-        <label><input type="checkbox" id="dev-log-autoscroll" checked> Auto-scroll</label>
-        <label><input type="checkbox" id="dev-log-pause"> Pausar</label>
-        <button type="button" class="btn btn-secondary btn-xs" id="dev-log-clear">Limpiar</button>
-        <span class="muted" id="dev-log-status">conectando…</span>
+    <div class="dev-tab-panel active" data-panel="salud">
+      <div class="dev-callout {'ok' if db_ok else 'warn'}">
+        {'Base de datos conectada.' if db_ok else 'Problema de conexión a MariaDB. Revisa config.ini.'}
+        Semana actual en BD: <strong>{'sí' if existe else 'no'}</strong>.
+        Migraciones: <strong>{'OK' if not mig_bad else str(len(mig_bad))+' pendientes'}</strong>.
       </div>
-      <pre id="dev-console" class="dev-console" aria-live="polite"></pre>
-    </section>
-    <script src="/static/dev_console.js"></script>
-
-
-    <section class="dev-section">
+<section class="dev-section">
       <h2>Semana actual (calendario sáb–vie)</h2>
       <p class="dev-hint">Lo que el sistema considera esta semana de pago según la fecha de hoy.</p>
       {semana_html}
     </section>
 
-    <section class="dev-section">
+    
+<section class="dev-section">
       <h2>Migraciones / columnas esperadas</h2>
       <p class="dev-hint">Si algo está faltante, ejecuta el script en HeidiSQL.</p>
       <div class="table-wrap"><table>
@@ -371,48 +372,18 @@ def render_debug_page(
       </table></div>
     </section>
 
-    <section class="dev-section">
-      <h2>Folios repetidos entre trabajadores</h2>
-      <p class="dev-hint">Mismo folio en 2+ personas distintas. También se resaltan en Plata.</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Folio</th><th>Semana</th><th>Nº personas</th><th>Quiénes</th></tr></thead>
-        <tbody>{rows_fd()}</tbody>
-      </table></div>
-    </section>
+    
+    </div><!-- /panel salud -->
 
-    <section class="dev-section">
-      <h2>Huérfanos (sin trabajador válido)</h2>
-      <p class="dev-hint">Reparar enlaza por nombre + ubic exactos del catálogo.</p>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Área</th><th>ID</th><th>Nombre</th><th>Ubic</th><th>trab_id</th></tr></thead>
-        <tbody>{rows_or()}</tbody>
-      </table></div>
-    </section>
+    <div class="dev-tab-panel" data-panel="datos">
 
-    <section class="dev-section">
-      <h2>Desajustes nombre/ubic</h2>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Área</th><th>ID</th><th>trab_id</th><th>Nómina</th><th>Catálogo</th></tr></thead>
-        <tbody>{rows_mm()}</tbody>
-      </table></div>
-    </section>
+      <div class="dev-callout warn">
+        Aquí se revisan <strong>folios</strong> y <strong>fichas de trabajadores</strong> que conviene limpiar.
+        Cada bloque explica el problema y ofrece una acción (abrir Plata, marcar terminado, unir fichas, deshacer unión).
+      </div>
 
-    <section class="dev-section">
-      <h2>Muestra «Vela»</h2>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Origen</th><th>ID</th><th>Nombre</th><th>Ubic</th><th>trab_id</th><th>Extra</th></tr></thead>
-        <tbody>{rows_vela()}</tbody>
-      </table></div>
-    </section>
-
-    <section class="dev-section">
-      <h2>Aprendizaje ligero</h2>
-      {apr_note}
-      <p class="dev-hint">Eventos 7 días: <strong>{_esc(apr.get('eventos_7d', 0))}</strong>.</p>
-    </section>
-
-    <section class="dev-section">
-      <h2 id="folios">Folios sin avance</h2>
+<section class="dev-section">
+      <h2 id="folios">Folios sin avance esta semana</h2>
       <p class="dev-hint">Sin gramos esta semana. Puedes marcar como terminado o abrir Plata para corregir.</p>
       <div class="table-wrap"><table>
         <thead><tr><th>Folio</th><th>Quién lo tiene ahora</th><th>Qué parece</th><th>Semana pasada</th><th>Qué hacer</th></tr></thead>
@@ -420,7 +391,8 @@ def render_debug_page(
       </table></div>
     </section>
 
-    <section class="dev-section">
+    
+<section class="dev-section">
       <h2>Folios que cambiaron de persona</h2>
       <p class="dev-hint">La semana pasada tenía gramos una persona; esta semana otra. Revisa si es reasignación real.</p>
       <div class="table-wrap"><table>
@@ -429,8 +401,19 @@ def render_debug_page(
       </table></div>
     </section>
 
-    <section class="dev-section">
-      <h2 id="dup">Posibles fichas dobles (misma ubicación)</h2>
+    
+<section class="dev-section">
+      <h2>Folios repetidos entre trabajadores</h2>
+      <p class="dev-hint">Mismo folio en 2+ personas distintas. También se resaltan en Plata.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Folio</th><th>Semana</th><th>Nº personas</th><th>Quiénes</th></tr></thead>
+        <tbody>{rows_fd()}</tbody>
+      </table></div>
+    </section>
+
+    
+<section class="dev-section">
+      <h2 id="dup">Fichas dobles · misma ubicación + nombre parecido</h2>
       <p class="dev-hint">Solo misma ubic + nombre igual o parecido. Al unir se conserva el
       <strong>nombre más completo</strong> y se mezclan el resto de datos. Puedes deshacer abajo.</p>
       <div class="table-wrap"><table>
@@ -438,7 +421,8 @@ def render_debug_page(
       </table></div>
     </section>
 
-    <section class="dev-section" id="historial-uniones">
+    
+<section class="dev-section" id="historial-uniones">
       <h2>Historial de uniones de fichas</h2>
       <p class="dev-hint">Registro de fusiones. <strong>Deshacer</strong> restaura la ficha dada de baja y
       devuelve las filas de nómina que se movieron (si siguen apuntando al survivor).</p>
@@ -506,13 +490,125 @@ def render_debug_page(
       </script>
     </section>
 
-    <section class="dev-section">
+    
+<section class="dev-section">
+      <h2>Huérfanos (sin trabajador válido)</h2>
+      <p class="dev-hint">Reparar enlaza por nombre + ubic exactos del catálogo.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Área</th><th>ID</th><th>Nombre</th><th>Ubic</th><th>trab_id</th></tr></thead>
+        <tbody>{rows_or()}</tbody>
+      </table></div>
+    </section>
+
+    
+<section class="dev-section">
+      <h2>Desajustes nombre/ubic</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Área</th><th>ID</th><th>trab_id</th><th>Nómina</th><th>Catálogo</th></tr></thead>
+        <tbody>{rows_mm()}</tbody>
+      </table></div>
+    </section>
+
+    
+<section class="dev-section">
+      <h2>Aprendizaje ligero</h2>
+      {apr_note}
+      <p class="dev-hint">Eventos 7 días: <strong>{_esc(apr.get('eventos_7d', 0))}</strong>.</p>
+    </section>
+
+    
+    </div><!-- /panel datos -->
+
+    <div class="dev-tab-panel" data-panel="acciones">
+
+      <div class="dev-callout">
+        Acciones guiadas sobre la base de datos. No borran historial de pago; sincronizan catálogo y reparan enlaces rotos.
+      </div>
+
+    <div class="dev-actions">
+      <form method="post" action="/dev/sync" style="display:inline">
+        <button type="submit" class="btn">Sincronizar catálogo → nóminas</button>
+      </form>
+      <form method="post" action="/dev/reparar-huerfanos" style="display:inline">
+        <button type="submit" class="btn btn-secondary">Reparar huérfanos</button>
+      </form>
+      <a class="btn btn-secondary" href="/dev">Refrescar</a>
+      <a class="btn btn-secondary" href="/docs" target="_blank" rel="noopener">API</a>
+    </div>
+      <p class="muted" style="margin-top:0.75rem;font-size:0.85rem">También arriba del todo: <em>Reparación inteligente</em> y comandos rápidos.</p>
+    </div><!-- /panel acciones -->
+
+    <div class="dev-tab-panel" data-panel="tecnico">
+
+      <div class="dev-callout">
+        Herramientas para diagnóstico técnico (consola, muestra de filas, esquema). Uso habitual: solo si hay un error raro.
+      </div>
+
+<section class="dev-section" id="dev-console-section">
+      <h2>Consola en vivo <span class="muted" style="font-weight:400;font-size:0.85rem">(solo lectura)</span></h2>
+      <p class="dev-hint">Eventos del servidor y del navegador. Si un botón no responde, el error suele aparecer aquí.</p>
+      <div class="dev-console-toolbar">
+        <label><input type="checkbox" id="dev-log-autoscroll" checked> Auto-scroll</label>
+        <label><input type="checkbox" id="dev-log-pause"> Pausar</label>
+        <button type="button" class="btn btn-secondary btn-xs" id="dev-log-clear">Limpiar</button>
+        <span class="muted" id="dev-log-status">conectando…</span>
+      </div>
+      <pre id="dev-console" class="dev-console" aria-live="polite"></pre>
+    </section>
+    <script src="/static/dev_console.js"></script>
+
+
+    
+<section class="dev-section">
+      <h2>Muestra «Vela»</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Origen</th><th>ID</th><th>Nombre</th><th>Ubic</th><th>trab_id</th><th>Extra</th></tr></thead>
+        <tbody>{rows_vela()}</tbody>
+      </table></div>
+    </section>
+
+    
+<section class="dev-section">
       <h2>Esquema</h2>
       <div class="table-wrap"><table>
         <thead><tr><th>Tabla</th><th>Columna</th><th>Tipo</th><th>Null</th><th>Key</th></tr></thead>
         <tbody>{rows_col()}</tbody>
       </table></div>
     </section>
+
+    </div><!-- /panel tecnico -->
+
+
+
+<script>
+(function(){{
+  var nav = document.getElementById('dev-tabs');
+  if (!nav) return;
+  function show(tab) {{
+    nav.querySelectorAll('button[data-tab]').forEach(function(b){{
+      b.classList.toggle('active', b.getAttribute('data-tab') === tab);
+    }});
+    document.querySelectorAll('.dev-tab-panel').forEach(function(p){{
+      p.classList.toggle('active', p.getAttribute('data-panel') === tab);
+    }});
+    try {{ localStorage.setItem('fajos_dev_tab', tab); }} catch(e) {{}}
+    if (tab === 'datos' && typeof cargarFusiones === 'function') {{
+      try {{ cargarFusiones(); }} catch(e) {{}}
+    }}
+  }}
+  nav.querySelectorAll('button[data-tab]').forEach(function(b){{
+    b.addEventListener('click', function(){{ show(b.getAttribute('data-tab')); }});
+  }});
+  var initial = 'salud';
+  try {{
+    var q = new URLSearchParams(location.search).get('tab');
+    if (q) initial = q;
+    else initial = localStorage.getItem('fajos_dev_tab') || 'salud';
+  }} catch(e) {{}}
+  show(initial);
+}})();
+</script>
+
   </main>
 </body>
 </html>"""
