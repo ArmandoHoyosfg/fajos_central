@@ -163,8 +163,12 @@ class AprendizajeService:
                     "prod_id": r.get("id"),
                 })
 
+        from app.services.export.helpers import linea_activa
+
         out: list[dict] = []
         for r in lineas:
+            if not linea_activa(r):
+                continue
             folio = (r.get("folio") or "").strip()
             if not folio:
                 continue

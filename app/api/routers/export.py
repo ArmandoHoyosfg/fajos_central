@@ -159,11 +159,13 @@ async def api_export_captura_manual(
     if not semana:
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Semana no encontrada")
-    # Activas (también sin gramos); excluye folios terminados/cerrados
-    lineas = prod_repo.listar_por_semana(semana_id, incluir_terminados=False)
-    # Doble filtro por si listar aún trae alguna cerrada
-    from app.services.export_service import filtrar_lineas_export
-    lineas = filtrar_lineas_export(lineas, solo_con_gramos=False)
+    from app.services.export_service import filtrar_lineas_export, linea_activa
+
+    # Todas las filas de la semana (para contar cuántas se excluyen)
+    todas = prod_repo.listar_por_semana(semana_id, incluir_terminados=True)
+    excluidas = [r for r in (todas or []) if not linea_activa(r)]
+    # Solo activas en el archivo (también sin gramos); nunca terminados/cerrados
+    lineas = filtrar_lineas_export(todas or [], solo_con_gramos=False)
     content, media_type, filename = export_svc.export_captura_manual(
         lineas,
         codigo_semana=str(semana.get("codigo") or ""),
@@ -176,7 +178,17 @@ async def api_export_captura_manual(
     return Response(
         content=content,
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Fajos-Incluidas": str(len(lineas)),
+            "X-Fajos-Excluidas-Terminados": str(len(excluidas)),
+            "X-Fajos-Msg": (
+                f"Se excluyeron {len(excluidas)} folio(s) terminado(s)/cerrado(s). "
+                f"No aparecen en captura manual ni deben seguir en «sin avance»."
+                if excluidas
+                else "Sin folios terminados excluidos."
+            ),
+        },
     )
 
 

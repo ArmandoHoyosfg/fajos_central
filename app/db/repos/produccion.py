@@ -46,10 +46,10 @@ class ProduccionRepo(BaseRepo):
             # (Antes: trabajo_id NULL pasaba el filtro de trabajo; solo notas bastaba,
             #  pero reforzamos con exclusión explícita.)
             sql += """
-              AND (p.notas IS NULL OR p.notas NOT LIKE %s)
+              AND (p.notas IS NULL OR (p.notas NOT LIKE %s AND LOWER(p.notas) NOT LIKE %s))
               AND NOT (p.trabajo_id IS NOT NULL AND COALESCE(tj.activo, 1) = 0)
             """
-            params: tuple = (semana_id, "%[terminado]%")
+            params: tuple = (semana_id, "%[terminado]%", "%[cerrado]%")
         else:
             params = (semana_id,)
         sql += """
@@ -60,11 +60,8 @@ class ProduccionRepo(BaseRepo):
                 cur.execute(sql, params)
                 rows = list(cur.fetchall() or [])
                 if not incluir_terminados:
-                    rows = [
-                        r for r in rows
-                        if "[terminado]" not in str(r.get("notas") or "").lower()
-                        and int(r.get("trabajo_activo") if r.get("trabajo_activo") is not None else 1) != 0
-                    ]
+                    from app.services.export.helpers import linea_activa
+                    rows = [r for r in rows if linea_activa(r)]
                 return rows
             except Exception:
                 # Fallback sin join trabajos / sin filtro
@@ -82,11 +79,8 @@ class ProduccionRepo(BaseRepo):
                 )
                 rows = list(cur.fetchall() or [])
                 if not incluir_terminados:
-                    rows = [
-                        r for r in rows
-                        if "[terminado]" not in str(r.get("notas") or "").lower()
-                        and int(r.get("trabajo_activo") if r.get("trabajo_activo") is not None else 1) != 0
-                    ]
+                    from app.services.export.helpers import linea_activa
+                    rows = [r for r in rows if linea_activa(r)]
                 return rows
 
     def listar_terminados_semana(self, semana_id: int) -> list[dict]:

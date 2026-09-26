@@ -1,3 +1,10 @@
+## [3.29.1] — 2026-09-26
+
+### Captura manual / sin avance
+- Exclusión reforzada de folios terminados/cerrados en listados y captura.
+- Export captura: cabeceras X-Fajos-* + aviso al descargar con conteo de excluidos.
+- Banner y nota en «sin avance» para limpiar terminados de esa lista.
+
 ## [3.29.0] — 2026-09-25
 
 ### E0+E1 — export parcial
