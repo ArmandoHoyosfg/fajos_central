@@ -42,15 +42,44 @@ router = APIRouter()
 
 @router.get("/catalogos", response_class=HTMLResponse)
 async def page_catalogos(request: Request):
-    from app.db.repository import CatalogosRepo
+    """Catálogos de materiales y modelos (asistencia a captura)."""
+    from app.db.repository import CatalogosRepo, HistorialPreciosRepo
     cat = CatalogosRepo()
-    materiales = cat.listar_materiales(solo_activos=False)
-    modelos = cat.listar_modelos()
+    materiales = cat.listar_materiales(solo_activos=False) or []
+    modelos = cat.listar_modelos() or []
+    # Último precio de historial por material (para mostrar en UI)
+    hist_map: dict[str, float] = {}
+    try:
+        hp = HistorialPreciosRepo()
+        for m in materiales:
+            nom = str(m.get("material") or "").strip()
+            if not nom:
+                continue
+            sug = hp.sugerir(nom, None)
+            if sug is not None:
+                hist_map[nom.upper()] = float(sug)
+        # precio pita / torcedor
+        pita = hp.sugerir("PITA", "torcedor")
+        if pita is not None:
+            hist_map["PITA"] = float(pita)
+    except Exception:
+        pass
+    # Asegurar material PITA visible como tarifa de torcedores si no existe
+    has_pita = any(str(m.get("material") or "").upper() == "PITA" for m in materiales)
     return templates.TemplateResponse(
         request,
         "catalogos.html",
-        _ctx(request, materiales=materiales, modelos=modelos),
+        _ctx(
+            request,
+            materiales=materiales,
+            modelos=modelos,
+            hist_map=hist_map,
+            has_pita=has_pita,
+            precio_pita_sugerido=hist_map.get("PITA"),
+        ),
     )
+
+
 
 
 

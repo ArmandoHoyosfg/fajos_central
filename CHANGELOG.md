@@ -1,3 +1,12 @@
+## [3.35.0] — 2026-09-26
+
+### Catálogos: UI clara y más utilidad
+- Pestañas: Materiales, Modelos, Pita/torcedores, Ayuda.
+- Formularios en grid legible; filtros por texto y tipo.
+- Materiales muestran $/g de catálogo vs último precio usado (historial).
+- Modelos: datalist de materiales; tarifa vacía = precio variable.
+- Pestaña PITA para precio por defecto de torcedores.
+
 ## [3.34.0] — 2026-09-26
 
 ### Taller: precio/pita editable + predictor de tarifas
