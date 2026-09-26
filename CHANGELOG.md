@@ -1,3 +1,11 @@
+## [3.36.0] — 2026-09-26
+
+### Fase 4 — Aprendizaje en Dashboard / Plata
+- `alertas_operativas()`: resúmenes (sin avance, reasignaciones, fichas dobles).
+- Integrado en «Qué revisar hoy» del Dashboard con badge Aprendizaje y botones de acción.
+- Enlaces a Plata (`filtro=sin_avance` / `reasignados`) y Trabajadores (unir fichas).
+- Menos ruido: ya no se lista cada folio inactivo como aviso aparte.
+
 ## [3.35.0] — 2026-09-26
 
 ### Catálogos: UI clara y más utilidad

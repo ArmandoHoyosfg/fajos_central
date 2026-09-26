@@ -1221,6 +1221,79 @@ class AprendizajeService:
         }
 
 
+
+    def alertas_operativas(self, semana_id: int | None = None) -> list[dict]:
+        """
+        Avisos accionables para Dashboard / Plata (Fase 4).
+        Resume conteos en lugar de listar cada folio (menos ruido).
+        """
+        from urllib.parse import quote
+        avisos: list[dict] = []
+        try:
+            inact = self.detectar_folios_inactivos(semana_id) or []
+        except Exception:
+            inact = []
+        try:
+            reasig = self.detectar_reasignaciones(semana_id) or []
+        except Exception:
+            reasig = []
+        try:
+            dups = self.candidatos_duplicados_trabajadores() or []
+        except Exception:
+            dups = []
+
+        n_inact = len(inact)
+        n_fin = sum(1 for x in inact if (x.get("hint") or "") == "posible_finalizado")
+        n_reasig_hint = sum(1 for x in inact if (x.get("hint") or "") == "posible_reasignacion")
+        sid_q = f"semana_id={int(semana_id)}&" if semana_id else ""
+
+        if n_inact:
+            detalle_parts = [f"{n_inact} folio(s) sin gramos esta semana"]
+            if n_fin:
+                detalle_parts.append(f"{n_fin} parecen terminados")
+            if n_reasig_hint:
+                detalle_parts.append(f"{n_reasig_hint} posibles reasignaciones")
+            avisos.append({
+                "nivel": "warn" if n_inact >= 5 else "info",
+                "codigo": "aprendizaje_sin_avance",
+                "titulo": f"{n_inact} folio(s) sin avance",
+                "detalle": " · ".join(detalle_parts) + ". Revisa en Plata o marca terminados en lote.",
+                "href": f"/produccion?{sid_q}filtro=sin_avance",
+                "accion": "Ver en Plata",
+                "count": n_inact,
+                "fuente": "aprendizaje",
+            })
+
+        if reasig:
+            sample = ", ".join(
+                str(x.get("folio") or "?") for x in reasig[:3]
+            )
+            extra = f" Ej: {sample}" if sample else ""
+            avisos.append({
+                "nivel": "info",
+                "codigo": "aprendizaje_reasignacion",
+                "titulo": f"{len(reasig)} folio(s) cambiaron de persona",
+                "detalle": "La semana pasada tenían avance con otro trabajador." + extra,
+                "href": f"/produccion?{sid_q}filtro=reasignados",
+                "accion": "Revisar",
+                "count": len(reasig),
+                "fuente": "aprendizaje",
+            })
+
+        if dups:
+            avisos.append({
+                "nivel": "info",
+                "codigo": "aprendizaje_fichas_dobles",
+                "titulo": f"{len(dups)} posible(s) ficha(s) doble(s)",
+                "detalle": "Misma ubicación y nombre igual o parecido. Unir o descartar en Trabajadores.",
+                "href": "/trabajadores#unir-fichas",
+                "accion": "Unir fichas",
+                "count": len(dups),
+                "fuente": "aprendizaje",
+            })
+
+        return avisos
+
     def resumen_aprendizaje(self) -> dict:
         """KPIs simples para panel Dev."""
         out: dict[str, Any] = {
@@ -1249,6 +1322,7 @@ class AprendizajeService:
             out["folios_inactivos"] = self.detectar_folios_inactivos()[:40]
             out["reasignaciones"] = self.detectar_reasignaciones()[:40]
             out["candidatos_dup"] = self.candidatos_duplicados_trabajadores()[:30]
+            out["alertas"] = self.alertas_operativas()
         except Exception:
             logger.exception("resumen_aprendizaje")
         return out

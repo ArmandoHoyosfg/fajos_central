@@ -1294,6 +1294,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (q && txt) { txt.value = q; }
     if (filtro === 'sin_firma' && sinFirma) sinFirma.checked = true;
     if (filtro === 'sin_hoy' && sinHoy) sinHoy.checked = true;
+    if (filtro === 'sin_avance') {
+      // Abrir panel de sin avance si existe
+      var panel = document.getElementById('panel-sin-avance') || document.querySelector('.folio-hints-compact details, details.folio-hints-compact');
+      var sa = document.querySelector('[data-panel-sin-avance], #sin-avance-list, details.folio-hints-compact');
+      document.querySelectorAll('details.folio-hints-compact').forEach(function(d){
+        if ((d.textContent || '').toLowerCase().indexOf('sin avance') >= 0) {
+          d.open = true;
+          try { d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
+        }
+      });
+    }
+    if (filtro === 'reasignados') {
+      document.querySelectorAll('details.folio-hints-compact').forEach(function(d){
+        if ((d.textContent || '').toLowerCase().indexOf('reasign') >= 0 || (d.textContent || '').toLowerCase().indexOf('cambiaron') >= 0) {
+          d.open = true;
+          try { d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
+        }
+      });
+    }
 
     // Edición temporal de un día concreto (Completar ayer, etc.)
     if (dia && /^gm_(sab|dom|lun|mar|mie|jue|vie)$/.test(dia)) {

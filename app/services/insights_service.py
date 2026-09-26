@@ -258,7 +258,16 @@ class InsightsService:
         except Exception as e:
             logger.warning("pronostico en avisos: %s", e)
 
-        if not avisos:
+        # Aprendizaje (resúmenes, sin listar cada folio)
+        try:
+            from app.services.aprendizaje_service import AprendizajeService
+            for a in AprendizajeService(self.db).alertas_operativas(sid):
+                avisos.append(a)
+        except Exception as e:
+            logger.warning("alertas aprendizaje: %s", e)
+
+        reales = [a for a in avisos if a.get("codigo") not in ("todo_bien", "pronostico")]
+        if not reales:
             avisos.append({
                 "nivel": "ok",
                 "codigo": "todo_bien",
@@ -267,30 +276,6 @@ class InsightsService:
                 "href": f"/produccion?semana_id={sid}",
                 "accion": "Ir a Plata",
             })
-
-
-        try:
-            from app.services.aprendizaje_service import AprendizajeService
-            for fx in AprendizajeService(self.db).detectar_folios_inactivos(sid)[:8]:
-                hint = fx.get("hint") or ""
-                if hint == "posible_reasignacion":
-                    tit = "Folio posiblemente reasignado"
-                elif hint == "posible_finalizado":
-                    tit = "Folio posiblemente terminado"
-                else:
-                    tit = "Folio sin avance"
-                folio_q = str(fx.get("folio") or "").strip()
-                from urllib.parse import quote
-                avisos.append({
-                    "nivel": "info",
-                    "codigo": "folio_inactivo",
-                    "titulo": f"{tit}: {fx.get('folio')}",
-                    "detalle": f"{fx.get('nombre')} (ubic {fx.get('ubic')})",
-                    "href": f"/produccion?semana_id={sid}&q={quote(folio_q)}&highlight=folio",
-                    "accion": "Ver folio",
-                })
-        except Exception:
-            pass
 
         return {
             "fecha": ref.isoformat(),

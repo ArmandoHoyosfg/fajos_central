@@ -131,7 +131,9 @@ async function repararConsistencia() {
     {% for a in insights.avisos %}
     <li class="insight-compact insight-{{ a.nivel }}" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.6rem;align-items:center;padding:0.28rem 0;border-bottom:1px solid var(--border);font-size:0.88rem;">
       <span style="flex:1 1 12rem;min-width:8rem;">
+        {% if a.fuente == 'aprendizaje' %}<span class="cat-badge" style="font-size:0.7rem;margin-right:0.25rem;background:rgba(201,162,39,0.25)">Aprendizaje</span>{% endif %}
         <strong>{{ a.titulo }}</strong>
+        {% if a.count %}<span class="muted">({{ a.count }})</span>{% endif %}
         {% if a.detalle %}<span class="muted"> — {{ a.detalle }}</span>{% endif %}
       </span>
       {% if a.href %}
@@ -141,6 +143,19 @@ async function repararConsistencia() {
     {% endfor %}
   </ul>
 </details>
+
+{% set apr_avisos = (insights.avisos or [])|selectattr('fuente', 'equalto', 'aprendizaje')|list if insights and insights.avisos else [] %}
+{% if apr_avisos %}
+<div class="card aprendizaje-resumen" style="margin:0.5rem 0;padding:0.65rem 0.9rem;border-left:3px solid var(--accent,#c9a227);">
+  <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;align-items:center;">
+    <strong style="font-size:0.9rem;">Aprendizaje del sistema</strong>
+    {% for a in apr_avisos %}
+    <a class="btn btn-secondary btn-xs" href="{{ a.href or '#' }}">{{ a.titulo }}</a>
+    {% endfor %}
+    <span class="muted" style="font-size:0.8rem;">Resúmenes (no cada folio). Detalle en «Qué revisar hoy».</span>
+  </div>
+</div>
+{% endif %}
 
 <div class="card" style="margin:0.75rem 0;padding:0.75rem 1rem;">
   <form class="inline" style="flex-wrap:wrap;align-items:center;gap:0.5rem;" onsubmit="return saveUmbral(event)">
