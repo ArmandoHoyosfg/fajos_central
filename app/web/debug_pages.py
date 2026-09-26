@@ -430,12 +430,80 @@ def render_debug_page(
     </section>
 
     <section class="dev-section">
-      <h2 id="dup">Personas con el mismo nombre (posibles duplicados)</h2>
-      <p class="dev-hint">Elige la ficha <strong>principal</strong> (se queda) y la que se da de baja.
-      Todas las nóminas del secundario pasan a la principal.</p>
+      <h2 id="dup">Posibles fichas dobles (misma ubicación)</h2>
+      <p class="dev-hint">Solo misma ubic + nombre igual o parecido. Al unir se conserva el
+      <strong>nombre más completo</strong> y se mezclan el resto de datos. Puedes deshacer abajo.</p>
       <div class="table-wrap"><table>
         <tbody>{cand_rows}</tbody>
       </table></div>
+    </section>
+
+    <section class="dev-section" id="historial-uniones">
+      <h2>Historial de uniones de fichas</h2>
+      <p class="dev-hint">Registro de fusiones. <strong>Deshacer</strong> restaura la ficha dada de baja y
+      devuelve las filas de nómina que se movieron (si siguen apuntando al survivor).</p>
+      <button type="button" class="btn" onclick="cargarFusiones()">Actualizar lista</button>
+      <div class="table-wrap" style="margin-top:0.6rem">
+        <table>
+          <thead><tr>
+            <th>Id evento</th><th>Fecha</th><th>Conservada</th><th>Fusionada</th>
+            <th>Nombre final</th><th>Movidas</th><th>Estado</th><th></th>
+          </tr></thead>
+          <tbody id="fusiones-tbody">
+            <tr><td colspan="8" class="muted">Pulsa «Actualizar lista»</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <script>
+      async function cargarFusiones() {{
+        const tb = document.getElementById('fusiones-tbody');
+        tb.innerHTML = '<tr><td colspan="8">Cargando…</td></tr>';
+        try {{
+          const res = await fetch('/api/dev/fusiones?limit=40');
+          const d = await res.json();
+          const items = (d && d.items) || [];
+          if (!items.length) {{
+            tb.innerHTML = '<tr><td colspan="8" class="muted">Sin uniones registradas</td></tr>';
+            return;
+          }}
+          tb.innerHTML = items.map(function (x) {{
+            const c = x.counts || {{}};
+            const mov = 'P' + (c.plata||0) + ' · Pi' + (c.pita||0) + ' · T' + (c.taller||0);
+            const est = x.deshecho ? '<span style="color:#a6e3a1">Deshecha</span>' : 'Activa';
+            const btn = x.deshecho
+              ? ''
+              : '<button type="button" class="btn btn-secondary btn-xs" onclick="deshacerFusion(' + x.id + ')">Deshacer</button>';
+            return '<tr>' +
+              '<td>' + x.id + '</td>' +
+              '<td>' + (x.creado_en || '') + '</td>' +
+              '<td>id ' + (x.keep || '') + '</td>' +
+              '<td>id ' + (x.merged || '') + '</td>' +
+              '<td>' + (x.nombre_final || '') + '</td>' +
+              '<td>' + mov + '</td>' +
+              '<td>' + est + '</td>' +
+              '<td>' + btn + '</td></tr>';
+          }}).join('');
+        }} catch (e) {{
+          tb.innerHTML = '<tr><td colspan="8">Error al cargar</td></tr>';
+        }}
+      }}
+      async function deshacerFusion(eventId) {{
+        if (!confirm('¿Deshacer la unión #' + eventId + '?\nSe restaurará la ficha fusionada y se intentará devolver sus filas.')) return;
+        try {{
+          const res = await fetch('/api/dev/fusiones/' + eventId + '/deshacer', {{ method: 'POST' }});
+          const d = await res.json().catch(function(){{ return {{}}; }});
+          if (!res.ok || d.ok === false) {{
+            alert(d.error || d.message || 'No se pudo deshacer');
+            return;
+          }}
+          alert(d.msg || 'Unión deshecha');
+          cargarFusiones();
+        }} catch (e) {{
+          alert('Error de red');
+        }}
+      }}
+      document.addEventListener('DOMContentLoaded', function(){{ cargarFusiones(); }});
+      </script>
     </section>
 
     <section class="dev-section">

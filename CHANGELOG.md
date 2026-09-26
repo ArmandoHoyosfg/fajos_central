@@ -1,3 +1,10 @@
+## [3.31.0] — 2026-09-26
+
+### Unir fichas: nombre completo, mezcla, historial y rollback
+- Al unir se elige automáticamente la ficha con **nombre más completo** y se mezclan datos.
+- Snapshot + ids movidos permiten **deshacer** en DEV → Historial de uniones.
+- API: `GET /api/dev/fusiones`, `POST /api/dev/fusiones/{id}/deshacer`.
+
 ## [3.30.0] — 2026-09-26
 
 ### Fase 1 — Duplicados de trabajadores

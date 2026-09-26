@@ -44,9 +44,25 @@ router = APIRouter()
 async def api_merge_trabajadores(
     id_keep: int = Form(...),
     id_merge: int = Form(...),
+    auto_nombre: int = Form(1),
 ):
+    """Une fichas. Por defecto conserva el nombre más completo (auto_nombre=1)."""
     from app.services.aprendizaje_service import AprendizajeService
-    return AprendizajeService().fusionar_trabajadores(id_keep, id_merge)
+    return AprendizajeService().fusionar_trabajadores(
+        id_keep, id_merge, auto_nombre=bool(int(auto_nombre)),
+    )
+
+
+@router.get("/api/dev/fusiones")
+async def api_dev_fusiones(limit: int = 50):
+    from app.services.aprendizaje_service import AprendizajeService
+    return {"ok": True, "items": AprendizajeService().listar_fusiones(limit=limit)}
+
+
+@router.post("/api/dev/fusiones/{event_id}/deshacer")
+async def api_dev_deshacer_fusion(event_id: int):
+    from app.services.aprendizaje_service import AprendizajeService
+    return AprendizajeService().deshacer_fusion(event_id)
 
 
 
