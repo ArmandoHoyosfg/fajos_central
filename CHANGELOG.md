@@ -1,3 +1,10 @@
+## [3.38.1] — 2026-09-26
+
+### Gráficas fluidas + 4 tipos
+- Selector: **Línea suave**, **Área rellena**, **Barras**, **Línea recta**.
+- Curvas Catmull-Rom, degradados y puntos más legibles.
+- Preferencia guardada en el navegador.
+
 ## [3.38.0] — 2026-09-26
 
 ### Fase 5 + gráficas
