@@ -1,3 +1,8 @@
+## [3.25.7] — 2026-09-25
+
+### Duplicar semana
+- No copia a la semana siguiente folios terminados/cerrados (notas [terminado]/[cerrado] o trabajo inactivo).
+
 ## [3.25.5] — 2026-09-12
 
 ### Captura manual compacta

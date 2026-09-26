@@ -1133,27 +1133,55 @@ class ProduccionRepo(BaseRepo):
 
     def duplicar_trabajos_a_semana(self, semana_origen_id: int, semana_destino_id: int) -> dict:
         """
-        Copia trabajos activos con línea de producción (folio/modelo/material) a otra semana.
-        No copia gramos. Reutiliza trabajo_id existentes.
+        Copia trabajos ACTIVOS con línea de producción a otra semana.
+        No copia gramos ni folios terminados/cerrados.
+        Reutiliza trabajo_id existentes.
         """
         from app.services.audit_service import AuditService
+        from app.services.export_service import linea_activa
+
         AuditService(self.db).assert_semana_abierta(semana_destino_id)
         with self.db.cursor() as cur:
-            cur.execute(
-                """
-                SELECT p.trabajador_id, p.trabajo_id, p.nombre, p.ubic, p.folio, p.modelo,
-                       p.material, p.tarifa_gr
-                FROM produccion_plata p
-                WHERE p.semana_id = %s
-                """,
-                (semana_origen_id,),
-            )
+            # Solo líneas de origen que NO estén terminadas/cerradas
+            try:
+                cur.execute(
+                    """
+                    SELECT p.trabajador_id, p.trabajo_id, p.nombre, p.ubic, p.folio, p.modelo,
+                           p.material, p.tarifa_gr, p.notas,
+                           COALESCE(t.activo, 1) AS trabajo_activo
+                    FROM produccion_plata p
+                    LEFT JOIN trabajos t ON t.id = p.trabajo_id
+                    WHERE p.semana_id = %s
+                      AND (p.notas IS NULL OR (
+                            LOWER(p.notas) NOT LIKE '%%[terminado]%%'
+                        AND LOWER(p.notas) NOT LIKE '%%[cerrado]%%'
+                      ))
+                      AND (t.id IS NULL OR t.activo = 1)
+                    """,
+                    (semana_origen_id,),
+                )
+            except Exception:
+                # Fallback sin JOIN trabajos (BD antigua)
+                cur.execute(
+                    """
+                    SELECT p.trabajador_id, p.trabajo_id, p.nombre, p.ubic, p.folio, p.modelo,
+                           p.material, p.tarifa_gr, p.notas
+                    FROM produccion_plata p
+                    WHERE p.semana_id = %s
+                      AND (p.notas IS NULL OR (
+                            LOWER(p.notas) NOT LIKE '%%[terminado]%%'
+                        AND LOWER(p.notas) NOT LIKE '%%[cerrado]%%'
+                      ))
+                    """,
+                    (semana_origen_id,),
+                )
             origen = list(cur.fetchall() or [])
-            # también trabajos activos sin línea esta semana
+            # Trabajos activos del catálogo (solo activo=1)
             cur.execute(
                 """
                 SELECT t.id AS trabajo_id, t.trabajador_id, tr.nombre_mostrar AS nombre, tr.ubic,
-                       t.folio, t.modelo, t.material, t.tarifa_gr
+                       t.folio, t.modelo, t.material, t.tarifa_gr,
+                       1 AS trabajo_activo
                 FROM trabajos t
                 JOIN trabajadores tr ON tr.id = t.trabajador_id
                 WHERE t.activo = 1 AND tr.activo = 1
@@ -1161,10 +1189,14 @@ class ProduccionRepo(BaseRepo):
             )
             todos = list(cur.fetchall() or [])
         # Solo líneas de la semana origen (evita re-duplicar el catálogo completo).
-        # Si el destino está vacío y no había líneas en origen, se complementa con trabajos activos.
+        # Defensa extra con linea_activa (notas / flags).
         seen = set()
         to_insert = []
+        skipped_cerrados = 0
         for r in origen:
+            if not linea_activa(r):
+                skipped_cerrados += 1
+                continue
             key = (
                 r.get("trabajador_id"),
                 str(r.get("trabajo_id") or ""),
@@ -1247,7 +1279,12 @@ class ProduccionRepo(BaseRepo):
                     ),
                 )
                 created += 1
-        return {"created": created, "skipped": skipped, "total_candidates": len(to_insert)}
+        return {
+            "created": created,
+            "skipped": skipped,
+            "skipped_cerrados": skipped_cerrados,
+            "total_candidates": len(to_insert),
+        }
 
 
     def buscar_linea(
