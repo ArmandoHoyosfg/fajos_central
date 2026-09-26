@@ -1,3 +1,12 @@
+## [3.27.0] — 2026-09-25
+
+### Deuda técnica C — routes modulares
+- `app/api/routes.py` deja de ser monolito: reexporta el router agregado.
+- Routers por dominio en `app/api/routers/`:
+  pages, trabajadores, produccion, semanas, nominas, export, dev, insights, catalogos.
+- Helpers compartidos en `app/api/helpers.py`.
+- Copia de seguridad del monolito: `app/api/routes_monolith.py.bak`.
+
 ## [3.26.0] — 2026-09-25
 
 ### Deuda técnica A+B
