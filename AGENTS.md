@@ -22,7 +22,7 @@
 | Ruta HTTP / página web | `app/api/routers/<dominio>.py` |
 | Helpers de plantillas | `app/api/helpers.py` |
 | Consultas SQL / datos | `app/db/repos/<dominio>.py` |
-| Export Excel/PDF | `app/services/export_service.py` (aún monolito; tocar solo el método) |
+| Export Excel/PDF | `app/services/export_service.py` + `app/services/export/` (helpers, captura, suministro; resto aún en fachada) |
 | Cierre de día | `app/services/dia_service.py` + `db/schema/006_cierre_dia.sql` |
 | Migración SQL nueva | `db/schema/00N_nombre.sql` (siguiente número libre) |
 | Plantilla HTML | `app/web/templates/*.html` |

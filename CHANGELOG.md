@@ -1,3 +1,11 @@
+## [3.29.0] — 2026-09-25
+
+### E0+E1 — export parcial
+- `app/services/export/helpers.py`: linea_activa, filtrar_lineas, estilos, oficio.
+- `export/captura.py` + `export/suministro.py`: mixins de captura manual y suministro.
+- `export_service.py` fachada (~1280 líneas, antes ~1885); API pública intacta.
+- Respaldo: `export_service_monolith.py.bak`.
+
 ## [3.28.0] — 2026-09-25
 
 ### D — repository modular + offline + IA local
