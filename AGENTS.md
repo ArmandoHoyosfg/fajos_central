@@ -89,3 +89,7 @@
 
 ## Duplicados de trabajadores
 Solo misma **ubic** + nombre igual/parecido. Distinta ubic = personas distintas.
+
+## DEV BD segura
+- SELECT: `app/services/dev_db_service.py` allowlist.
+- No añadir UPDATE/DELETE libres; solo REPAIRS en código.

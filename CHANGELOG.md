@@ -1,3 +1,11 @@
+## [3.33.0] — 2026-09-26
+
+### Fase 3 A+B — BD segura en DEV
+- **Nivel A:** `POST /api/dev/db/query` — solo SELECT, tablas allowlist, LIMIT≤200, un statement.
+- Presets listos (trabajadores, líneas, terminados, merges, migraciones…).
+- **Nivel B:** `POST /api/dev/db/repair/{id}` — migrar, sync, huérfanos, crear semana, purgar, pipeline.
+- UI en DEV → pestaña **Acciones** → «Base de datos segura».
+
 ## [3.32.0] — 2026-09-26
 
 ### Fase 2 — Panel DEV por pestañas

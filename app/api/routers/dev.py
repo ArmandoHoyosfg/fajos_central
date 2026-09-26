@@ -242,3 +242,50 @@ async def page_dev_crear_semana_actual(
     return _dev_page_payload(repo, action_result=result, error=error)
 
 
+
+
+@router.get("/api/dev/db/meta")
+async def api_dev_db_meta():
+    """Tablas allowlist, presets y reparaciones disponibles."""
+    from app.services.dev_db_service import DevDbService
+    svc = DevDbService()
+    return {
+        "ok": True,
+        "tables": svc.list_tables(),
+        "presets": svc.list_presets(),
+        "repairs": svc.list_repairs(),
+        "max_rows": 200,
+    }
+
+
+@router.post("/api/dev/db/query")
+async def api_dev_db_query(request: Request):
+    """Nivel A: SELECT seguro (preset o SQL de solo lectura)."""
+    from app.services.dev_db_service import DevDbService
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        form = await request.form()
+        body = dict(form)
+    preset_id = (body.get("preset_id") or body.get("preset") or "").strip() or None
+    sql = (body.get("sql") or "").strip() or None
+    try:
+        return DevDbService().run_select(sql=sql, preset_id=preset_id)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/api/dev/db/repair/{action_id}")
+async def api_dev_db_repair(action_id: str):
+    """Nivel B: reparación guiada (código fijo, no SQL libre de escritura)."""
+    from app.services.dev_db_service import DevDbService
+    try:
+        return DevDbService().run_repair(action_id)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+

@@ -536,6 +536,169 @@ def render_debug_page(
       <a class="btn btn-secondary" href="/docs" target="_blank" rel="noopener">API</a>
     </div>
       <p class="muted" style="margin-top:0.75rem;font-size:0.85rem">También arriba del todo: <em>Reparación inteligente</em> y comandos rápidos.</p>
+
+    <section class="dev-section" id="dev-bd-segura">
+      <h2>Base de datos segura</h2>
+      <p class="dev-hint">
+        <strong>Nivel A:</strong> solo <code>SELECT</code> sobre tablas permitidas, máximo 200 filas, un solo statement.
+        <strong>Nivel B:</strong> botones de reparación (código fijo; no ejecutan SQL libre de escritura).
+      </p>
+
+      <h3 style="font-size:0.95rem;margin:0.75rem 0 0.35rem">Consulta (solo lectura)</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;margin-bottom:0.5rem">
+        <label class="muted">Preset
+          <select id="dev-sql-preset" style="margin-left:0.25rem;max-width:260px"></select>
+        </label>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="devRunPreset()">Ejecutar preset</button>
+      </div>
+      <textarea id="dev-sql-input" rows="4" style="width:100%;font-family:ui-monospace,monospace;font-size:0.82rem;border-radius:8px;padding:0.5rem"
+        placeholder="SELECT id, nombre_mostrar, ubic FROM trabajadores WHERE activo=1 LIMIT 50"></textarea>
+      <div style="margin-top:0.4rem;display:flex;gap:0.4rem;flex-wrap:wrap">
+        <button type="button" class="btn btn-xs" onclick="devRunSql()">Ejecutar SELECT</button>
+        <span class="muted" id="dev-sql-meta" style="font-size:0.8rem"></span>
+      </div>
+      <div class="table-wrap" style="margin-top:0.6rem;max-height:320px;overflow:auto">
+        <table>
+          <thead id="dev-sql-thead"></thead>
+          <tbody id="dev-sql-tbody">
+            <tr><td class="muted">Sin resultados aún</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:0.78rem;margin-top:0.35rem">Tablas permitidas: <code id="dev-sql-tables">…</code></p>
+
+      <h3 style="font-size:0.95rem;margin:1rem 0 0.35rem">Reparaciones guiadas</h3>
+      <div id="dev-repairs" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+      <pre id="dev-repair-out" style="margin-top:0.5rem;font-size:0.78rem;max-height:180px;overflow:auto;display:none"></pre>
+    </section>
+
+<script>
+(function(){{
+  var metaLoaded = false;
+  async function loadMeta() {{
+    if (metaLoaded) return;
+    try {{
+      var res = await fetch('/api/dev/db/meta');
+      var d = await res.json();
+      metaLoaded = true;
+      var sel = document.getElementById('dev-sql-preset');
+      if (sel && d.presets) {{
+        sel.innerHTML = d.presets.map(function(p){{
+          return '<option value="'+p.id+'">'+p.label+'</option>';
+        }}).join('');
+      }}
+      var t = document.getElementById('dev-sql-tables');
+      if (t && d.tables) t.textContent = d.tables.join(', ');
+      var box = document.getElementById('dev-repairs');
+      if (box && d.repairs) {{
+        box.innerHTML = d.repairs.map(function(r){{
+          return '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:flex-start;padding:0.5rem;border:1px solid var(--border,#333);border-radius:8px">'
+            + '<div style="flex:1;min-width:180px"><strong>'+r.label+'</strong><br><span class="muted" style="font-size:0.8rem">'+r.desc+'</span></div>'
+            + '<button type="button" class="btn btn-secondary btn-xs" data-repair="'+r.id+'">Ejecutar</button></div>';
+        }}).join('');
+        box.querySelectorAll('[data-repair]').forEach(function(btn){{
+          btn.addEventListener('click', function(){{ devRunRepair(btn.getAttribute('data-repair')); }});
+        }});
+      }}
+    }} catch (e) {{ console.warn(e); }}
+  }}
+
+  function renderRows(d) {{
+    var thead = document.getElementById('dev-sql-thead');
+    var tbody = document.getElementById('dev-sql-tbody');
+    var meta = document.getElementById('dev-sql-meta');
+    if (!d || !d.ok) {{
+      if (tbody) tbody.innerHTML = '<tr><td style="color:#f38ba8">'+(d && d.error ? d.error : 'Error')+'</td></tr>';
+      if (meta) meta.textContent = '';
+      return;
+    }}
+    var cols = d.columns || [];
+    if (thead) thead.innerHTML = '<tr>'+cols.map(function(c){{ return '<th>'+c+'</th>'; }}).join('')+'</tr>';
+    var rows = d.rows || [];
+    if (tbody) {{
+      if (!rows.length) tbody.innerHTML = '<tr><td class="muted" colspan="'+Math.max(cols.length,1)+'">0 filas</td></tr>';
+      else tbody.innerHTML = rows.map(function(r){{
+        return '<tr>'+cols.map(function(c){{
+          var v = r[c];
+          if (v === null || v === undefined) v = '';
+          return '<td>'+String(v).replace(/</g,'&lt;').slice(0,120)+'</td>';
+        }}).join('')+'</tr>';
+      }}).join('');
+    }}
+    if (meta) meta.textContent = d.n + ' fila(s) · ' + d.ms + ' ms';
+  }}
+
+  window.devRunPreset = async function() {{
+    await loadMeta();
+    var sel = document.getElementById('dev-sql-preset');
+    var id = sel ? sel.value : '';
+    var meta = document.getElementById('dev-sql-meta');
+    if (meta) meta.textContent = 'Consultando…';
+    try {{
+      var res = await fetch('/api/dev/db/query', {{
+        method: 'POST',
+        headers: {{'Content-Type':'application/json'}},
+        body: JSON.stringify({{ preset_id: id }})
+      }});
+      var d = await res.json();
+      renderRows(d);
+    }} catch (e) {{
+      renderRows({{ ok:false, error: String(e) }});
+    }}
+  }};
+
+  window.devRunSql = async function() {{
+    await loadMeta();
+    var ta = document.getElementById('dev-sql-input');
+    var sql = ta ? ta.value : '';
+    var meta = document.getElementById('dev-sql-meta');
+    if (meta) meta.textContent = 'Consultando…';
+    try {{
+      var res = await fetch('/api/dev/db/query', {{
+        method: 'POST',
+        headers: {{'Content-Type':'application/json'}},
+        body: JSON.stringify({{ sql: sql }})
+      }});
+      var d = await res.json();
+      renderRows(d);
+    }} catch (e) {{
+      renderRows({{ ok:false, error: String(e) }});
+    }}
+  }};
+
+  window.devRunRepair = async function(actionId) {{
+    if (!confirm('¿Ejecutar reparación «' + actionId + '»?\\nEs una acción guiada (no borra historial de pagos).')) return;
+    var out = document.getElementById('dev-repair-out');
+    if (out) {{ out.style.display = 'block'; out.textContent = 'Ejecutando ' + actionId + '…'; }}
+    try {{
+      var res = await fetch('/api/dev/db/repair/' + encodeURIComponent(actionId), {{ method: 'POST' }});
+      var d = await res.json();
+      if (out) out.textContent = JSON.stringify(d, null, 2);
+      if (!d.ok) alert(d.error || 'La reparación reportó error');
+      else alert('Listo: ' + actionId);
+    }} catch (e) {{
+      if (out) out.textContent = String(e);
+      alert('Error de red');
+    }}
+  }};
+
+  // Cargar meta al entrar a Acciones
+  document.addEventListener('DOMContentLoaded', function(){{
+    var nav = document.getElementById('dev-tabs');
+    if (nav) {{
+      nav.querySelectorAll('button[data-tab]').forEach(function(b){{
+        b.addEventListener('click', function(){{
+          if (b.getAttribute('data-tab') === 'acciones') loadMeta();
+        }});
+      }});
+    }}
+    try {{
+      if ((localStorage.getItem('fajos_dev_tab') || '') === 'acciones') loadMeta();
+    }} catch(e) {{}}
+  }});
+}})();
+</script>
+
     </div><!-- /panel acciones -->
 
     <div class="dev-tab-panel" data-panel="tecnico">
