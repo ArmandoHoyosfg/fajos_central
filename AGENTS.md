@@ -93,3 +93,7 @@ Solo misma **ubic** + nombre igual/parecido. Distinta ubic = personas distintas.
 ## DEV BD segura
 - SELECT: `app/services/dev_db_service.py` allowlist.
 - No añadir UPDATE/DELETE libres; solo REPAIRS en código.
+
+## Tests
+- `tests/test_aprendizaje_rules.py` — reglas de nombres/ubic sin BD.
+- Preferir pytest: `python -m pytest tests/ -q`

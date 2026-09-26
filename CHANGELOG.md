@@ -1,3 +1,10 @@
+## [3.38.0] — 2026-09-26
+
+### Fase 5 + gráficas
+- Tests unitarios de reglas de duplicados / contrato de alertas (`tests/test_aprendizaje_rules.py`).
+- README/versión alineados (app 3.38, Python 3.12–3.14).
+- Dashboard: gráficas amplias multi-serie (Plata/Pita/Taller/Total) + **histórico diario** de Plata (gramos y $).
+
 ## [3.37.0] — 2026-09-26
 
 ### Taller: $/pita por defecto desde catálogo (editable)

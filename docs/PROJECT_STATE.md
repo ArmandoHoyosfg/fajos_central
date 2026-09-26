@@ -1,3 +1,5 @@
+Versión app: 3.38.0
+Python: 3.12+
 # PROJECT_STATE — Fajos Central
 
 > Archivo de checkpoint legible por humanos e IAs.
@@ -13,7 +15,7 @@
 |----------|--------|
 | SO | **Windows** (10 u 11) |
 | Shell | **PowerShell 7** (`pwsh`) — no asumir bash/Linux |
-| Python | 3.10+ (recomendado instalado con `py -3`) |
+| Python | 3.12+ (recomendado instalado con `py -3`) |
 | Base de datos | MariaDB + **HeidiSQL** |
 | Repo | https://github.com/ArmandoHoyosfg/fajos_central.git |
 
@@ -56,7 +58,7 @@ Objetivos:
 - Exportar a Excel, CSV, PDF, JSON
 
 Stack actual:
-- **Backend/Web:** Python 3.10+, FastAPI, Jinja2, uvicorn
+- **Backend/Web:** Python 3.12+, FastAPI, Jinja2, uvicorn
 - **BD:** MariaDB (`fajos_central`)
 - **Desktop legacy:** PySide6 (carpeta `desktop_legacy/`)
 - **Launcher:** `launcher.py` (tkinter) + `start.ps1` / `setup_windows.ps1` (Windows PowerShell 7)
