@@ -1,3 +1,11 @@
+## [3.30.0] — 2026-09-26
+
+### Fase 1 — Duplicados de trabajadores
+- Solo se sugieren fichas dobles con **misma ubicación** y nombre igual o similar estricto.
+- Distinta ubic = personas distintas (no aparecen como duplicados).
+- Sin ubicación no se sugiere. Similitud menos agresiva (no solo por nombre de pila corto).
+- Textos UI: «fichas dobles (misma ubic)».
+
 ## [3.29.1] — 2026-09-26
 
 ### Captura manual / sin avance

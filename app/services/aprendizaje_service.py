@@ -665,21 +665,49 @@ class AprendizajeService:
 
     @classmethod
     def _nombres_similares(cls, a: str, b: str) -> bool:
+        """
+        Similitud estricta para posibles fichas dobles.
+        - Igual normalizado → sí
+        - Uno contiene al otro solo si ambos tienen ≥ 2 tokens (evita José vs José Luis Pérez en distinto contexto)
+        - Mismo primer token (≥4 letras) + al menos otro token en común
+        No empareja solo por nombre de pila genérico (Juan, José, María…).
+        """
         na, nb = cls._norm_nombre(a), cls._norm_nombre(b)
         if not na or not nb:
             return False
         if na == nb:
             return True
-        if na in nb or nb in na:
-            return True
         ta, tb = na.split(), nb.split()
-        if ta and tb and ta[0] == tb[0] and len(ta[0]) >= 3:
-            # mismo primer nombre + al menos un token extra en común, o uno es solo el nombre corto
-            if len(ta) == 1 or len(tb) == 1:
-                return True
-            if set(ta) & set(tb) - {ta[0]}:
-                return True
+        # Contención solo con nombres compuestos (2+ tokens cada lado o el corto ⊆ largo con 2+ tokens en el largo)
+        if na in nb or nb in na:
+            corto, largo = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+            if len(largo) >= 2 and len(corto) >= 1:
+                # todos los tokens del corto están en el largo
+                if set(corto) <= set(largo):
+                    return True
+            return False
+        if not ta or not tb:
+            return False
+        # Primer nombre genérico corto: no basta por sí solo
+        if ta[0] != tb[0] or len(ta[0]) < 4:
+            return False
+        extra = (set(ta) & set(tb)) - {ta[0]}
+        if extra and len(ta) >= 2 and len(tb) >= 2:
+            return True
         return False
+
+    @classmethod
+    def _ubic_key(cls, ubic) -> str | None:
+        """Normaliza ubicación; None si vacía/inválida (sin ubic no se sugiere duplicado)."""
+        if ubic is None:
+            return None
+        s = str(ubic).strip()
+        if s == "" or s.lower() in ("none", "null", "-"):
+            return None
+        try:
+            return str(int(float(s)))
+        except (TypeError, ValueError):
+            return s.lower()
 
     def _pares_descartados(self, dias: int = 7) -> set[tuple[int, int]]:
         """Pares (id_min, id_max) descartados hace menos de N días."""
@@ -720,9 +748,10 @@ class AprendizajeService:
 
     def candidatos_duplicados_trabajadores(self) -> list[dict]:
         """
-        Posibles duplicados:
-        - mismo nombre (sin importar ubic)
-        - nombres similares en la misma ubicación
+        Posibles fichas dobles (regla de negocio):
+        - Misma ubicación (obligatorio)
+        - Nombre igual (normalizado) o similar estricto
+        Sin ubicación no se sugiere. Distinta ubic = personas distintas.
         Respeta descartes recientes (7 días).
         """
         rows = self.trab.listar(solo_activos=False)
@@ -730,7 +759,7 @@ class AprendizajeService:
         seen_pairs: set[tuple[int, int]] = set()
         cands: list[dict] = []
 
-        def _detalle(group):
+        def _detalle(group: list) -> list[dict]:
             return [
                 {
                     "id": int(g["id"]),
@@ -742,78 +771,74 @@ class AprendizajeService:
                 for g in group
             ]
 
-        def _add(motivo: str, label: str, group: list):
-            ids = sorted(int(g["id"]) for g in group)
-            # si hay >2, generamos el grupo completo; filtramos si todos los pares están descartados
-            pairs_ok = False
-            for i in range(len(ids)):
-                for j in range(i + 1, len(ids)):
-                    p = (ids[i], ids[j])
-                    if p in seen_pairs:
-                        continue
-                    if p in skipped:
-                        continue
-                    pairs_ok = True
-                    seen_pairs.add(p)
-            if not pairs_ok and len(ids) == 2 and (ids[0], ids[1]) in skipped:
+        def _pair_ok(ia: int, ib: int) -> bool:
+            a, b = (ia, ib) if ia < ib else (ib, ia)
+            if a == b:
+                return False
+            if (a, b) in seen_pairs or (a, b) in skipped:
+                return False
+            return True
+
+        def _add_pair(motivo: str, label: str, a: dict, b: dict) -> None:
+            ia, ib = int(a["id"]), int(b["id"])
+            if not _pair_ok(ia, ib):
                 return
-            if len(ids) < 2:
-                return
-            # si solo 2 y descartado, ya salimos; si >2 y al menos un par vivo, mostrar grupo
-            if len(ids) == 2 and (ids[0], ids[1]) in skipped:
-                return
+            lo, hi = (ia, ib) if ia < ib else (ib, ia)
+            seen_pairs.add((lo, hi))
             cands.append({
                 "nombre": label,
                 "motivo": motivo,
-                "n": len(group),
-                "ids": ids,
-                "detalle": _detalle(group),
+                "n": 2,
+                "ids": [lo, hi],
+                "detalle": _detalle([a, b]),
+                "ubic": self._ubic_key(a.get("ubic")),
             })
 
-        # 1) mismo nombre exacto (normalizado)
-        by_name: dict[str, list] = {}
-        for r in rows:
-            k = self._norm_nombre(r.get("nombre_mostrar") or "")
-            if not k:
-                continue
-            by_name.setdefault(k, []).append(r)
-        for name, group in by_name.items():
-            if len(group) >= 2:
-                _add("mismo_nombre", name, group)
-
-        # 2) misma ubic + nombres similares (activos prioritarios)
+        # Agrupar por ubicación; solo comparar dentro del mismo grupo
         by_ubic: dict[str, list] = {}
         for r in rows:
-            if not r.get("activo"):
+            uk = self._ubic_key(r.get("ubic"))
+            if uk is None:
                 continue
-            u = str(r.get("ubic") if r.get("ubic") is not None else "").strip()
-            if not u:
-                continue
-            by_ubic.setdefault(u, []).append(r)
+            by_ubic.setdefault(uk, []).append(r)
+
         for ubic, group in by_ubic.items():
-            n = len(group)
-            for i in range(n):
-                for j in range(i + 1, n):
+            if len(group) < 2:
+                continue
+            # 1) mismo nombre exacto (normalizado) en esta ubic
+            by_name: dict[str, list] = {}
+            for r in group:
+                k = self._norm_nombre(r.get("nombre_mostrar") or "")
+                if not k:
+                    continue
+                by_name.setdefault(k, []).append(r)
+            for name, g2 in by_name.items():
+                if len(g2) < 2:
+                    continue
+                # pares dentro del grupo (no un mega-grupo de 5 sin revisar descartes)
+                for i in range(len(g2)):
+                    for j in range(i + 1, len(g2)):
+                        a, b = g2[i], g2[j]
+                        label = f"{a.get('nombre_mostrar')} · ubic {ubic}"
+                        _add_pair("mismo_nombre_misma_ubic", label, a, b)
+
+            # 2) nombres similares (no idénticos) en la misma ubic
+            for i in range(len(group)):
+                for j in range(i + 1, len(group)):
                     a, b = group[i], group[j]
-                    ia, ib = int(a["id"]), int(b["id"])
-                    pair = (min(ia, ib), max(ia, ib))
-                    if pair in skipped or pair in seen_pairs:
+                    na = self._norm_nombre(a.get("nombre_mostrar") or "")
+                    nb = self._norm_nombre(b.get("nombre_mostrar") or "")
+                    if not na or not nb or na == nb:
+                        continue  # exactos ya cubiertos arriba
+                    if not self._nombres_similares(a.get("nombre_mostrar") or "", b.get("nombre_mostrar") or ""):
                         continue
-                    if self._nombres_similares(a.get("nombre_mostrar") or "", b.get("nombre_mostrar") or ""):
-                        # evitar si ya entró por mismo nombre exacto
-                        if self._norm_nombre(a.get("nombre_mostrar") or "") == self._norm_nombre(b.get("nombre_mostrar") or ""):
-                            continue
-                        seen_pairs.add(pair)
-                        label = f"{a.get('nombre_mostrar')} / {b.get('nombre_mostrar')} · ubic {ubic}"
-                        cands.append({
-                            "nombre": label,
-                            "motivo": "similar_misma_ubic",
-                            "n": 2,
-                            "ids": [ia, ib],
-                            "detalle": _detalle([a, b]),
-                        })
+                    label = (
+                        f"{a.get('nombre_mostrar')} / {b.get('nombre_mostrar')} · ubic {ubic}"
+                    )
+                    _add_pair("similar_misma_ubic", label, a, b)
 
         return cands
+
 
     def fusionar_trabajadores(self, id_keep: int, id_merge: int) -> dict:
         """

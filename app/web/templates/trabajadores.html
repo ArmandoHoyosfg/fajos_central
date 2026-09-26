@@ -21,7 +21,7 @@
   <a class="btn btn-secondary" href="/api/export/trabajadores" title="Descargar catálogo en Excel">Excel</a>
   <a class="btn btn-secondary" href="/api/export/trabajadores?activos=1" title="Solo activos">Excel activos</a>
   {% if duplicados %}
-  <a class="btn btn-secondary" href="#unir-fichas">Duplicados ({{ duplicados|length }})</a>
+  <a class="btn btn-secondary" href="#unir-fichas">Fichas dobles ({{ duplicados|length }})</a>
   {% endif %}
 </div>
 <div id="toast" class="toast-web" hidden></div>
@@ -29,8 +29,8 @@
 {% if duplicados %}
 <details class="folio-hints-compact" id="unir-fichas">
   <summary>
-    <span>{{ duplicados|length }} posible(s) duplicado(s)</span>
-    <span class="muted"> — unir o descartar 7 días</span>
+    <span>{{ duplicados|length }} posible(s) ficha(s) doble(s) (misma ubic)</span>
+    <span class="muted"> — misma ubicación + nombre igual/parecido · unir o descartar 7 días</span>
   </summary>
   <div class="folio-hint-block">
     <p class="muted" style="margin:0 0 0.4rem;font-size:0.82rem">

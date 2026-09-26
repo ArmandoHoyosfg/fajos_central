@@ -85,3 +85,7 @@
 
 - `app/__init__.py` — solo `__version__`
 - `launcher.py` — solo si el cambio es del launcher
+
+
+## Duplicados de trabajadores
+Solo misma **ubic** + nombre igual/parecido. Distinta ubic = personas distintas.
