@@ -123,3 +123,60 @@ async def api_catalogo_modelo_del(modelo_id: int):
 async def api_catalogos_materiales():
     from app.db.repository import CatalogosRepo
     return CatalogosRepo().listar_materiales(solo_activos=True)
+
+
+@router.get("/api/catalogos/sugerir-tarifa")
+async def api_sugerir_tarifa(
+    material: str = Query(""),
+    modelo: str = Query(""),
+):
+    """
+    Predicción de $/g: catálogo de materiales → historial material+modelo → historial material.
+    El cliente puede sobrescribir el valor en el mismo campo de texto.
+    """
+    material = (material or "").strip()
+    modelo = (modelo or "").strip() or None
+    out = {
+        "ok": True,
+        "material": material,
+        "modelo": modelo,
+        "tarifa_gr": None,
+        "fuente": None,
+        "detalle": None,
+    }
+    if not material:
+        return out
+    # 1) Catálogo
+    try:
+        from app.db.repository import CatalogosRepo
+        mats = CatalogosRepo().listar_materiales(solo_activos=True) or []
+        for m in mats:
+            nom = str(m.get("nombre") or m.get("material") or "").strip()
+            if nom.upper() == material.upper():
+                t = m.get("tarifa_por_gramo")
+                if t is None:
+                    t = m.get("tarifa_gr")
+                if t is not None and float(t) > 0:
+                    out["tarifa_gr"] = float(t)
+                    out["fuente"] = "catalogo"
+                    out["detalle"] = f"Precio de catálogo ({nom})"
+                    break
+    except Exception:
+        pass
+    # 2) Historial (más específico gana si existe)
+    try:
+        from app.db.repository import HistorialPreciosRepo
+        det = HistorialPreciosRepo().sugerir_detalle(material, modelo)
+        if det and det.get("tarifa_gr") is not None:
+            # Prefer historial de modelo si hay; si solo catálogo, historial material también aporta aprendizaje
+            if det.get("fuente") == "historial_modelo" or out["tarifa_gr"] is None:
+                out["tarifa_gr"] = float(det["tarifa_gr"])
+                out["fuente"] = det.get("fuente")
+                out["detalle"] = det.get("detalle")
+            elif det.get("fuente") == "historial_material" and out.get("fuente") == "catalogo":
+                # Mostrar ambos: default catálogo, hint historial
+                out["historial_sugerido"] = float(det["tarifa_gr"])
+                out["detalle"] = (out.get("detalle") or "") + f" · historial reciente ${det['tarifa_gr']}"
+    except Exception:
+        pass
+    return out

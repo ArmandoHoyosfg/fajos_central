@@ -227,6 +227,14 @@ async def api_patch_taller(
         return {"ok": True, "id": row_id, "unchanged": True}
     repo.actualizar(row_id, data)
     row = repo.obtener(row_id) or {}
+    try:
+        if data.get("precio_pita") is not None:
+            from app.db.repository import HistorialPreciosRepo
+            HistorialPreciosRepo().registrar(
+                "PITA", float(data["precio_pita"]), modelo="torcedor", fuente="taller",
+            )
+    except Exception:
+        pass
     return {
         "ok": True,
         "id": row_id,

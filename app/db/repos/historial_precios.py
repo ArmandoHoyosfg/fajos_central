@@ -83,6 +83,14 @@ class HistorialPreciosRepo:
 
     def sugerir(self, material: str, modelo: str | None = None) -> float | None:
         """Último precio conocido para material (+ modelo si hay)."""
+        det = self.sugerir_detalle(material, modelo)
+        return det.get("tarifa_gr") if det else None
+
+    def sugerir_detalle(self, material: str, modelo: str | None = None) -> dict | None:
+        """
+        Predicción de precio: historial material+modelo → historial material → None.
+        El catálogo de materiales lo aplica la capa superior si esto es None.
+        """
         material = (material or "").strip()
         if not material:
             return None
@@ -92,7 +100,7 @@ class HistorialPreciosRepo:
             if modelo:
                 cur.execute(
                     """
-                    SELECT tarifa_gr FROM historial_precios
+                    SELECT tarifa_gr, modelo, fuente, creado_en FROM historial_precios
                     WHERE material=%s AND modelo=%s
                     ORDER BY id DESC LIMIT 1
                     """,
@@ -100,15 +108,27 @@ class HistorialPreciosRepo:
                 )
                 row = cur.fetchone()
                 if row:
-                    return float(row["tarifa_gr"])
+                    return {
+                        "tarifa_gr": float(row["tarifa_gr"]),
+                        "fuente": "historial_modelo",
+                        "modelo": row.get("modelo"),
+                        "detalle": f"Último precio usado con modelo {modelo}",
+                    }
             cur.execute(
                 """
-                SELECT tarifa_gr FROM historial_precios
+                SELECT tarifa_gr, modelo, fuente, creado_en FROM historial_precios
                 WHERE material=%s
                 ORDER BY id DESC LIMIT 1
                 """,
                 (material,),
             )
             row = cur.fetchone()
-            return float(row["tarifa_gr"]) if row else None
+            if row:
+                return {
+                    "tarifa_gr": float(row["tarifa_gr"]),
+                    "fuente": "historial_material",
+                    "modelo": row.get("modelo"),
+                    "detalle": "Último precio usado para este material",
+                }
+        return None
 

@@ -1,3 +1,11 @@
+## [3.34.0] — 2026-09-26
+
+### Taller: precio/pita editable + predictor de tarifas
+- Columna **$/pita** en Taller para torcedores (editable; sueldo = pitas × precio).
+- Al guardar precio/pita se registra en historial (material PITA / modelo torcedor).
+- `GET /api/catalogos/sugerir-tarifa`: catálogo → historial modelo → historial material.
+- `catalog_assist.js`: predice $/g al cambiar material/modelo; el campo sigue editable.
+
 ## [3.33.0] — 2026-09-26
 
 ### Fase 3 A+B — BD segura en DEV
