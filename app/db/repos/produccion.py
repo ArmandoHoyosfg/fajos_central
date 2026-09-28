@@ -135,6 +135,7 @@ class ProduccionRepo(BaseRepo):
 
         trabajo_id = data.get("trabajo_id")
         if not trabajo_id and (data.get("folio") or data.get("modelo") or data.get("material")):
+            from app.db.repos.trabajos import TrabajosRepo
             trabajo_id = TrabajosRepo(self.db).asegurar(
                 trabajador_id,
                 folio=data.get("folio"),

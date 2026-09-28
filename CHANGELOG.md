@@ -1,3 +1,9 @@
+## [3.38.3] — 2026-09-28
+
+### Fix: agregar fila en Plata
+- `NameError: TrabajosRepo is not defined` en `ProduccionRepo.insertar`.
+- Import local al asegurar trabajo (folio/modelo/material).
+
 ## [3.38.2] — 2026-09-26
 
 ### Nav, filtros Plata y botones compactos
