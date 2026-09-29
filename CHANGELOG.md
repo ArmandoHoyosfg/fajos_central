@@ -1,3 +1,10 @@
+## [3.38.4] — 2026-09-28
+
+### Limpieza y revisión de bugs tipo NameError
+- Eliminados monoliticos `.bak` (`routes_monolith`, `repository_monolith`, `export_service_monolith`).
+- Revisión estática de imports de `*Repo` / `*Service` en `app/` (sin más NameError del estilo TrabajosRepo).
+- `ProduccionRepo.insertar` mantiene import local de `TrabajosRepo` (fix 3.38.3).
+
 ## [3.38.3] — 2026-09-28
 
 ### Fix: agregar fila en Plata
