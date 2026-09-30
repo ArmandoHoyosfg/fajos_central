@@ -1,3 +1,12 @@
+## [3.39.4] — 2026-09-30
+
+### Fix definitivo GR/$ 
+- SQL trae `gramos_calc` / `efectivo_calc` (suma de días × tarifa).
+- Python escribe `gr_display` / `ef_display` listos para pintar.
+- Plantilla solo muestra esos campos (sin cálculo Jinja).
+- KPI = suma de filas visibles.
+- Cache-bust de `live_totals.js`.
+
 ## [3.39.3] — 2026-09-30
 
 ### Fix fuerte: GR/$ y KPI en semanas cerradas

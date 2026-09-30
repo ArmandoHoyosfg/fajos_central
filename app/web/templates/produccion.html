@@ -341,16 +341,6 @@
       <td title="{{ r.modelo or '' }}">{{ r.modelo or '—' }}</td>
       <td>{{ r.material or '—' }}</td>
       <td>{{ r.tarifa_gr or '—' }}</td>
-      {# Totales de fila: siempre desde días (evita GR/$ vacíos) #}
-      {% set ns = namespace(tg=0.0, tar=0.0) %}
-      {% for d in ['gm_sab','gm_dom','gm_lun','gm_mar','gm_mie','gm_jue','gm_vie'] %}
-        {% set ns.tg = ns.tg + (r[d]|float if r[d] else 0) %}
-      {% endfor %}
-      {% if r.total_gramos and (r.total_gramos|float) > ns.tg %}
-        {% set ns.tg = r.total_gramos|float %}
-      {% endif %}
-      {% set ns.tar = (r.tarifa_gr|float if r.tarifa_gr else 0) %}
-      {% set row_ef = (ns.tg * ns.tar) if (ns.tg and ns.tar) else (r.efectivo|float if r.efectivo else 0) %}
       {% for d in ['gm_sab','gm_dom','gm_lun','gm_mar','gm_mie','gm_jue','gm_vie'] %}
       <td class="cell-dia" data-gm="{{ r[d] if r[d] else '' }}">
         {% if semana_cerrada %}
@@ -363,8 +353,8 @@
         {% endif %}
       </td>
       {% endfor %}
-      <td class="cell-total" data-total="{{ '%.1f'|format(ns.tg) if ns.tg else '' }}">{% if ns.tg %}{{ '%.1f'|format(ns.tg)|replace('.0','') }}{% endif %}</td>
-      <td class="cell-efectivo" data-efectivo="{{ '%.2f'|format(row_ef) if row_ef else '' }}">{% if row_ef %}${{ '%.2f'|format(row_ef) }}{% endif %}</td>
+      <td class="cell-total" data-total="{{ r.gr_display or r.total_gramos or '' }}">{{ r.gr_display or r.total_gramos or '' }}</td>
+      <td class="cell-efectivo" data-efectivo="{{ r.ef_display or '' }}">{{ r.ef_display or '' }}</td>
       <td>
         <input type="checkbox" class="chk-firmado" {% if r.firmado %}checked{% endif %}
                {% if semana_cerrada %}disabled{% endif %}

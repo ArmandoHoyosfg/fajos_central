@@ -17,35 +17,67 @@ class ProduccionRepo(BaseRepo):
 
     @classmethod
     def _enrich_row_totales(cls, row: dict) -> dict:
-        """Asegura total_gramos y efectivo aunque la BD no tenga columnas generadas."""
+        """Asegura total_gramos, efectivo y textos de pantalla (gr_display / ef_display)."""
         if not row:
             return row
+        # Normalizar a dict mutable
+        if not isinstance(row, dict):
+            try:
+                row = dict(row)
+            except Exception:
+                return row
+
         days = 0.0
         for c in cls.DAY_COLS_LIST:
+            raw = row.get(c)
+            if raw is None or raw == "":
+                continue
             try:
-                days += float(row.get(c) or 0)
+                days += float(raw)
             except (TypeError, ValueError):
-                pass
+                try:
+                    days += float(str(raw).replace(",", "."))
+                except (TypeError, ValueError):
+                    pass
+
+        # Preferir suma SQL si viene
+        try:
+            gc = float(row.get("gramos_calc") or 0)
+            if gc > days:
+                days = gc
+        except (TypeError, ValueError):
+            pass
+
         try:
             tg = float(row.get("total_gramos") or 0)
         except (TypeError, ValueError):
             tg = 0.0
-        if days > 0 and (tg <= 0 or abs(days - tg) > 0.05):
-            # Preferir suma de días (fuente de verdad de la captura)
-            row["total_gramos"] = round(days, 1)
+        if days > 0:
             tg = days
-        elif tg > 0:
-            row["total_gramos"] = round(tg, 1)
-        try:
-            ef = float(row.get("efectivo") or 0)
-        except (TypeError, ValueError):
-            ef = 0.0
+        row["total_gramos"] = round(tg, 1) if tg else 0
+
         try:
             tarifa = float(row.get("tarifa_gr") or 0)
         except (TypeError, ValueError):
             tarifa = 0.0
-        if tg > 0 and tarifa > 0 and (ef <= 0 or abs(ef - tg * tarifa) > 0.05):
-            row["efectivo"] = round(tg * tarifa, 2)
+        try:
+            ef = float(row.get("efectivo_calc") or row.get("efectivo") or 0)
+        except (TypeError, ValueError):
+            ef = 0.0
+        if tg > 0 and tarifa > 0:
+            ef = round(tg * tarifa, 2)
+        row["efectivo"] = ef if ef else 0
+
+        # Textos listos para la plantilla (sin lógica Jinja)
+        if tg > 0:
+            gtxt = f"{tg:.1f}".rstrip("0").rstrip(".")
+            row["gr_display"] = gtxt
+        else:
+            row["gr_display"] = ""
+        if ef > 0:
+            row["ef_display"] = f"${ef:.2f}"
+        else:
+            row["ef_display"] = ""
         return row
 
     @classmethod
@@ -71,6 +103,14 @@ class ProduccionRepo(BaseRepo):
                    p.folio, p.modelo, p.material, p.tarifa_gr,
                    p.gm_sab, p.gm_dom, p.gm_lun, p.gm_mar, p.gm_mie, p.gm_jue, p.gm_vie,
                    p.total_gramos, p.efectivo, p.firmado, p.notas,
+                   (COALESCE(p.gm_sab,0)+COALESCE(p.gm_dom,0)+COALESCE(p.gm_lun,0)+
+                    COALESCE(p.gm_mar,0)+COALESCE(p.gm_mie,0)+COALESCE(p.gm_jue,0)+COALESCE(p.gm_vie,0)
+                   ) AS gramos_calc,
+                   ROUND(
+                    (COALESCE(p.gm_sab,0)+COALESCE(p.gm_dom,0)+COALESCE(p.gm_lun,0)+
+                     COALESCE(p.gm_mar,0)+COALESCE(p.gm_mie,0)+COALESCE(p.gm_jue,0)+COALESCE(p.gm_vie,0)
+                    ) * COALESCE(p.tarifa_gr,0), 2
+                   ) AS efectivo_calc,
                    p.nombre AS nombre_guardado, p.ubic AS ubic_guardada,
                    tr.nombre_mostrar AS cat_nombre, tr.ubic AS cat_ubic,
                    COALESCE(tj.activo, 1) AS trabajo_activo,
