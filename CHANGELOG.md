@@ -1,3 +1,9 @@
+## [3.40.2] — 2026-09-30
+
+### UI: acciones horizontales en Trabajadores y barras compartidas
+- `.plt-capture-bar` vuelve a ser fila (no columna); botones lado a lado.
+- En Plata, solo las secciones `.toolbar-row` ocupan 100% de ancho.
+
 ## [3.40.1] — 2026-09-30
 
 ### UI: toolbars horizontales
