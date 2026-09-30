@@ -13,6 +13,45 @@ from app.db.repos.base import BaseRepo, _parse_fecha_sql
 logger = get_logger(__name__)
 
 class ProduccionRepo(BaseRepo):
+    DAY_COLS_LIST = ("gm_sab", "gm_dom", "gm_lun", "gm_mar", "gm_mie", "gm_jue", "gm_vie")
+
+    @classmethod
+    def _enrich_row_totales(cls, row: dict) -> dict:
+        """Asegura total_gramos y efectivo aunque la BD no tenga columnas generadas."""
+        if not row:
+            return row
+        days = 0.0
+        for c in cls.DAY_COLS_LIST:
+            try:
+                days += float(row.get(c) or 0)
+            except (TypeError, ValueError):
+                pass
+        try:
+            tg = float(row.get("total_gramos") or 0)
+        except (TypeError, ValueError):
+            tg = 0.0
+        if days > 0 and (tg <= 0 or abs(days - tg) > 0.05):
+            # Preferir suma de días (fuente de verdad de la captura)
+            row["total_gramos"] = round(days, 1)
+            tg = days
+        elif tg > 0:
+            row["total_gramos"] = round(tg, 1)
+        try:
+            ef = float(row.get("efectivo") or 0)
+        except (TypeError, ValueError):
+            ef = 0.0
+        try:
+            tarifa = float(row.get("tarifa_gr") or 0)
+        except (TypeError, ValueError):
+            tarifa = 0.0
+        if tg > 0 and tarifa > 0 and (ef <= 0 or abs(ef - tg * tarifa) > 0.05):
+            row["efectivo"] = round(tg * tarifa, 2)
+        return row
+
+    @classmethod
+    def _enrich_rows(cls, rows: list) -> list:
+        return [cls._enrich_row_totales(dict(r) if not isinstance(r, dict) else r) for r in (rows or [])]
+
     def obtener(self, prod_id: int) -> dict | None:
         with self.db.cursor() as cur:
             cur.execute("SELECT * FROM produccion_plata WHERE id = %s", (prod_id,))
@@ -62,7 +101,7 @@ class ProduccionRepo(BaseRepo):
                 if not incluir_terminados:
                     from app.services.export.helpers import linea_activa
                     rows = [r for r in rows if linea_activa(r)]
-                return rows
+                return self._enrich_rows(rows)
             except Exception:
                 # Fallback sin join trabajos / sin filtro
                 cur.execute(
@@ -81,7 +120,7 @@ class ProduccionRepo(BaseRepo):
                 if not incluir_terminados:
                     from app.services.export.helpers import linea_activa
                     rows = [r for r in rows if linea_activa(r)]
-                return rows
+                return self._enrich_rows(rows)
 
     def listar_terminados_semana(self, semana_id: int) -> list[dict]:
         """Líneas de la semana ligadas a trabajo terminado o marcadas [terminado]."""
@@ -632,18 +671,55 @@ class ProduccionRepo(BaseRepo):
         logger.info("Producción id=%s día %s = %s", prod_id, col, val)
 
     def totales_semana(self, semana_id: int) -> dict:
+        """Totales de la semana. Suma días si total_gramos/efectivo no están fiables."""
         sql = """
             SELECT
                 COUNT(*) AS lineas,
                 COALESCE(SUM(total_gramos), 0) AS total_gramos,
-                COALESCE(SUM(efectivo), 0) AS total_efectivo
+                COALESCE(SUM(efectivo), 0) AS total_efectivo,
+                COALESCE(SUM(
+                    COALESCE(gm_sab,0)+COALESCE(gm_dom,0)+COALESCE(gm_lun,0)+
+                    COALESCE(gm_mar,0)+COALESCE(gm_mie,0)+COALESCE(gm_jue,0)+COALESCE(gm_vie,0)
+                ), 0) AS total_gramos_dias,
+                COALESCE(SUM(
+                    (COALESCE(gm_sab,0)+COALESCE(gm_dom,0)+COALESCE(gm_lun,0)+
+                     COALESCE(gm_mar,0)+COALESCE(gm_mie,0)+COALESCE(gm_jue,0)+COALESCE(gm_vie,0))
+                    * COALESCE(tarifa_gr,0)
+                ), 0) AS total_efectivo_dias
             FROM produccion_plata
             WHERE semana_id = %s
         """
         with self.db.cursor() as cur:
-            cur.execute(sql, (semana_id,))
-            row = cur.fetchone()
-        return row or {"lineas": 0, "total_gramos": Decimal("0"), "total_efectivo": Decimal("0")}
+            try:
+                cur.execute(sql, (semana_id,))
+                row = cur.fetchone() or {}
+            except Exception:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) AS lineas,
+                           COALESCE(SUM(total_gramos), 0) AS total_gramos,
+                           COALESCE(SUM(efectivo), 0) AS total_efectivo
+                    FROM produccion_plata WHERE semana_id = %s
+                    """,
+                    (semana_id,),
+                )
+                row = cur.fetchone() or {}
+        try:
+            tg = float(row.get("total_gramos") or 0)
+            te = float(row.get("total_efectivo") or 0)
+            tgd = float(row.get("total_gramos_dias") or 0)
+            ted = float(row.get("total_efectivo_dias") or 0)
+        except (TypeError, ValueError):
+            tg = te = tgd = ted = 0.0
+        if tgd > tg:
+            tg = tgd
+        if ted > te:
+            te = ted
+        return {
+            "lineas": int(row.get("lineas") or 0),
+            "total_gramos": round(tg, 1),
+            "total_efectivo": round(te, 2),
+        }
 
 
 

@@ -109,11 +109,35 @@
           const efCell = tr.querySelector(".cell-efectivo");
           if (efCell) efCell.textContent = rowGr * tarifa ? ("$" + (rowGr * tarifa).toFixed(2)) : "";
         } else {
-          // Solo lectura: respetar totales del servidor
+          // Solo lectura (semana cerrada): total celda o suma de días en texto
           const totCell = tr.querySelector(".cell-total");
           const efCell = tr.querySelector(".cell-efectivo");
-          const g = parseNum(totCell && totCell.textContent);
-          const e = parseNum(efCell && efCell.textContent);
+          let g = parseNum(totCell && totCell.textContent);
+          let e = parseNum(efCell && efCell.textContent);
+          if (g <= 0) {
+            let sumDays = 0;
+            const dayAttrs = tr.querySelectorAll("td.cell-dia[data-gm], [data-gm]");
+            if (dayAttrs.length) {
+              dayAttrs.forEach(function (el) {
+                sumDays += parseNum(el.getAttribute("data-gm") || el.textContent);
+              });
+            } else {
+              $all("td.cell-dia", tr).forEach(function (td) {
+                sumDays += parseNum(td.textContent);
+              });
+            }
+            g = sumDays;
+          }
+          if (g > 0 && e <= 0) {
+            const tarifa = parseFloat(tr.dataset.tarifa || "0") || 0;
+            if (tarifa) e = Math.round(g * tarifa * 100) / 100;
+          }
+          if (totCell && !(totCell.textContent || "").trim() && g > 0) {
+            totCell.textContent = String(Math.round(g * 10) / 10);
+          }
+          if (efCell && !(efCell.textContent || "").trim() && e > 0) {
+            efCell.textContent = "$" + e.toFixed(2);
+          }
           gramos += g;
           efectivo += e;
         }

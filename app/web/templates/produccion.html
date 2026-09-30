@@ -328,7 +328,7 @@
       <td>{{ r.material or '—' }}</td>
       <td>{{ r.tarifa_gr or '—' }}</td>
       {% for d in ['gm_sab','gm_dom','gm_lun','gm_mar','gm_mie','gm_jue','gm_vie'] %}
-      <td>
+      <td class="cell-dia" data-gm="{{ r[d] if r[d] else '' }}">
         {% if semana_cerrada %}
           {{ r[d] or '' }}
         {% else %}
@@ -339,7 +339,7 @@
         {% endif %}
       </td>
       {% endfor %}
-      <td class="cell-total">{{ r.total_gramos or '' }}</td>
+      <td class="cell-total">{% if r.total_gramos %}{{ r.total_gramos }}{% endif %}</td>
       <td class="cell-efectivo">{% if r.efectivo %}${{ '%.2f'|format(r.efectivo|float) }}{% endif %}</td>
       <td>
         <input type="checkbox" class="chk-firmado" {% if r.firmado %}checked{% endif %}

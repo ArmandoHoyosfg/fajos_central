@@ -1,3 +1,10 @@
+## [3.39.1] — 2026-09-30
+
+### Fix: GR y $ vacíos en semanas cerradas
+- Enrich de filas: si hay gramos por día y `total_gramos`/`efectivo` vienen 0/null, se calculan.
+- `totales_semana` usa suma de días como respaldo.
+- Celdas de día con `data-gm`; KPI/JS suman días en modo solo lectura y rellenan GR/$.
+
 ## [3.39.0] — 2026-09-30
 
 ### Semanas cerradas + estadísticas detalladas
