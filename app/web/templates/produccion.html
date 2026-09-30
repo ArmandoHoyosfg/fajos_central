@@ -71,66 +71,80 @@
   </div>
 </div>
 
-<div class="toolbar" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-  <form class="inline" method="get" action="/produccion">
-    <label class="muted">Semana</label>
-    <select name="semana_id" onchange="this.form.submit()">
-      {% for s in semanas %}
-      <option value="{{ s.id }}" {% if s.id == semana_id %}selected{% endif %}>
-        {{ s.codigo }} ({{ s.fecha_inicio }} → {{ s.fecha_fin }}){% if s.es_actual %} ★{% endif %}
-      </option>
-      {% endfor %}
-    </select>
-  </form>
-  {% if semana_id %}
-  <div class="kpi-bar" id="kpi-live" data-server-gramos="{{ totales.total_gramos or 0 }}" data-server-efectivo="{{ totales.total_efectivo or 0 }}" data-server-lineas="{{ totales.lineas or 0 }}">
-    <span class="kpi-item"><b>{{ totales.lineas or 0 }}</b> líneas</span>
-    <span class="kpi-item"><b>{{ totales.total_gramos or 0 }}</b> g</span>
-    <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}</b></span>
-    {% if semana_cerrada %}<span class="kpi-item muted" title="Solo consulta; los totales vienen de la BD">· consulta</span>{% endif %}
+<div class="toolbar toolbar-stack">
+  <div class="toolbar-row toolbar-row--meta">
+    <form class="inline toolbar-semana" method="get" action="/produccion">
+      <label class="muted">Semana</label>
+      <select name="semana_id" onchange="this.form.submit()">
+        {% for s in semanas %}
+        <option value="{{ s.id }}" {% if s.id == semana_id %}selected{% endif %}>
+          {{ s.codigo }} ({{ s.fecha_inicio }} → {{ s.fecha_fin }}){% if s.es_actual %} ★{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+    {% if semana_id %}
+    <div class="kpi-bar" id="kpi-live" data-server-gramos="{{ totales.total_gramos or 0 }}" data-server-efectivo="{{ totales.total_efectivo or 0 }}" data-server-lineas="{{ totales.lineas or 0 }}">
+      <span class="kpi-item"><b>{{ totales.lineas or 0 }}</b> líneas</span>
+      <span class="kpi-item"><b>{{ totales.total_gramos or 0 }}</b> g</span>
+      <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}</b></span>
+      {% if semana_cerrada %}<span class="kpi-item muted" title="Solo consulta; los totales vienen de la BD">· consulta</span>{% endif %}
+    </div>
+    {% if semana_cerrada %}<span class="badge-cerrada">SEMANA CERRADA</span>{% endif %}
+    {% endif %}
   </div>
-  <button type="button" class="btn" id="btn-formal-xlsx" onclick="checklistExport({{ semana_id }})">Formal Excel Plata</button>
-  <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'plt')" title="Duplicar semana (elige áreas)">Duplicar → sig. semana</button>
-  <button type="button" class="btn btn-secondary" id="btn-captura-manual"
-          data-semana-id="{{ semana_id }}"
-          title="Nómina en blanco para anotar gramos a mano (sin folios terminados)">Captura manual</button>
-  <a class="btn btn-secondary" href="/suministro{% if semana_id %}?semana_id={{ semana_id }}{% endif %}" title="Hoja del día: folio/nombre listos, solo anotar gramos">Suministro día</a>
-  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
-  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
+  {% if semana_id %}
+  <div class="toolbar-row toolbar-row--export">
+    <span class="toolbar-label muted">Exportar</span>
+    <div class="btn-grid">
+      <button type="button" class="btn" id="btn-formal-xlsx" onclick="checklistExport({{ semana_id }})">Formal Excel</button>
+      <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'plt')" title="Duplicar semana (elige áreas)">Duplicar semana</button>
+      <button type="button" class="btn btn-secondary" id="btn-captura-manual"
+              data-semana-id="{{ semana_id }}"
+              title="Nómina en blanco para anotar gramos a mano">Captura manual</button>
+      <a class="btn btn-secondary" href="/suministro{% if semana_id %}?semana_id={{ semana_id }}{% endif %}">Suministro día</a>
+      <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
+      <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
+    </div>
+  </div>
   {% endif %}
 </div>
 
 {% if semana_id %}
 
 <div class="plt-capture-bar" id="plt-capture-bar">
-  {% if semana_id %}
-  <button type="button" class="btn" onclick="openModal('modal-un-dia')" {% if semana_cerrada %}disabled{% endif %}>＋ Un día</button>
-  <button type="button" class="btn btn-secondary" onclick="openModal('modal-linea')" {% if semana_cerrada %}disabled{% endif %}>＋ Fila</button>
-
-  <span id="sel-acciones-wrap" class="sel-acciones-wrap" style="position:relative;display:inline-flex;align-items:center;gap:0.35rem">
-    <button type="button" class="btn btn-secondary" id="btn-sel-acciones"
-            onclick="toggleAccionesMenu(event)"
-            aria-haspopup="true" aria-expanded="false"
-            title="Acciones sobre las filas marcadas con ✓">
-      Acciones…
-    </button>
-    <span id="sel-count" class="muted" style="font-size:0.82rem;min-width:6rem"></span>
-    <div id="sel-acciones-panel" class="row-menu-panel sel-acciones-panel" hidden
-         style="position:absolute;top:100%;left:0;z-index:40;min-width:14rem;margin-top:0.25rem"
-         onclick="event.stopPropagation()">
-      <button type="button" onclick="cerrarFoliosSeleccionados()">Cerrar seleccionados (≥2 sem sin avance)</button>
-      <button type="button" onclick="duplicarSeleccionadosEnDOL()">Duplicar seleccionados en DOL</button>
-      <button type="button" onclick="limpiarSeleccion()">Quitar selección</button>
+  <div class="toolbar-row">
+    <span class="toolbar-label muted">Captura</span>
+    <div class="btn-grid">
+      <button type="button" class="btn" onclick="openModal('modal-un-dia')" {% if semana_cerrada %}disabled{% endif %}>＋ Un día</button>
+      <button type="button" class="btn btn-secondary" onclick="openModal('modal-linea')" {% if semana_cerrada %}disabled{% endif %}>＋ Fila</button>
+      <span id="sel-acciones-wrap" class="sel-acciones-wrap">
+        <button type="button" class="btn btn-secondary" id="btn-sel-acciones"
+                onclick="toggleAccionesMenu(event)"
+                aria-haspopup="true" aria-expanded="false"
+                title="Acciones sobre las filas marcadas">
+          Acciones…
+        </button>
+        <span id="sel-count" class="muted sel-count"></span>
+        <div id="sel-acciones-panel" class="row-menu-panel sel-acciones-panel" hidden
+             onclick="event.stopPropagation()">
+          <button type="button" onclick="cerrarFoliosSeleccionados()">Cerrar seleccionados (≥2 sem sin avance)</button>
+          <button type="button" onclick="duplicarSeleccionadosEnDOL()">Duplicar en DOL</button>
+          <button type="button" onclick="limpiarSeleccion()">Quitar selección</button>
+        </div>
+      </span>
     </div>
-  </span>
-
-  <button type="button" class="btn btn-secondary" onclick="cerrarSemana()" {% if semana_cerrada %}disabled{% endif %}>🔒 Cerrar semana</button>
-  <button type="button" class="btn btn-secondary" onclick="reabrirSemana()" {% if not semana_cerrada %}disabled{% endif %}>🔓 Reabrir</button>
-  <a class="btn btn-secondary" href="/historial/{{ semana_id }}" target="_blank">Historial</a>
-  {% if semana_cerrada %}<span class="badge-actual" style="color:#f38ba8;">SEMANA CERRADA</span>{% endif %}
-  {% endif %}
-  <button type="button" class="btn btn-secondary" onclick="crearSemanaActual()">★ Semana actual</button>
-  <a class="btn btn-secondary" href="/semanas" title="Editar, alinear o eliminar semanas">Semanas…</a>
+  </div>
+  <div class="toolbar-row">
+    <span class="toolbar-label muted">Semana</span>
+    <div class="btn-grid">
+      <button type="button" class="btn btn-secondary" onclick="cerrarSemana()" {% if semana_cerrada %}disabled{% endif %}>🔒 Cerrar</button>
+      <button type="button" class="btn btn-secondary" onclick="reabrirSemana()" {% if not semana_cerrada %}disabled{% endif %}>🔓 Reabrir</button>
+      <a class="btn btn-secondary" href="/historial/{{ semana_id }}" target="_blank">Historial</a>
+      <button type="button" class="btn btn-secondary" onclick="crearSemanaActual()">★ Actual</button>
+      <a class="btn btn-secondary" href="/semanas" title="Editar o eliminar semanas">Semanas…</a>
+    </div>
+  </div>
 </div>
 
 {% set n_fi = folio_inactivos|length if folio_inactivos else 0 %}

@@ -1,3 +1,10 @@
+## [3.39.2] — 2026-09-30
+
+### UI: toolbars y menús en cuadrícula
+- Plata: filas ordenadas (semana+KPI · exportar · captura · semana).
+- Botones en `btn-grid` (auto-fill, mismo ancho).
+- Estadísticas: filtros en grilla alineada.
+
 ## [3.39.1] — 2026-09-30
 
 ### Fix: GR y $ vacíos en semanas cerradas
