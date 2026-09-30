@@ -1,3 +1,10 @@
+## [3.40.1] — 2026-09-30
+
+### UI: toolbars horizontales
+- Corregido conflicto `.toolbar { align-items:center }` que apilaba botones en columna centrada.
+- Filas Exportar / Captura / Semana en flex horizontal con wrap.
+- Filtros de tabla en fila flexible.
+
 ## [3.40.0] — 2026-09-30
 
 ### Estadísticas: desglose + buscador inteligente

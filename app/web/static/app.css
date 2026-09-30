@@ -152,6 +152,14 @@ h2 { font-size: 1.1rem; margin: 1.5rem 0 0.65rem; font-weight: 600; }
 .toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem;
   margin-bottom: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Cuando es toolbar-stack, no centrar hijos (rompe filas de botones) */
+.toolbar.toolbar-stack {
+  align-items: stretch;
+  flex-direction: column;
+  flex-wrap: nowrap;
 }
 .search-box {
   display: flex; flex: 1; min-width: 200px; max-width: 420px;
@@ -2278,64 +2286,94 @@ th.col-actions, td.col-actions {
   background: color-mix(in srgb, var(--accent, #c9a227) 12%, transparent);
 }
 
-/* —— Barras y botones en cuadrícula ordenada —— */
+/* —— Barras de herramientas: filas horizontales, sin centrar columnas estrechas —— */
+.toolbar.toolbar-stack,
 .toolbar-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important; /* evita que .toolbar { align-items:center } estreche filas */
+  justify-content: flex-start !important;
+  flex-wrap: nowrap !important;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 100%;
   margin-bottom: 0.75rem;
+  box-sizing: border-box;
 }
 .toolbar-row {
-  display: grid;
-  grid-template-columns: 5.5rem 1fr;
-  gap: 0.45rem 0.65rem;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 0.45rem 0.55rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 .toolbar-row--meta {
-  grid-template-columns: auto 1fr auto;
-  gap: 0.55rem;
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
 }
-@media (max-width: 720px) {
-  .toolbar-row,
-  .toolbar-row--meta {
-    grid-template-columns: 1fr;
-  }
+.toolbar-row--meta .toolbar-semana {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+.toolbar-row--meta .kpi-bar {
+  flex: 0 1 auto;
+  margin: 0;
+}
+.toolbar-row--export {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
 }
 .toolbar-label {
-  font-size: 0.75rem;
-  font-weight: 600;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  color: var(--muted);
   white-space: nowrap;
+  min-width: 4.5rem;
 }
 .btn-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap;
   gap: 0.35rem;
-  align-items: stretch;
-  width: 100%;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto !important;
 }
 .btn-grid > .btn,
-.btn-grid > a.btn,
-.btn-grid > .sel-acciones-wrap {
-  width: 100%;
+.btn-grid > a.btn {
+  width: auto !important;
   min-width: 0;
+  flex: 0 0 auto;
   justify-content: center;
-  text-align: center;
+  white-space: nowrap;
 }
 .btn-grid > .sel-acciones-wrap {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.25rem;
-  position: relative;
+  display: inline-flex !important;
+  flex-direction: row;
   align-items: center;
+  gap: 0.3rem;
+  position: relative;
+  width: auto !important;
+  flex: 0 0 auto;
 }
 .btn-grid > .sel-acciones-wrap > .btn {
-  width: 100%;
+  width: auto !important;
 }
 .sel-acciones-wrap .sel-count {
   font-size: 0.78rem;
-  min-width: 1.5rem;
+  min-width: 1.25rem;
 }
 .sel-acciones-panel {
   position: absolute;
@@ -2373,26 +2411,33 @@ th.col-actions, td.col-actions {
   padding: 0.2rem 0.5rem;
   border: 1px solid color-mix(in srgb, #f38ba8 40%, transparent);
   border-radius: 6px;
+  flex: 0 0 auto;
 }
 .plt-capture-bar {
   display: flex !important;
   flex-direction: column !important;
   gap: 0.4rem !important;
   align-items: stretch !important;
+  width: 100% !important;
+  box-sizing: border-box;
 }
 .plt-capture-bar .toolbar-row {
   width: 100%;
 }
+.filter-row,
 .filter-row--compact {
-  display: grid !important;
-  grid-template-columns: minmax(12rem, 1.4fr) repeat(auto-fit, minmax(10.5rem, 1fr)) auto;
-  gap: 0.4rem 0.55rem !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 0.4rem 0.55rem !important;
+  width: 100%;
 }
-@media (max-width: 900px) {
-  .filter-row--compact {
-    grid-template-columns: 1fr 1fr;
-  }
+.filter-row--compact input[type="search"],
+.filter-row--compact #flt-texto {
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  max-width: 22rem;
 }
 /* Estadísticas: filtros en grilla fija */
 .stats-filters {
