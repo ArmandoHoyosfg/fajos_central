@@ -280,6 +280,253 @@ class StatsService:
         out.sort(key=lambda x: (x["fecha"], x.get("label") or ""))
         return out[:limit]
 
+
+    def detalle_folio(
+        self,
+        folio: str,
+        semana_ids: list[int] | None = None,
+        fecha_desde: date | None = None,
+        fecha_hasta: date | None = None,
+    ) -> dict:
+        """Desglose completo de un folio: por semana, por día, trabajadores, materiales."""
+        folio_q = (folio or "").strip()
+        if not folio_q:
+            return {"folio": "", "semanas": [], "dias": [], "resumen": {}}
+        fl = folio_q.lower()
+        semanas = self._semanas_filtradas(semana_ids, fecha_desde, fecha_hasta)
+        por_semana: list[dict] = []
+        dias: list[dict] = []
+        trabajadores: set = set()
+        materiales: set = set()
+        modelos: set = set()
+        total_g = 0.0
+        total_e = 0.0
+        n_dias = 0
+        for s in semanas:
+            sid = int(s["id"])
+            fi = parse_fecha(s.get("fecha_inicio"))
+            try:
+                rows = self.prod.listar_por_semana(sid, incluir_terminados=True)
+            except Exception:
+                continue
+            g_sem = 0.0
+            e_sem = 0.0
+            lineas_sem = []
+            for r in rows:
+                f = (r.get("folio") or "").strip()
+                if not f or fl not in f.lower() and f.lower() != fl:
+                    # match exact or contains
+                    if f.lower() != fl and fl not in f.lower():
+                        continue
+                # prefer exact match first — still include contains
+                if fl not in f.lower():
+                    continue
+                g = float(r.get("total_gramos") or 0)
+                if g <= 0:
+                    g = sum(float(r.get(c) or 0) for c in _DAY_COLS)
+                tarifa = float(r.get("tarifa_gr") or 0)
+                e = float(r.get("efectivo") or 0) or (g * tarifa)
+                g_sem += g
+                e_sem += e
+                nombre = str(r.get("nombre") or "").strip()
+                ubic = r.get("ubic")
+                trabajadores.add(f"{nombre} ({ubic})")
+                if r.get("material"):
+                    materiales.add(str(r.get("material")))
+                if r.get("modelo"):
+                    modelos.add(str(r.get("modelo")))
+                lineas_sem.append({
+                    "nombre": nombre,
+                    "ubic": ubic,
+                    "material": r.get("material"),
+                    "modelo": r.get("modelo"),
+                    "tarifa_gr": tarifa,
+                    "total_gramos": round(g, 1),
+                    "efectivo": round(e, 2),
+                    "firmado": bool(r.get("firmado")),
+                })
+                if fi:
+                    for i, col in enumerate(_DAY_COLS):
+                        gv = float(r.get(col) or 0)
+                        if gv <= 0:
+                            continue
+                        d = fi + timedelta(days=i)
+                        if fecha_desde and d < fecha_desde:
+                            continue
+                        if fecha_hasta and d > fecha_hasta:
+                            continue
+                        n_dias += 1
+                        dias.append({
+                            "fecha": d.isoformat(),
+                            "fecha_label": fecha_es(d) or d.isoformat(),
+                            "dia_semana": _DAY_LABELS.get(col, col),
+                            "gramos": round(gv, 1),
+                            "efectivo": round(gv * tarifa, 2),
+                            "nombre": nombre,
+                            "ubic": ubic,
+                            "semana": s.get("codigo"),
+                            "material": r.get("material"),
+                        })
+            if g_sem > 0 or lineas_sem:
+                total_g += g_sem
+                total_e += e_sem
+                por_semana.append({
+                    "semana_id": sid,
+                    "codigo": s.get("codigo"),
+                    "fecha_inicio": s.get("fecha_inicio"),
+                    "fecha_fin": s.get("fecha_fin"),
+                    "cerrada": bool(s.get("cerrada")),
+                    "total_gramos": round(g_sem, 1),
+                    "total_efectivo": round(e_sem, 2),
+                    "lineas": lineas_sem,
+                })
+        dias.sort(key=lambda x: x["fecha"])
+        return {
+            "folio": folio_q,
+            "resumen": {
+                "total_gramos": round(total_g, 1),
+                "total_efectivo": round(total_e, 2),
+                "n_semanas": len(por_semana),
+                "n_dias_con_avance": n_dias,
+                "trabajadores": sorted(trabajadores),
+                "materiales": sorted(materiales),
+                "modelos": sorted(modelos),
+            },
+            "semanas": por_semana,
+            "dias": dias,
+        }
+
+    def detalle_trabajador(
+        self,
+        nombre: str = "",
+        ubic: int | None = None,
+        semana_ids: list[int] | None = None,
+        fecha_desde: date | None = None,
+        fecha_hasta: date | None = None,
+    ) -> dict:
+        """Desglose de un trabajador: folios, semanas y días."""
+        nl = (nombre or "").strip().lower()
+        semanas = self._semanas_filtradas(semana_ids, fecha_desde, fecha_hasta)
+        por_semana: list[dict] = []
+        dias: list[dict] = []
+        folios: dict[str, dict] = {}
+        total_g = 0.0
+        total_e = 0.0
+        n_dias = 0
+        nombre_real = nombre
+        ubic_real = ubic
+        for s in semanas:
+            sid = int(s["id"])
+            fi = parse_fecha(s.get("fecha_inicio"))
+            try:
+                rows = self.prod.listar_por_semana(sid, incluir_terminados=True)
+            except Exception:
+                continue
+            g_sem = 0.0
+            e_sem = 0.0
+            lineas_sem = []
+            for r in rows:
+                rn = str(r.get("nombre") or "").strip()
+                try:
+                    ru = int(r.get("ubic") or 0)
+                except (TypeError, ValueError):
+                    ru = 0
+                if nl and nl not in rn.lower():
+                    continue
+                if ubic is not None and ru != int(ubic):
+                    continue
+                nombre_real = rn or nombre_real
+                ubic_real = ru if ubic_real is None else ubic_real
+                g = float(r.get("total_gramos") or 0)
+                if g <= 0:
+                    g = sum(float(r.get(c) or 0) for c in _DAY_COLS)
+                tarifa = float(r.get("tarifa_gr") or 0)
+                e = float(r.get("efectivo") or 0) or (g * tarifa)
+                g_sem += g
+                e_sem += e
+                folio = (r.get("folio") or "").strip() or "—"
+                lineas_sem.append({
+                    "folio": folio,
+                    "material": r.get("material"),
+                    "modelo": r.get("modelo"),
+                    "tarifa_gr": tarifa,
+                    "total_gramos": round(g, 1),
+                    "efectivo": round(e, 2),
+                })
+                slot = folios.setdefault(folio.upper(), {
+                    "folio": folio,
+                    "total_gramos": 0.0,
+                    "total_efectivo": 0.0,
+                    "materiales": set(),
+                    "modelos": set(),
+                    "n_semanas": 0,
+                })
+                slot["total_gramos"] += g
+                slot["total_efectivo"] += e
+                slot["n_semanas"] += 1
+                if r.get("material"):
+                    slot["materiales"].add(str(r.get("material")))
+                if r.get("modelo"):
+                    slot["modelos"].add(str(r.get("modelo")))
+                if fi:
+                    for i, col in enumerate(_DAY_COLS):
+                        gv = float(r.get(col) or 0)
+                        if gv <= 0:
+                            continue
+                        d = fi + timedelta(days=i)
+                        if fecha_desde and d < fecha_desde:
+                            continue
+                        if fecha_hasta and d > fecha_hasta:
+                            continue
+                        n_dias += 1
+                        dias.append({
+                            "fecha": d.isoformat(),
+                            "fecha_label": fecha_es(d) or d.isoformat(),
+                            "dia_semana": _DAY_LABELS.get(col, col),
+                            "gramos": round(gv, 1),
+                            "efectivo": round(gv * tarifa, 2),
+                            "folio": folio,
+                            "semana": s.get("codigo"),
+                            "material": r.get("material"),
+                        })
+            if g_sem > 0 or lineas_sem:
+                total_g += g_sem
+                total_e += e_sem
+                por_semana.append({
+                    "semana_id": sid,
+                    "codigo": s.get("codigo"),
+                    "cerrada": bool(s.get("cerrada")),
+                    "total_gramos": round(g_sem, 1),
+                    "total_efectivo": round(e_sem, 2),
+                    "lineas": lineas_sem,
+                })
+        dias.sort(key=lambda x: x["fecha"])
+        folios_out = []
+        for slot in folios.values():
+            folios_out.append({
+                "folio": slot["folio"],
+                "total_gramos": round(slot["total_gramos"], 1),
+                "total_efectivo": round(slot["total_efectivo"], 2),
+                "n_semanas": slot["n_semanas"],
+                "materiales": sorted(slot["materiales"]),
+                "modelos": sorted(slot["modelos"]),
+            })
+        folios_out.sort(key=lambda x: -x["total_gramos"])
+        return {
+            "nombre": nombre_real,
+            "ubic": ubic_real,
+            "resumen": {
+                "total_gramos": round(total_g, 1),
+                "total_efectivo": round(total_e, 2),
+                "n_semanas": len(por_semana),
+                "n_dias_con_avance": n_dias,
+                "n_folios": len(folios_out),
+            },
+            "folios": folios_out,
+            "semanas": por_semana,
+            "dias": dias,
+        }
+
     @staticmethod
     def _sum_dias_rango(
         row: dict,

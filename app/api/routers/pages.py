@@ -194,6 +194,7 @@ async def page_buscar(
             trabajadores=data.get("trabajadores") or [],
             semanas=data.get("semanas") or [],
             folios=data.get("folios") or [],
+            trabajos=data.get("trabajos") or [],
         ),
     )
 
@@ -269,6 +270,31 @@ async def page_estadisticas(
     sum_g = sum(float(r.get("total_gramos") or 0) for r in rows)
     sum_e = sum(float(r.get("total_efectivo") or 0) for r in rows)
 
+    # Desglose opcional (?detalle=folio&folio=XXX o ?detalle=trabajador&nombre=&ubic=)
+    detalle = (request.query_params.get("detalle") or "").strip().lower()
+    detalle_data = None
+    if detalle == "folio":
+        folio_d = (request.query_params.get("folio") or q or "").strip()
+        if folio_d:
+            detalle_data = svc.detalle_folio(
+                folio_d,
+                semana_ids=selected_ids or None if periodo == "semanas" else None,
+                fecha_desde=fd,
+                fecha_hasta=fh,
+            )
+    elif detalle == "trabajador":
+        nom = (request.query_params.get("nombre") or q or "").strip()
+        ubic_s = request.query_params.get("ubic") or ""
+        ubic_i = int(ubic_s) if str(ubic_s).isdigit() else None
+        if nom or ubic_i is not None:
+            detalle_data = svc.detalle_trabajador(
+                nombre=nom,
+                ubic=ubic_i,
+                semana_ids=selected_ids or None if periodo == "semanas" else None,
+                fecha_desde=fd,
+                fecha_hasta=fh,
+            )
+
     return templates.TemplateResponse(
         request,
         "estadisticas.html",
@@ -287,6 +313,8 @@ async def page_estadisticas(
             agrupar=agrupar,
             sum_gramos=round(sum_g, 1),
             sum_efectivo=round(sum_e, 2),
+            detalle=detalle or "",
+            detalle_data=detalle_data,
         ),
     )
 

@@ -1,3 +1,10 @@
+## [3.40.0] — 2026-09-30
+
+### Estadísticas: desglose + buscador inteligente
+- Botón **Desglose** en filas de folio/trabajador: por semana, por día, materiales y enlaces a Plata.
+- Buscador: todas las semanas, tokens («tigre 02» / «tigre02»), material/modelo, trabajos, gramos acumulados.
+- Cerrado el issue de GR/$ en semanas cerradas (v3.39.4).
+
 ## [3.39.4] — 2026-09-30
 
 ### Fix definitivo GR/$ 
