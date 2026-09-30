@@ -1,3 +1,11 @@
+## [3.39.0] — 2026-09-30
+
+### Semanas cerradas + estadísticas detalladas
+- **Plata / semana cerrada:** el KPI ya no se pone en $0 (leía inputs inexistentes). Lee totales de celdas estáticas; no los sobrescribe.
+- Semana cerrada lista también filas terminadas para consulta real.
+- **Estadísticas:** vista por día; periodo últimos N días / un día / rango; días con avance; totales de la consulta.
+- `live_totals.js` modo solo-lectura; `StatsService.stats_diario`.
+
 ## [3.38.4] — 2026-09-28
 
 ### Limpieza y revisión de bugs tipo NameError

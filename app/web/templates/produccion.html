@@ -83,10 +83,11 @@
     </select>
   </form>
   {% if semana_id %}
-  <div class="kpi-bar" id="kpi-live">
+  <div class="kpi-bar" id="kpi-live" data-server-gramos="{{ totales.total_gramos or 0 }}" data-server-efectivo="{{ totales.total_efectivo or 0 }}" data-server-lineas="{{ totales.lineas or 0 }}">
     <span class="kpi-item"><b>{{ totales.lineas or 0 }}</b> líneas</span>
     <span class="kpi-item"><b>{{ totales.total_gramos or 0 }}</b> g</span>
     <span class="kpi-item money"><b>${{ '%.2f'|format((totales.total_efectivo or 0)|float) }}</b></span>
+    {% if semana_cerrada %}<span class="kpi-item muted" title="Solo consulta; los totales vienen de la BD">· consulta</span>{% endif %}
   </div>
   <button type="button" class="btn" id="btn-formal-xlsx" onclick="checklistExport({{ semana_id }})">Formal Excel Plata</button>
   <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'plt')" title="Duplicar semana (elige áreas)">Duplicar → sig. semana</button>

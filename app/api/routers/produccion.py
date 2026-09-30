@@ -308,7 +308,13 @@ async def page_produccion(
     if semana_id is None and semanas:
         actual = encontrar_semana_actual(semanas_raw, today())
         semana_id = actual["id"] if actual else semanas[0]["id"]
-    lineas = prod_repo.listar_por_semana(semana_id) if semana_id else []
+    # Semana cerrada: consulta completa (incluye terminados) para ver totales reales
+    _sem_obj = next((s for s in semanas if s.get("id") == semana_id), None) if semana_id else None
+    _cerrada_prev = bool(_sem_obj and _sem_obj.get("cerrada"))
+    lineas = (
+        prod_repo.listar_por_semana(semana_id, incluir_terminados=_cerrada_prev)
+        if semana_id else []
+    )
     terminados_semana: list = []
     if semana_id:
         try:

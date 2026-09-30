@@ -204,17 +204,71 @@ async def page_estadisticas(
     request: Request,
     vista: str = Query("trabajador"),
     q: str = Query(""),
+    periodo: str = Query("semanas"),
+    n_dias: int = Query(14, ge=1, le=90),
+    fecha: str = Query(""),
+    fecha_desde: str = Query(""),
+    fecha_hasta: str = Query(""),
+    agrupar: str = Query("dia"),
 ):
+    """
+    vista: trabajador | folio | diario
+    periodo: semanas (checkboxes) | n_dias | un_dia | rango
+    """
+    from datetime import timedelta
     from app.services.stats_service import StatsService
+    from app.core.calendar_util import today
+    from app.utils.fechas_nomina import parse_fecha
+
     form_ids = request.query_params.getlist("semana_id")
     selected_ids = [int(x) for x in form_ids if str(x).isdigit()]
     svc = StatsService()
     semanas = svc.listar_semanas()
+
+    fd = parse_fecha(fecha_desde) if fecha_desde else None
+    fh = parse_fecha(fecha_hasta) if fecha_hasta else None
+    if periodo == "un_dia":
+        d = parse_fecha(fecha) or today()
+        fd = fh = d
+        selected_ids = []
+    elif periodo == "n_dias":
+        fh = today()
+        fd = fh - timedelta(days=max(1, int(n_dias)) - 1)
+        selected_ids = []
+    elif periodo == "rango":
+        selected_ids = []
+    else:
+        periodo = "semanas"
+        fd = fh = None
+
     if vista == "folio":
-        rows = svc.stats_folio(q=q, semana_ids=selected_ids or None)
+        rows = svc.stats_folio(
+            q=q,
+            semana_ids=selected_ids or None,
+            fecha_desde=fd,
+            fecha_hasta=fh,
+        )
+    elif vista == "diario":
+        rows = svc.stats_diario(
+            q=q,
+            semana_ids=selected_ids or None if periodo == "semanas" else None,
+            fecha_desde=fd,
+            fecha_hasta=fh,
+            agrupar=agrupar if agrupar in ("dia", "trabajador", "folio") else "dia",
+        )
     else:
         vista = "trabajador"
-        rows = svc.stats_trabajador(q=q, semana_ids=selected_ids or None)
+        rows = svc.stats_trabajador(
+            q=q,
+            semana_ids=selected_ids or None,
+            fecha_desde=fd,
+            fecha_hasta=fh,
+        )
+
+    # Resumen rápido
+    sum_g = sum(float(r.get("total_gramos") or 0) for r in rows)
+    sum_e = sum(float(r.get("total_efectivo") or 0) for r in rows)
+
     return templates.TemplateResponse(
         request,
         "estadisticas.html",
@@ -225,6 +279,14 @@ async def page_estadisticas(
             rows=rows,
             semanas=semanas,
             selected_ids=set(selected_ids),
+            periodo=periodo,
+            n_dias=n_dias,
+            fecha=fecha or (fd.isoformat() if fd and periodo == "un_dia" else ""),
+            fecha_desde=fd.isoformat() if fd and periodo == "rango" else (fecha_desde or ""),
+            fecha_hasta=fh.isoformat() if fh and periodo == "rango" else (fecha_hasta or ""),
+            agrupar=agrupar,
+            sum_gramos=round(sum_g, 1),
+            sum_efectivo=round(sum_e, 2),
         ),
     )
 
