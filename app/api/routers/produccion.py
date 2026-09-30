@@ -326,7 +326,34 @@ async def page_produccion(
             AprendizajeService().purgar_terminados(dias=7)
         except Exception:
             pass
-    totales = prod_repo.totales_semana(semana_id) if semana_id else {}
+    # Totales desde las mismas filas visibles (fuente de verdad de los gramos por día)
+    from app.db.repos.produccion import ProduccionRepo as _PRepo
+    if lineas:
+        lineas = _PRepo._enrich_rows(lineas)
+    totales = {}
+    if semana_id:
+        try:
+            totales = prod_repo.totales_semana(semana_id) or {}
+        except Exception:
+            totales = {}
+        # Si la BD reporta 0 pero las filas tienen gramos, recalcular desde lineas
+        g_rows = sum(float(r.get("total_gramos") or 0) for r in lineas)
+        e_rows = sum(float(r.get("efectivo") or 0) for r in lineas)
+        try:
+            g_db = float(totales.get("total_gramos") or 0)
+            e_db = float(totales.get("total_efectivo") or 0)
+        except (TypeError, ValueError):
+            g_db = e_db = 0.0
+        if g_rows > g_db:
+            totales = {
+                "lineas": len(lineas),
+                "total_gramos": round(g_rows, 1),
+                "total_efectivo": round(e_rows, 2),
+            }
+        else:
+            totales.setdefault("lineas", len(lineas))
+            totales["total_gramos"] = round(g_db or g_rows, 1)
+            totales["total_efectivo"] = round(e_db or e_rows, 2)
     trabajadores = trab_repo.listar(solo_plt=False, solo_activos=True)
     folios_dup_set: set = set()
     try:

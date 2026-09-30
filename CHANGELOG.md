@@ -1,3 +1,10 @@
+## [3.39.3] — 2026-09-30
+
+### Fix fuerte: GR/$ y KPI en semanas cerradas
+- Totales de fila calculados en la **plantilla** desde Sáb–Vie (no dependen de la columna BD).
+- KPI recalculado desde las filas visibles si la BD reporta 0.
+- JS suma `data-gm` / `data-total` y rellena celdas vacías al cargar; no pisa KPI servidor con 0.
+
 ## [3.39.2] — 2026-09-30
 
 ### UI: toolbars y menús en cuadrícula

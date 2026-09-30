@@ -1,6 +1,5 @@
 /**
- * Totales en vivo + toast + confirmación día pasado.
- * Principios: KPI visibles siempre; en semana cerrada (sin inputs) lee celdas estáticas.
+ * Totales en vivo. Semana cerrada: suma data-gm / data-total y NO borra celdas.
  */
 (function () {
   function $(sel, root) { return (root || document).querySelector(sel); }
@@ -10,6 +9,12 @@
     if (txt == null || txt === "") return 0;
     const v = parseFloat(String(txt).replace(/[^0-9.,\-]/g, "").replace(",", "."));
     return isNaN(v) ? 0 : v;
+  }
+
+  function fmtG(n) {
+    if (!n) return "";
+    const x = Math.round(n * 10) / 10;
+    return (x % 1 === 0) ? String(x) : x.toFixed(1);
   }
 
   window.FajosLive = {
@@ -36,7 +41,6 @@
       el.classList.add("kpi-pulse");
       setTimeout(() => el.classList.remove("kpi-pulse"), 400);
     },
-
     showToast(msg, err) {
       let el = $("#toast");
       if (!el) {
@@ -55,127 +59,122 @@
       window._toastT = setTimeout(() => { el.hidden = true; }, err ? 6000 : 2800);
     },
 
-    /**
-     * Suma gramos/efectivo.
-     * - Con inputs.cell-gm: recalcula y actualiza celdas de total.
-     * - Sin inputs (semana cerrada / solo lectura): lee .cell-total y .cell-efectivo
-     *   y NO los sobrescribe (evita poner 0 al abrir semanas cerradas).
-     */
+    /** Gramos de una fila: inputs, data-gm o data-total */
+    rowGramos(tr) {
+      const inputs = $all("input.cell-gm", tr);
+      if (inputs.length) {
+        let s = 0;
+        inputs.forEach((inp) => {
+          const v = parseNum(inp.value);
+          if (v > 0) s += v;
+        });
+        return s;
+      }
+      const tot = tr.querySelector(".cell-total");
+      let g = parseNum(tot && (tot.getAttribute("data-total") || tot.textContent));
+      if (g > 0) return g;
+      let s = 0;
+      $all("td.cell-dia", tr).forEach((td) => {
+        s += parseNum(td.getAttribute("data-gm") || td.textContent);
+      });
+      return s;
+    },
+
+    rowTarifa(tr) {
+      let t = parseFloat(tr.dataset.tarifa || "0") || 0;
+      if (t) return t;
+      const tarTd = tr.querySelector("td.col-tar, [data-field='tarifa_gr']");
+      if (tarTd) t = parseNum(tarTd.textContent);
+      return t || 0;
+    },
+
     recalcFromTable(tableSel, kpiSel) {
-      const table = $(tableSel);
-      const kpi = $(kpiSel);
+      const table = $(tableSel) || $("table.sortable") || $(".table-wrap table");
+      const kpi = $(kpiSel) || $("#kpi-live");
       if (!table || !kpi) return;
 
-      const anyInput = !!table.querySelector("input.cell-gm");
       let lineas = 0, gramos = 0, efectivo = 0;
-
       $all("tbody tr", table).forEach((tr) => {
         if (tr.style.display === "none") return;
-        if (!tr.querySelector("td")) return;
-        // fila vacía de mensaje
-        if (tr.querySelector("td[colspan]")) return;
-
-        const cells = $all("input.cell-gm", tr);
+        if (!tr.querySelector("td") || tr.querySelector("td[colspan]")) return;
         lineas += 1;
+        const g = this.rowGramos(tr);
+        const tarifa = this.rowTarifa(tr);
+        const e = g * tarifa;
+        gramos += g;
+        efectivo += e;
 
-        if (cells.length) {
-          let rowGr = 0;
-          cells.forEach((inp) => {
-            const v = parseFloat(String(inp.value || "").replace(",", "."));
-            if (!isNaN(v) && v > 0) rowGr += v;
-          });
-          let tarifa = parseFloat(tr.dataset.tarifa || "0") || 0;
-          if (!tarifa) {
-            const tarCell = tr.querySelector("[data-tarifa]");
-            if (tarCell) tarifa = parseFloat(tarCell.dataset.tarifa || tarCell.value || "0") || 0;
+        const totCell = tr.querySelector(".cell-total");
+        const efCell = tr.querySelector(".cell-efectivo");
+        const hasInputs = !!tr.querySelector("input.cell-gm");
+        // Rellenar siempre si está vacío o si hay inputs (edición en vivo)
+        if (totCell && (hasInputs || !(totCell.textContent || "").trim())) {
+          if (g > 0) {
+            totCell.textContent = fmtG(g);
+            totCell.setAttribute("data-total", String(g));
           }
-          if (!tarifa) {
-            const tds = $all("td", tr);
-            // col $/G suele ser índice 6 (sel, ⋯, nom, ubic, folio, mod, mat, tar)
-            for (let i = 0; i < tds.length; i++) {
-              const t = parseFloat((tds[i].textContent || "").replace(/[^0-9.]/g, ""));
-              if (!isNaN(t) && t >= 1 && t <= 500 && tds[i].className.indexOf("cell") < 0) {
-                // prefer cell near material: try data
-              }
-            }
-            const tarTd = tr.querySelector("td.col-tar, [data-field='tarifa_gr']");
-            if (tarTd) tarifa = parseNum(tarTd.textContent);
-            else if (tds.length > 6) tarifa = parseNum(tds[6].textContent);
-          }
-          gramos += rowGr;
-          efectivo += rowGr * (tarifa || 0);
-          const totCell = tr.querySelector(".cell-total");
-          if (totCell) totCell.textContent = rowGr ? String(Math.round(rowGr * 10) / 10) : "";
-          const efCell = tr.querySelector(".cell-efectivo");
-          if (efCell) efCell.textContent = rowGr * tarifa ? ("$" + (rowGr * tarifa).toFixed(2)) : "";
-        } else {
-          // Solo lectura (semana cerrada): total celda o suma de días en texto
-          const totCell = tr.querySelector(".cell-total");
-          const efCell = tr.querySelector(".cell-efectivo");
-          let g = parseNum(totCell && totCell.textContent);
-          let e = parseNum(efCell && efCell.textContent);
-          if (g <= 0) {
-            let sumDays = 0;
-            const dayAttrs = tr.querySelectorAll("td.cell-dia[data-gm], [data-gm]");
-            if (dayAttrs.length) {
-              dayAttrs.forEach(function (el) {
-                sumDays += parseNum(el.getAttribute("data-gm") || el.textContent);
-              });
-            } else {
-              $all("td.cell-dia", tr).forEach(function (td) {
-                sumDays += parseNum(td.textContent);
-              });
-            }
-            g = sumDays;
-          }
-          if (g > 0 && e <= 0) {
-            const tarifa = parseFloat(tr.dataset.tarifa || "0") || 0;
-            if (tarifa) e = Math.round(g * tarifa * 100) / 100;
-          }
-          if (totCell && !(totCell.textContent || "").trim() && g > 0) {
-            totCell.textContent = String(Math.round(g * 10) / 10);
-          }
-          if (efCell && !(efCell.textContent || "").trim() && e > 0) {
+        }
+        if (efCell && (hasInputs || !(efCell.textContent || "").trim())) {
+          if (e > 0) {
             efCell.textContent = "$" + e.toFixed(2);
+            efCell.setAttribute("data-efectivo", e.toFixed(2));
           }
-          gramos += g;
-          efectivo += e;
         }
       });
 
+      // Si la suma dio 0 pero el servidor mandó totales, no pisarlos con 0
+      const sg = parseNum(kpi.getAttribute("data-server-gramos"));
+      const se = parseNum(kpi.getAttribute("data-server-efectivo"));
+      const sl = parseNum(kpi.getAttribute("data-server-lineas"));
+      if (gramos <= 0 && sg > 0) {
+        gramos = sg;
+        efectivo = se;
+        if (lineas <= 0 && sl > 0) lineas = sl;
+      }
+
       kpi.innerHTML =
         "<span class='kpi-item'><b>" + lineas + "</b> líneas</span>" +
-        "<span class='kpi-item'><b>" + (gramos ? (Math.round(gramos * 10) / 10) : "0") + "</b> g</span>" +
+        "<span class='kpi-item'><b>" + (gramos ? fmtG(gramos) : "0") + "</b> g</span>" +
         "<span class='kpi-item money'><b>$" + efectivo.toFixed(2) + "</b></span>";
+      // conservar data-server
+      if (sg) kpi.setAttribute("data-server-gramos", String(sg));
+      if (se) kpi.setAttribute("data-server-efectivo", String(se));
+      if (sl) kpi.setAttribute("data-server-lineas", String(sl));
     },
 
     bindGramInputs(opts) {
       const {
-        tableSel = "table",
+        tableSel = "table.sortable",
         kpiSel = "#kpi-live",
         onSave,
       } = opts || {};
-      const inputs = $all(tableSel + " input.cell-gm");
-      if (!inputs.length) {
-        // Semana cerrada / sin captura: solo consolidar KPI desde celdas estáticas
+      const table = $(tableSel) || $(".table-wrap table");
+      if (!table) {
         this.recalcFromTable(tableSel, kpiSel);
         return;
       }
+      const inputs = $all("input.cell-gm", table);
       inputs.forEach((inp) => {
         inp.addEventListener("change", async () => {
-          if (typeof onSave === "function") {
-            await onSave(inp);
-          }
+          if (typeof onSave === "function") await onSave(inp);
           this.recalcFromTable(tableSel, kpiSel);
           this.flashCell(inp);
           this.flashRow(inp);
           this.pulseKpi(kpiSel);
         });
-        inp.addEventListener("input", () => {
-          this.recalcFromTable(tableSel, kpiSel);
-        });
+        inp.addEventListener("input", () => this.recalcFromTable(tableSel, kpiSel));
       });
+      // Siempre recalcular al cargar (rellena GR/$ en semana cerrada)
       this.recalcFromTable(tableSel, kpiSel);
     },
   };
+
+  // Auto-arranque: si hay tabla Plata, rellenar totales aunque nadie llame bind
+  document.addEventListener("DOMContentLoaded", function () {
+    if ($("#kpi-live") && ($("table.sortable") || $(".table-wrap table"))) {
+      try {
+        window.FajosLive.recalcFromTable("table.sortable", "#kpi-live");
+      } catch (e) { /* ignore */ }
+    }
+  });
 })();
