@@ -1,9 +1,9 @@
 /**
  * Catálogos como asistencia (no candado):
  * - datalist sugiere materiales/modelos de BD
- * - si coincide → aplica tarifa / material por defecto
- * - si no coincide → valor libre, se guarda en la nómina igual
- * - opcional: añadir el valor libre al catálogo
+ * - predicción: catálogo → historial material+modelo → historial material
+ * - el usuario puede cambiar el precio en el mismo campo (marca userEdited)
+ * - valor libre se guarda igual; opcional añadir al catálogo
  */
 (function (global) {
   "use strict";
@@ -42,7 +42,7 @@
       hint.className = "cat-hint";
       hint.id = "hint-" + Math.random().toString(36).slice(2, 9);
       el.setAttribute("data-hint-id", hint.id);
-      el.parentNode.appendChild(hint);
+      if (el.parentNode) el.parentNode.appendChild(hint);
     }
     hint.textContent = text || "";
     hint.className = "cat-hint" + (kind ? " cat-hint--" + kind : "");
@@ -53,237 +53,155 @@
     return el.form || el.closest("form") || el.closest(".modal") || document;
   }
 
+  function tarifaField(form) {
+    return form.querySelector
+      ? form.querySelector('[name="tarifa_gr"]')
+      : (form.elements && form.elements.namedItem("tarifa_gr"));
+  }
+
+  function materialField(form) {
+    return form.querySelector
+      ? form.querySelector('[name="material"]')
+      : (form.elements && form.elements.namedItem("material"));
+  }
+
+  function modeloField(form) {
+    return form.querySelector
+      ? form.querySelector('[name="modelo"]')
+      : (form.elements && form.elements.namedItem("modelo"));
+  }
+
+  function applyTarifa(t, price, force) {
+    if (!t || price == null || price === "") return;
+    var empty = String(t.value || "").trim() === "";
+    if (force || empty || t.dataset.userEdited !== "1") {
+      t.value = price;
+      t.dataset.predicted = "1";
+    }
+  }
+
+  var _suggestTimer = null;
+  function suggestFromServer(form, matEl) {
+    var mat = materialField(form);
+    var mod = modeloField(form);
+    var t = tarifaField(form);
+    var material = mat ? String(mat.value || "").trim() : "";
+    var modelo = mod ? String(mod.value || "").trim() : "";
+    if (!material) {
+      setHint(matEl || mat, "", "");
+      return;
+    }
+    clearTimeout(_suggestTimer);
+    _suggestTimer = setTimeout(function () {
+      var url = "/api/catalogos/sugerir-tarifa?material=" + encodeURIComponent(material) +
+        (modelo ? "&modelo=" + encodeURIComponent(modelo) : "");
+      fetch(url, { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.ok || d.tarifa_gr == null) {
+            // fallback local catalog map
+            var map = tariffs();
+            var k = findKey(map, material);
+            if (k != null && map[k] != null && map[k] !== "") {
+              applyTarifa(t, map[k], false);
+              setHint(matEl || mat, "Catálogo · $" + map[k] + "/g (editable)", "ok");
+            } else {
+              setHint(matEl || mat, "Sin precio predicho · escribe $/g manualmente", "warn");
+            }
+            return;
+          }
+          applyTarifa(t, d.tarifa_gr, false);
+          var src = d.fuente || "prediccion";
+          var msg = (d.detalle || ("Sugerido $" + d.tarifa_gr + "/g")) + " · " + src;
+          if (t && t.dataset.userEdited === "1" && String(t.value) !== String(d.tarifa_gr)) {
+            msg += " (tú pusiste $" + t.value + ")";
+          }
+          setHint(matEl || mat, msg + " — editable", src === "catalogo" ? "ok" : "info");
+        })
+        .catch(function () {
+          var map = tariffs();
+          var k = findKey(map, material);
+          if (k != null) applyTarifa(t, map[k], false);
+        });
+    }, 220);
+  }
+
   function onMaterialInput(el) {
     if (!el) return;
     var form = formOf(el);
     var key = String(el.value || "").trim();
-    var map = tariffs();
-    var t = form.querySelector
-      ? form.querySelector('[name="tarifa_gr"]')
-      : (form.elements && form.elements.namedItem("tarifa_gr"));
     if (!key) {
       setHint(el, "", "");
       el.dataset.fromCatalog = "0";
       return;
     }
+    var map = tariffs();
     var k = findKey(map, key);
-    if (k != null && map[k] != null && map[k] !== "") {
-      el.dataset.fromCatalog = "1";
-      var catPrice = map[k];
-      if (t) {
-        var empty = String(t.value || "").trim() === "";
-        // Rellenar si vacío o si el usuario no bloqueó edición manual
-        if (empty || t.dataset.userEdited !== "1") {
-          t.value = catPrice;
-        }
-      }
-      setHint(el, "Catálogo · $" + catPrice + "/g" + (t && t.dataset.userEdited === "1" && String(t.value) !== String(catPrice) ? " (precio de fila conservado)" : ""), "ok");
-    } else {
-      el.dataset.fromCatalog = "0";
-      setHint(el, "Valor libre (no está en catálogo) — puedes guardar precio abajo", "free");
-    }
+    el.dataset.fromCatalog = k ? "1" : "0";
+    suggestFromServer(form, el);
   }
 
   function onModeloInput(el) {
     if (!el) return;
     var form = formOf(el);
-    var key = String(el.value || "").trim();
-    var map = models();
-    if (!key) {
-      setHint(el, "", "");
-      return;
-    }
-    var k = findKey(map, key);
-    if (k == null) {
-      setHint(el, "Modelo libre (no está en catálogo)", "free");
-      return;
-    }
-    var info = map[k] || {};
-    setHint(el, "Catálogo" + (info.material ? " · mat. " + info.material : ""), "ok");
-    var mat = form.querySelector
-      ? form.querySelector('[name="material"]')
-      : (form.elements && form.elements.namedItem("material"));
-    if (mat && info.material) {
-      // solo sugiere si material vacío o venía del catálogo
-      if (!String(mat.value || "").trim() || mat.dataset.fromCatalog === "1") {
-        mat.value = info.material;
-        onMaterialInput(mat);
-      }
-    }
-    var t = form.querySelector
-      ? form.querySelector('[name="tarifa_gr"]')
-      : (form.elements && form.elements.namedItem("tarifa_gr"));
-    if (t && info.tarifa != null && t.dataset.userEdited !== "1") {
-      t.value = info.tarifa;
+    var mat = materialField(form);
+    if (mat && String(mat.value || "").trim()) {
+      suggestFromServer(form, mat);
     }
   }
 
-  function markTarifaEdited(el) {
-    if (el) el.dataset.userEdited = "1";
+  function markUserEditedTarifa(el) {
+    if (!el) return;
+    el.dataset.userEdited = "1";
+    el.dataset.predicted = "0";
   }
 
-  function resetTarifaEdited(form) {
-    var t = form && (form.querySelector('[name="tarifa_gr"]'));
-    if (t) t.dataset.userEdited = "0";
-  }
-
-  /** Chips clicables bajo el input de material */
-  function renderMaterialChips(container, input) {
-    if (!container || !input) return;
-    var map = tariffs();
-    var keys = Object.keys(map).sort();
-    if (!keys.length) {
-      container.innerHTML = '<span class="muted" style="font-size:0.8rem">Sin materiales en catálogo. <a href="/catalogos">Gestionar</a></span>';
-      return;
-    }
-    container.innerHTML = keys
-      .map(function (k) {
-        return (
-          '<button type="button" class="cat-chip" data-mat="' +
-          k.replace(/"/g, "&quot;") +
-          '" title="$' +
-          map[k] +
-          '/g">' +
-          k +
-          "</button>"
-        );
-      })
-      .join("") +
-      ' <a class="cat-chip cat-chip-link" href="/catalogos" title="Abrir catálogos">⚙</a>';
-    container.querySelectorAll(".cat-chip[data-mat]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        input.value = btn.getAttribute("data-mat") || "";
-        onMaterialInput(input);
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-      });
+  function bindForm(root) {
+    root = root || document;
+    root.querySelectorAll('[name="material"]').forEach(function (el) {
+      if (el.dataset.catBound) return;
+      el.dataset.catBound = "1";
+      el.addEventListener("input", function () { onMaterialInput(el); });
+      el.addEventListener("change", function () { onMaterialInput(el); });
+    });
+    root.querySelectorAll('[name="modelo"]').forEach(function (el) {
+      if (el.dataset.catBound) return;
+      el.dataset.catBound = "1";
+      el.addEventListener("input", function () { onModeloInput(el); });
+      el.addEventListener("change", function () { onModeloInput(el); });
+    });
+    root.querySelectorAll('[name="tarifa_gr"]').forEach(function (el) {
+      if (el.dataset.catBound) return;
+      el.dataset.catBound = "1";
+      el.addEventListener("input", function () { markUserEditedTarifa(el); });
+      el.addEventListener("change", function () { markUserEditedTarifa(el); });
     });
   }
 
-  async function saveMaterialToCatalog(material, tarifa) {
-    var fd = new FormData();
-    fd.append("material", material);
-    fd.append("tarifa_por_gramo", String(tarifa));
-    fd.append("activo", "1");
-    var res = await fetch("/api/catalogos/material", { method: "POST", body: fd });
-    var data = await res.json().catch(function () { return {}; });
-    if (!res.ok || data.ok === false) throw new Error(data.error || res.statusText);
-    return data;
-  }
-
-  async function saveModeloToCatalog(modelo, material, tarifa) {
-    var fd = new FormData();
-    fd.append("modelo", modelo);
-    fd.append("tipo", "PLT");
-    if (material) fd.append("material_default", material);
-    if (tarifa != null && tarifa !== "") fd.append("tarifa_default", String(tarifa));
-    var res = await fetch("/api/catalogos/modelo", { method: "POST", body: fd });
-    var data = await res.json().catch(function () { return {}; });
-    if (!res.ok || data.ok === false) throw new Error(data.error || res.statusText);
-    return data;
-  }
-
-  function wireForm(form) {
-    if (!form || form.dataset.catalogWired) return;
-    form.dataset.catalogWired = "1";
-    var mat = form.querySelector('[name="material"]');
-    var mod = form.querySelector('[name="modelo"]');
-    var tar = form.querySelector('[name="tarifa_gr"]');
-    if (mat) {
-      mat.addEventListener("input", function () { onMaterialInput(mat); });
-      mat.addEventListener("change", function () { onMaterialInput(mat); });
-      var chips = form.querySelector(".mat-chips");
-      if (chips) renderMaterialChips(chips, mat);
-    }
-    if (mod) {
-      mod.addEventListener("input", function () { onModeloInput(mod); });
-      mod.addEventListener("change", function () { onModeloInput(mod); });
-    }
-    if (tar) {
-      tar.addEventListener("input", function () { markTarifaEdited(tar); });
-    }
-    var btnMat = form.querySelector(".btn-save-mat-cat");
-    if (btnMat && mat) {
-      btnMat.addEventListener("click", async function () {
-        var m = String(mat.value || "").trim();
-        var t = tar ? parseFloat(tar.value) : NaN;
-        if (!m) { alert("Escribe un material"); return; }
-        if (!(t >= 0)) { alert("Indica $/g para guardarlo en el catálogo"); return; }
-        try {
-          await saveMaterialToCatalog(m, t);
-          // refresh local map
-          var map = tariffs();
-          map[m] = t;
-          var el = document.getElementById("catalog-tarifas");
-          if (el) el.textContent = JSON.stringify(map);
-          var dl = document.getElementById("dl-materiales");
-          if (dl && ![].some.call(dl.options, function (o) { return o.value === m; })) {
-            var opt = document.createElement("option");
-            opt.value = m;
-            dl.appendChild(opt);
-          }
-          onMaterialInput(mat);
-          if (global.FajosLive && FajosLive.showToast) FajosLive.showToast("Material guardado en catálogo");
-          else alert("Material guardado en catálogo");
-        } catch (e) {
-          alert("No se pudo guardar: " + e.message);
-        }
+  function init() {
+    bindForm(document);
+    // Observer for dynamically added rows/modals
+    try {
+      var obs = new MutationObserver(function (muts) {
+        muts.forEach(function (m) {
+          m.addedNodes && m.addedNodes.forEach(function (n) {
+            if (n.nodeType === 1) bindForm(n);
+          });
+        });
       });
-    }
-    var btnMod = form.querySelector(".btn-save-mod-cat");
-    if (btnMod && mod) {
-      btnMod.addEventListener("click", async function () {
-        var m = String(mod.value || "").trim();
-        if (!m) { alert("Escribe un modelo"); return; }
-        var matV = mat ? String(mat.value || "").trim() : "";
-        var t = tar ? parseFloat(tar.value) : null;
-        try {
-          await saveModeloToCatalog(m, matV, t);
-          var map = models();
-          map[m] = { material: matV, tarifa: t };
-          var el = document.getElementById("catalog-modelos");
-          if (el) el.textContent = JSON.stringify(map);
-          var dl = document.getElementById("dl-modelos");
-          if (dl && ![].some.call(dl.options, function (o) { return o.value === m; })) {
-            var opt = document.createElement("option");
-            opt.value = m;
-            dl.appendChild(opt);
-          }
-          onModeloInput(mod);
-          if (global.FajosLive && FajosLive.showToast) FajosLive.showToast("Modelo guardado en catálogo");
-          else alert("Modelo guardado en catálogo");
-        } catch (e) {
-          alert("No se pudo guardar: " + e.message);
-        }
-      });
-    }
+      obs.observe(document.body, { childList: true, subtree: true });
+    } catch (e) {}
   }
-
-  function boot() {
-    document.querySelectorAll("form").forEach(wireForm);
-    // re-wire when modals open
-    document.querySelectorAll(".modal, [id^='modal-']").forEach(function (m) {
-      m.addEventListener("click", function () {
-        var f = m.querySelector("form");
-        if (f) wireForm(f);
-      }, true);
-    });
-  }
-
-  global.CatalogAssist = {
-    onMaterialInput: onMaterialInput,
-    markTarifaEdited: markTarifaEdited,
-    onModeloInput: onModeloInput,
-    wireForm: wireForm,
-    tariffs: tariffs,
-    models: models,
-  };
-  // Compat con handlers inline del HTML
-  global.onMaterialInput = onMaterialInput;
-  global.onModeloInput = onModeloInput;
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
+    document.addEventListener("DOMContentLoaded", init);
   } else {
-    boot();
+    init();
   }
+
+  global.FajosCatalogAssist = {
+    bind: bindForm,
+    suggest: suggestFromServer,
+    onMaterial: onMaterialInput,
+  };
 })(window);

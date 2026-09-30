@@ -19,29 +19,28 @@ class DiaService:
         self.db = db or get_db()
 
     def ensure_cierre_table(self) -> None:
+        """
+        Verifica que exista cierre_dia (creada por migración 006_cierre_dia.sql).
+        Ya no hace CREATE TABLE en runtime: el esquema vive en db/schema/.
+        """
         try:
             with self.db.cursor() as cur:
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS cierre_dia (
-                      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                      fecha DATE NOT NULL,
-                      semana_id INT UNSIGNED DEFAULT NULL,
-                      campo_dia VARCHAR(16) NOT NULL,
-                      trabajos_total INT NOT NULL DEFAULT 0,
-                      trabajos_sin_gramos INT NOT NULL DEFAULT 0,
-                      total_gramos DECIMAL(12,2) DEFAULT 0,
-                      total_efectivo DECIMAL(12,2) DEFAULT 0,
-                      resumen_json MEDIUMTEXT,
-                      cerrado_por VARCHAR(80) DEFAULT NULL,
-                      creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                      PRIMARY KEY (id),
-                      UNIQUE KEY uk_fecha (fecha)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                    """
-                )
+                cur.execute("SELECT 1 FROM cierre_dia LIMIT 1")
+                try:
+                    cur.fetchall()
+                except Exception:
+                    pass
         except Exception as e:
-            logger.warning("ensure cierre_dia: %s", e)
+            msg = str(e).lower()
+            if "doesn't exist" in msg or "1146" in msg or "no such table" in msg:
+                logger.warning(
+                    "Tabla cierre_dia ausente. Aplica migraciones (db/schema/006_cierre_dia.sql) "
+                    "reiniciando el servidor o desde Dev. Detalle: %s",
+                    e,
+                )
+            else:
+                logger.debug("ensure_cierre_table: %s", e)
+
 
     def estado_hoy(self, ref: date | None = None) -> dict[str, Any]:
         ref = ref or today()

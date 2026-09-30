@@ -39,6 +39,11 @@ static_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(router)
 
+# Plantillas Jinja + filtros (tojson Decimal/date) — un solo registro
+from app.web.templating import templates as _templates  # noqa: F401
+from app.web.jinja_ext import register_filters as _reg_jinja
+_reg_jinja(_templates)
+
 
 @app.on_event("startup")
 async def _startup_migrations() -> None:

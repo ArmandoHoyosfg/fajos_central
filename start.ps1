@@ -5,6 +5,9 @@
 #>
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() } catch {}
 
 $venvPy = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPy)) {

@@ -131,7 +131,9 @@ async function repararConsistencia() {
     {% for a in insights.avisos %}
     <li class="insight-compact insight-{{ a.nivel }}" style="display:flex;flex-wrap:wrap;gap:0.35rem 0.6rem;align-items:center;padding:0.28rem 0;border-bottom:1px solid var(--border);font-size:0.88rem;">
       <span style="flex:1 1 12rem;min-width:8rem;">
+        {% if a.fuente == 'aprendizaje' %}<span class="cat-badge" style="font-size:0.7rem;margin-right:0.25rem;background:rgba(201,162,39,0.25)">Aprendizaje</span>{% endif %}
         <strong>{{ a.titulo }}</strong>
+        {% if a.count %}<span class="muted">({{ a.count }})</span>{% endif %}
         {% if a.detalle %}<span class="muted"> — {{ a.detalle }}</span>{% endif %}
       </span>
       {% if a.href %}
@@ -141,6 +143,19 @@ async function repararConsistencia() {
     {% endfor %}
   </ul>
 </details>
+
+{% set apr_avisos = (insights.avisos or [])|selectattr('fuente', 'equalto', 'aprendizaje')|list if insights and insights.avisos else [] %}
+{% if apr_avisos %}
+<div class="card aprendizaje-resumen" style="margin:0.5rem 0;padding:0.65rem 0.9rem;border-left:3px solid var(--accent,#c9a227);">
+  <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;align-items:center;">
+    <strong style="font-size:0.9rem;">Aprendizaje del sistema</strong>
+    {% for a in apr_avisos %}
+    <a class="btn btn-secondary btn-xs" href="{{ a.href or '#' }}">{{ a.titulo }}</a>
+    {% endfor %}
+    <span class="muted" style="font-size:0.8rem;">Resúmenes (no cada folio). Detalle en «Qué revisar hoy».</span>
+  </div>
+</div>
+{% endif %}
 
 <div class="card" style="margin:0.75rem 0;padding:0.75rem 1rem;">
   <form class="inline" style="flex-wrap:wrap;align-items:center;gap:0.5rem;" onsubmit="return saveUmbral(event)">
@@ -251,37 +266,237 @@ async function saveUmbral(e) {
       </div>
     </div>
   </div>
+  {% if tendencias.serie or (tendencias.serie_diaria is defined and tendencias.serie_diaria) %}
+  <div class="chart-toolbar">
+    <label class="muted">Tipo de gráfica
+      <select id="chart-type-global" class="chart-type-select" title="Aplica a ambas gráficas">
+        <option value="smooth">Línea suave</option>
+        <option value="area">Área rellena</option>
+        <option value="bar">Barras</option>
+        <option value="line">Línea recta</option>
+      </select>
+    </label>
+    <span class="muted faint" style="font-size:0.78rem">Se guarda tu preferencia en este navegador</span>
+  </div>
+  {% endif %}
   {% if tendencias.serie %}
-  <div class="spark-wrap">
-    <svg class="sparkline" id="spark-total" viewBox="0 0 320 48" preserveAspectRatio="none" aria-label="Total por semana"></svg>
-    <div class="spark-labels muted">
+  <div class="chart-block" data-chart="semanas">
+    <div class="chart-head">
+      <strong>Total por semana</strong>
+      <span class="muted">Plata · Pita · Taller · Total</span>
+    </div>
+    <div class="chart-canvas-wrap">
+      <svg class="chart-main" id="chart-semanas" viewBox="0 0 720 220" preserveAspectRatio="xMidYMid meet" aria-label="Totales por semana"></svg>
+    </div>
+    <div class="chart-legend">
+      <span class="lg lg-plt">Plata</span>
+      <span class="lg lg-pit">Pita</span>
+      <span class="lg lg-tll">Taller</span>
+      <span class="lg lg-tot">Total</span>
+    </div>
+    <div class="spark-labels muted chart-labels">
       {% for p in tendencias.serie %}<span title="{{ p.codigo }}: ${{ '%.0f'|format(p.total) }}">{{ p.codigo }}</span>{% endfor %}
     </div>
   </div>
+  {% endif %}
+  {% if tendencias.serie_diaria %}
+  <div class="chart-block" data-chart="dias">
+    <div class="chart-head">
+      <strong>Histórico diario (Plata)</strong>
+      <span class="muted">Últimos días · gramos y estimado $</span>
+    </div>
+    <div class="chart-canvas-wrap chart-canvas-wrap--tall">
+      <svg class="chart-main" id="chart-dias" viewBox="0 0 720 200" preserveAspectRatio="xMidYMid meet" aria-label="Producción diaria"></svg>
+    </div>
+    <div class="chart-legend">
+      <span class="lg lg-gr">Gramos</span>
+      <span class="lg lg-ef">Efectivo est.</span>
+    </div>
+    <div class="spark-labels muted chart-labels chart-labels--dense">
+      {% for p in tendencias.serie_diaria %}<span title="{{ p.fecha }}: {{ p.gramos }} g · ${{ '%.0f'|format(p.efectivo) }}">{{ p.fecha[8:10] }}/{{ p.fecha[5:7] }}</span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
   <script>
   (function(){
-    const serie = {{ tendencias.serie|tojson }};
-    const svg = document.getElementById('spark-total');
-    if (!svg || !serie.length) return;
-    const vals = serie.map(p => Number(p.total) || 0);
-    const max = Math.max.apply(null, vals.concat([1]));
-    const min = Math.min.apply(null, vals);
-    const w = 320, h = 48, pad = 4;
-    const pts = vals.map((v, i) => {
-      const x = pad + (i * (w - 2*pad) / Math.max(vals.length - 1, 1));
-      const y = h - pad - ((v - min) / (max - min || 1)) * (h - 2*pad);
-      return x.toFixed(1) + ',' + y.toFixed(1);
-    });
-    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    poly.setAttribute('points', pts.join(' '));
-    poly.setAttribute('fill', 'none');
-    poly.setAttribute('stroke', 'var(--accent, #c9a227)');
-    poly.setAttribute('stroke-width', '2.5');
-    poly.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(poly);
+    var SERIE = {{ (tendencias.serie if tendencias and tendencias.serie else [])|tojson }};
+    var DIARIA = {{ (tendencias.serie_diaria if tendencias and tendencias.serie_diaria else [])|tojson }};
+    var COLORS_SEM = ['#89b4fa', '#a6e3a1', '#f9e2af', '#c9a227'];
+    var KEYS_SEM = ['plt', 'pit', 'tll', 'total'];
+    var COLORS_DIA = ['#cba6f7', '#c9a227'];
+    var KEYS_DIA = ['gramos', 'efectivo'];
+
+    function catmullRom2bezier(pts) {
+      if (pts.length < 2) return '';
+      if (pts.length === 2) {
+        return 'M ' + pts[0].x + ' ' + pts[0].y + ' L ' + pts[1].x + ' ' + pts[1].y;
+      }
+      var d = 'M ' + pts[0].x.toFixed(2) + ' ' + pts[0].y.toFixed(2);
+      for (var i = 0; i < pts.length - 1; i++) {
+        var p0 = pts[i === 0 ? i : i - 1];
+        var p1 = pts[i];
+        var p2 = pts[i + 1];
+        var p3 = pts[i + 2 < pts.length ? i + 2 : i + 1];
+        var cp1x = p1.x + (p2.x - p0.x) / 6;
+        var cp1y = p1.y + (p2.y - p0.y) / 6;
+        var cp2x = p2.x - (p3.x - p1.x) / 6;
+        var cp2y = p2.y - (p3.y - p1.y) / 6;
+        d += ' C ' + cp1x.toFixed(2) + ' ' + cp1y.toFixed(2) + ', '
+          + cp2x.toFixed(2) + ' ' + cp2y.toFixed(2) + ', '
+          + p2.x.toFixed(2) + ' ' + p2.y.toFixed(2);
+      }
+      return d;
+    }
+
+    function maxOf(series, keys) {
+      var max = 1;
+      keys.forEach(function(k) {
+        series.forEach(function(p) {
+          var v = Number(p[k] || 0);
+          if (v > max) max = v;
+        });
+      });
+      return max;
+    }
+
+    function drawChart(svgId, series, colors, keys, type) {
+      var svg = document.getElementById(svgId);
+      if (!svg || !series || !series.length) return;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      var vb = (svg.getAttribute('viewBox') || '0 0 720 220').split(/\s+/).map(Number);
+      var W = vb[2] || 720, H = vb[3] || 220;
+      var pad = { t: 18, r: 16, b: 16, l: 16 };
+      var max = maxOf(series, keys);
+      var n = series.length;
+      var innerW = W - pad.l - pad.r;
+      var innerH = H - pad.t - pad.b;
+
+      // defs gradient
+      var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      colors.forEach(function(col, ki) {
+        var g = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+        g.setAttribute('id', svgId + '-g' + ki);
+        g.setAttribute('x1', '0'); g.setAttribute('y1', '0');
+        g.setAttribute('x2', '0'); g.setAttribute('y2', '1');
+        var s1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+        s1.setAttribute('offset', '0%'); s1.setAttribute('stop-color', col); s1.setAttribute('stop-opacity', '0.45');
+        var s2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+        s2.setAttribute('offset', '100%'); s2.setAttribute('stop-color', col); s2.setAttribute('stop-opacity', '0.02');
+        g.appendChild(s1); g.appendChild(s2); defs.appendChild(g);
+      });
+      svg.appendChild(defs);
+
+      // grid
+      for (var i = 0; i <= 4; i++) {
+        var y = pad.t + innerH * (i / 4);
+        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', pad.l); line.setAttribute('x2', W - pad.r);
+        line.setAttribute('y1', y); line.setAttribute('y2', y);
+        line.setAttribute('stroke', 'rgba(255,255,255,0.07)');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+      }
+
+      function ptsFor(k) {
+        return series.map(function(p, i) {
+          var x = pad.l + (n === 1 ? innerW / 2 : (i * innerW / (n - 1)));
+          var v = Number(p[k] || 0);
+          var y = pad.t + innerH - (v / max) * innerH;
+          return { x: x, y: y, v: v };
+        });
+      }
+
+      if (type === 'bar') {
+        var groupN = keys.length;
+        var slot = innerW / n;
+        var barW = Math.max(3, (slot * 0.72) / groupN);
+        series.forEach(function(p, i) {
+          keys.forEach(function(k, ki) {
+            var v = Number(p[k] || 0);
+            var bh = (v / max) * innerH;
+            var x = pad.l + i * slot + slot * 0.14 + ki * barW;
+            var y = pad.t + innerH - bh;
+            var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('x', x.toFixed(2));
+            rect.setAttribute('y', y.toFixed(2));
+            rect.setAttribute('width', Math.max(2, barW - 1).toFixed(2));
+            rect.setAttribute('height', Math.max(0, bh).toFixed(2));
+            rect.setAttribute('rx', '2');
+            rect.setAttribute('fill', colors[ki]);
+            rect.setAttribute('opacity', k === 'total' || k === 'gramos' ? '0.95' : '0.75');
+            rect.setAttribute('class', 'chart-bar');
+            svg.appendChild(rect);
+          });
+        });
+        return;
+      }
+
+      keys.forEach(function(k, ki) {
+        var pts = ptsFor(k);
+        var isPrimary = (k === 'total' || k === 'gramos');
+        var pathD;
+        if (type === 'smooth' || type === 'area') {
+          pathD = catmullRom2bezier(pts);
+        } else {
+          pathD = 'M ' + pts.map(function(pt){ return pt.x.toFixed(2) + ' ' + pt.y.toFixed(2); }).join(' L ');
+        }
+
+        if (type === 'area' || (type === 'smooth' && isPrimary)) {
+          var areaD = pathD + ' L ' + pts[pts.length - 1].x.toFixed(2) + ' ' + (pad.t + innerH).toFixed(2)
+            + ' L ' + pts[0].x.toFixed(2) + ' ' + (pad.t + innerH).toFixed(2) + ' Z';
+          var area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          area.setAttribute('d', areaD);
+          area.setAttribute('fill', 'url(#' + svgId + '-g' + ki + ')');
+          area.setAttribute('class', 'chart-area');
+          svg.appendChild(area);
+        }
+
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathD);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', colors[ki]);
+        path.setAttribute('stroke-width', isPrimary ? '2.8' : '2');
+        path.setAttribute('stroke-linejoin', 'round');
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('class', 'chart-line');
+        svg.appendChild(path);
+
+        pts.forEach(function(pt) {
+          var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y);
+          c.setAttribute('r', isPrimary ? 3.5 : 2.8);
+          c.setAttribute('fill', colors[ki]);
+          c.setAttribute('stroke', 'var(--bg-elev, #1e1e1e)');
+          c.setAttribute('stroke-width', '1.5');
+          c.setAttribute('class', 'chart-dot');
+          svg.appendChild(c);
+        });
+      });
+    }
+
+    function redraw(type) {
+      type = type || 'smooth';
+      drawChart('chart-semanas', SERIE, COLORS_SEM, KEYS_SEM, type);
+      drawChart('chart-dias', DIARIA, COLORS_DIA, KEYS_DIA, type);
+    }
+
+    var sel = document.getElementById('chart-type-global');
+    var saved = 'smooth';
+    try { saved = localStorage.getItem('fajos_chart_type') || 'smooth'; } catch (e) {}
+    if (sel) {
+      if (['smooth', 'area', 'bar', 'line'].indexOf(saved) >= 0) sel.value = saved;
+      sel.addEventListener('change', function() {
+        try { localStorage.setItem('fajos_chart_type', sel.value); } catch (e) {}
+        redraw(sel.value);
+      });
+      redraw(sel.value);
+    } else {
+      redraw(saved);
+    }
   })();
   </script>
-  {% endif %}
+
   {% if tendencias.top_materiales %}
   <h3 class="muted" style="font-size:0.9rem;margin:1rem 0 0.4rem">Materiales (semana actual)</h3>
   <div class="mat-bars">

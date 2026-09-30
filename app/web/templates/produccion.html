@@ -90,7 +90,9 @@
   </div>
   <button type="button" class="btn" id="btn-formal-xlsx" onclick="checklistExport({{ semana_id }})">Formal Excel Plata</button>
   <button type="button" class="btn btn-secondary" onclick="duplicarSemana({{ semana_id }}, 'plt')" title="Duplicar semana (elige áreas)">Duplicar → sig. semana</button>
-  <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}/captura-manual" title="Nómina en blanco para anotar gramos a mano">Captura manual</a>
+  <button type="button" class="btn btn-secondary" id="btn-captura-manual"
+          data-semana-id="{{ semana_id }}"
+          title="Nómina en blanco para anotar gramos a mano (sin folios terminados)">Captura manual</button>
   <a class="btn btn-secondary" href="/suministro{% if semana_id %}?semana_id={{ semana_id }}{% endif %}" title="Hoja del día: folio/nombre listos, solo anotar gramos">Suministro día</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=csv">CSV</a>
   <a class="btn btn-secondary" href="/api/export/produccion/{{ semana_id }}?fmt=pdf">PDF</a>
@@ -132,6 +134,14 @@
 
 {% set n_fi = folio_inactivos|length if folio_inactivos else 0 %}
 {% set n_re = reasignaciones|length if reasignaciones else 0 %}
+{% set n_term = terminados_semana|length if terminados_semana else 0 %}
+{% if n_term %}
+<div class="folio-hints-compact" style="border-left:3px solid #f9e2af;padding:0.45rem 0.7rem;margin-bottom:0.4rem">
+  <strong>{{ n_term }} folio(s) terminado(s)/cerrado(s)</strong>
+  <span class="muted"> — no salen en la tabla ni en <em>Captura manual</em>.
+  Si aún los ves en «sin avance», termínalos desde el menú de fila o con «Terminar lote».</span>
+</div>
+{% endif %}
 {% if n_fi or n_re %}
 <details class="folio-hints-compact">
   <summary>
@@ -144,6 +154,7 @@
   <div class="folio-hint-block">
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
       <strong>Sin avance</strong>
+      <span class="muted" style="font-size:0.8rem">Captura manual nunca incluye folios ya terminados/cerrados; usa «Terminar lote» o el menú de fila para quitarlos de esta lista.</span>
       {% if not semana_cerrada and n_lote_inactivos and n_lote_inactivos > 0 %}
       <button type="button" class="btn btn-secondary btn-xs" id="btn-terminar-lote"
               onclick="terminarLoteInactivos({{ semana_id or 'null' }}, 2, {{ n_lote_inactivos }})"
@@ -213,11 +224,18 @@
 {% endif %}
 
 
-<div class="filter-row" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin:0.75rem 0;">
-  <input type="search" id="flt-texto" placeholder="Filtrar: nombre, ubic, folio, modelo o material…rial…" style="min-width:200px;">
-  <label><input type="checkbox" id="flt-sin-firma"> Solo sin firmar</label>
-  <label><input type="checkbox" id="flt-sin-hoy"> Solo sin gramos hoy</label>
-  <button type="button" class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.8rem" data-sort-reset="table.sortable" title="Quitar orden de columnas">Reset orden</button>
+<div class="filter-row filter-row--compact">
+  <input type="search" id="flt-texto" placeholder="Filtrar: nombre, ubic, folio, modelo…" style="min-width:180px;flex:1;max-width:280px;">
+  <label class="flt-chip" title="Sin casilla de firma y con gramos en la semana">
+    <input type="checkbox" id="flt-sin-firma-avance"> Sin firmar · con avance
+  </label>
+  <label class="flt-chip" title="Sin casilla de firma y sin gramos en ningún día">
+    <input type="checkbox" id="flt-sin-firma-sin-avance"> Sin firmar · sin avance
+  </label>
+  <label class="flt-chip" title="Solo filas sin gramos en el día de hoy">
+    <input type="checkbox" id="flt-sin-hoy"> Sin gramos hoy
+  </label>
+  <button type="button" class="btn btn-secondary btn-sm" data-sort-reset="table.sortable" title="Quitar orden de columnas">Reset orden</button>
 </div>
 <div class="table-wrap table-plt no-sticky-col">
 <table class="sortable" data-sortable="1">
@@ -543,6 +561,61 @@
 {% endblock %}
 
 {% block scripts %}
+
+<script>
+(function(){
+  var btn = document.getElementById('btn-captura-manual');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var sid = btn.getAttribute('data-semana-id');
+    if (!sid) { alert('No hay semana seleccionada'); return; }
+    btn.disabled = true;
+    var prev = btn.textContent;
+    btn.textContent = 'Generando…';
+    fetch('/api/export/produccion/' + sid + '/captura-manual', { credentials: 'same-origin' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var excl = parseInt(res.headers.get('X-Fajos-Excluidas-Terminados') || '0', 10) || 0;
+        var incl = parseInt(res.headers.get('X-Fajos-Incluidas') || '0', 10) || 0;
+        var msg = res.headers.get('X-Fajos-Msg') || '';
+        var cd = res.headers.get('Content-Disposition') || '';
+        var fname = 'captura_manual.xlsx';
+        var m = /filename="([^"]+)"/.exec(cd);
+        if (m) fname = m[1];
+        return res.blob().then(function (blob) {
+          return { blob: blob, excl: excl, incl: incl, msg: msg, fname: fname };
+        });
+      })
+      .then(function (o) {
+        var note = 'Captura manual lista.\n\nFilas incluidas: ' + o.incl;
+        if (o.excl > 0) {
+          note += '\nFolios terminados/cerrados excluidos: ' + o.excl;
+          note += '\n\nNo aparecen en el Excel. Si siguen listados en «sin avance»,';
+          note += ' márcalos terminados (menú de fila o Terminar lote) para limpiar esa sección.';
+        } else {
+          note += '\nNingún folio terminado en esta exportación.';
+        }
+        alert(note);
+        var url = URL.createObjectURL(o.blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = o.fname;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+      })
+      .catch(function (e) {
+        alert('No se pudo generar la captura manual: ' + (e && e.message ? e.message : e));
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = prev;
+      });
+  });
+})();
+</script>
+
 <script>
 
 /* Catálogos: lógica en /static/catalog_assist.js (CatalogAssist) */
@@ -1095,9 +1168,31 @@ async function saveGramCell(inp) {
   }
 }
 
+function rowEstaFirmado(tr) {
+  const box = tr.querySelector('input.chk-firmado')
+    || tr.querySelector('td.col-fir input[type=checkbox]')
+    || tr.querySelector('td:last-child input[type=checkbox]');
+  return !!(box && box.checked);
+}
+function rowTieneAvance(tr) {
+  // Gramos en cualquier día o total > 0
+  let sum = 0;
+  tr.querySelectorAll('input.cell-gm').forEach(function(inp) {
+    const v = parseFloat(String(inp.value || '0').replace(',', '.'));
+    if (!isNaN(v) && v > 0) sum += v;
+  });
+  if (sum > 0) return true;
+  const tot = tr.querySelector('.cell-total, [data-field="total_gramos"]');
+  if (tot) {
+    const t = parseFloat(String(tot.textContent || tot.value || '0').replace(',', '.').replace(/[^0-9.-]/g, ''));
+    if (!isNaN(t) && t > 0) return true;
+  }
+  return false;
+}
 function applyTableFilters() {
   const q = ((document.getElementById('flt-texto') || {}).value || '').trim().toLowerCase();
-  const sinFirma = !!(document.getElementById('flt-sin-firma') || {}).checked;
+  const sinFirmaAvance = !!(document.getElementById('flt-sin-firma-avance') || {}).checked;
+  const sinFirmaSinAvance = !!(document.getElementById('flt-sin-firma-sin-avance') || {}).checked;
   const sinHoy = !!(document.getElementById('flt-sin-hoy') || {}).checked;
   const colHoy = (typeof COL_HOY !== 'undefined' && COL_HOY) ? COL_HOY : '';
   document.querySelectorAll('tr[data-prod-id]').forEach(tr => {
@@ -1106,12 +1201,13 @@ function applyTableFilters() {
       const blob = (tr.textContent || '').toLowerCase();
       if (!blob.includes(q)) show = false;
     }
-    if (sinFirma) {
-      // Solo la casilla de firma (no la de selección de fila)
-      const box = tr.querySelector('input.chk-firmado')
-        || tr.querySelector('td.col-fir input[type=checkbox]')
-        || tr.querySelector('td:last-child input[type=checkbox]');
-      if (box && box.checked) show = false;
+    const firmado = rowEstaFirmado(tr);
+    const conAvance = rowTieneAvance(tr);
+    if (sinFirmaAvance) {
+      if (firmado || !conAvance) show = false;
+    }
+    if (sinFirmaSinAvance) {
+      if (firmado || conAvance) show = false;
     }
     if (sinHoy && colHoy) {
       const inp = tr.querySelector('input.cell-gm[data-dia="' + colHoy + '"]');
@@ -1163,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   applyDayLocks();
-  ['flt-texto', 'flt-sin-firma', 'flt-sin-hoy'].forEach(id => {
+  ['flt-texto', 'flt-sin-firma-avance', 'flt-sin-firma-sin-avance', 'flt-sin-hoy'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', applyTableFilters);
   });
@@ -1223,11 +1319,37 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function run() {
     const txt = document.getElementById('flt-texto');
-    const sinFirma = document.getElementById('flt-sin-firma');
+    const sinFirma = document.getElementById('flt-sin-firma-avance');
     const sinHoy = document.getElementById('flt-sin-hoy');
     if (q && txt) { txt.value = q; }
-    if (filtro === 'sin_firma' && sinFirma) sinFirma.checked = true;
+    if (filtro === 'sin_firma' || filtro === 'sin_firma_avance') {
+      var a = document.getElementById('flt-sin-firma-avance');
+      if (a) a.checked = true;
+    }
+    if (filtro === 'sin_firma_sin_avance') {
+      var b = document.getElementById('flt-sin-firma-sin-avance');
+      if (b) b.checked = true;
+    }
     if (filtro === 'sin_hoy' && sinHoy) sinHoy.checked = true;
+    if (filtro === 'sin_avance') {
+      // Abrir panel de sin avance si existe
+      var panel = document.getElementById('panel-sin-avance') || document.querySelector('.folio-hints-compact details, details.folio-hints-compact');
+      var sa = document.querySelector('[data-panel-sin-avance], #sin-avance-list, details.folio-hints-compact');
+      document.querySelectorAll('details.folio-hints-compact').forEach(function(d){
+        if ((d.textContent || '').toLowerCase().indexOf('sin avance') >= 0) {
+          d.open = true;
+          try { d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
+        }
+      });
+    }
+    if (filtro === 'reasignados') {
+      document.querySelectorAll('details.folio-hints-compact').forEach(function(d){
+        if ((d.textContent || '').toLowerCase().indexOf('reasign') >= 0 || (d.textContent || '').toLowerCase().indexOf('cambiaron') >= 0) {
+          d.open = true;
+          try { d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
+        }
+      });
+    }
 
     // Edición temporal de un día concreto (Completar ayer, etc.)
     if (dia && /^gm_(sab|dom|lun|mar|mie|jue|vie)$/.test(dia)) {

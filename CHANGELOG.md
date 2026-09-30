@@ -1,20 +1,141 @@
-# Changelog
+## [3.38.4] — 2026-09-28
 
-Todos los cambios relevantes de este proyecto se documentan en este archivo.
+### Limpieza y revisión de bugs tipo NameError
+- Eliminados monoliticos `.bak` (`routes_monolith`, `repository_monolith`, `export_service_monolith`).
+- Revisión estática de imports de `*Repo` / `*Service` en `app/` (sin más NameError del estilo TrabajosRepo).
+- `ProduccionRepo.insertar` mantiene import local de `TrabajosRepo` (fix 3.38.3).
 
-El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
-y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
+## [3.38.3] — 2026-09-28
 
-> **Fuente de verdad de la versión:** `app/__init__.py` (`__version__`).
-> Este archivo debe coincidir con ella. Si hay discrepancia, `app/__init__.py` gana.
+### Fix: agregar fila en Plata
+- `NameError: TrabajosRepo is not defined` en `ProduccionRepo.insertar`.
+- Import local al asegurar trabajo (folio/modelo/material).
 
-## [3.25.6] — 2026-09-24
+## [3.38.2] — 2026-09-26
 
-### Refactor estructural (sesión de bloques)
-- **Bloque 0:** `scripts/task_timer.py` — cronómetro de tarea con registro JSONL (`logs/task_timer_*.jsonl`)
-- **Bloque 1:** `docs/PROJECT_STATE.md` refrescado (versión 3.25.6, fecha, tabla de bloques, calibración de máquina, lección de tiempos reales)
-- **Bloque 2:** Unificación de versión — `README.md` actualizado a 3.25.6; `CHANGELOG.md` reordenado (título primero, entry 3.25.6 añadida); `VERSION` ya coincidía
-- **Calibración:** se documentó que el tiempo real de un bloque es 10–20× mayor que la suma de procesos Python (overhead de IA + round-trips + debug de encoding Windows)
+### Nav, filtros Plata y botones compactos
+- Enlace **API** solo en DEV.
+- Filtros: Sin firmar · con avance / Sin firmar · sin avance / Sin gramos hoy.
+- Botones y nav más compactos.
+
+## [3.38.1] — 2026-09-26
+
+### Gráficas fluidas + 4 tipos
+- Selector: **Línea suave**, **Área rellena**, **Barras**, **Línea recta**.
+- Curvas Catmull-Rom, degradados y puntos más legibles.
+- Preferencia guardada en el navegador.
+
+## [3.38.0] — 2026-09-26
+
+### Fase 5 + gráficas
+- Tests unitarios de reglas de duplicados / contrato de alertas (`tests/test_aprendizaje_rules.py`).
+- README/versión alineados (app 3.38, Python 3.12–3.14).
+- Dashboard: gráficas amplias multi-serie (Plata/Pita/Taller/Total) + **histórico diario** de Plata (gramos y $).
+
+## [3.37.0] — 2026-09-26
+
+### Taller: $/pita por defecto desde catálogo (editable)
+- Default: material **PITA** en catálogo → historial → 3.20.
+- Formularios y celdas usan ese default; el usuario puede cambiarlo siempre.
+- Cálculo de sueldo torcedor usa el mismo default en servidor.
+
+## [3.36.0] — 2026-09-26
+
+### Fase 4 — Aprendizaje en Dashboard / Plata
+- `alertas_operativas()`: resúmenes (sin avance, reasignaciones, fichas dobles).
+- Integrado en «Qué revisar hoy» del Dashboard con badge Aprendizaje y botones de acción.
+- Enlaces a Plata (`filtro=sin_avance` / `reasignados`) y Trabajadores (unir fichas).
+- Menos ruido: ya no se lista cada folio inactivo como aviso aparte.
+
+## [3.35.0] — 2026-09-26
+
+### Catálogos: UI clara y más utilidad
+- Pestañas: Materiales, Modelos, Pita/torcedores, Ayuda.
+- Formularios en grid legible; filtros por texto y tipo.
+- Materiales muestran $/g de catálogo vs último precio usado (historial).
+- Modelos: datalist de materiales; tarifa vacía = precio variable.
+- Pestaña PITA para precio por defecto de torcedores.
+
+## [3.34.0] — 2026-09-26
+
+### Taller: precio/pita editable + predictor de tarifas
+- Columna **$/pita** en Taller para torcedores (editable; sueldo = pitas × precio).
+- Al guardar precio/pita se registra en historial (material PITA / modelo torcedor).
+- `GET /api/catalogos/sugerir-tarifa`: catálogo → historial modelo → historial material.
+- `catalog_assist.js`: predice $/g al cambiar material/modelo; el campo sigue editable.
+
+## [3.33.0] — 2026-09-26
+
+### Fase 3 A+B — BD segura en DEV
+- **Nivel A:** `POST /api/dev/db/query` — solo SELECT, tablas allowlist, LIMIT≤200, un statement.
+- Presets listos (trabajadores, líneas, terminados, merges, migraciones…).
+- **Nivel B:** `POST /api/dev/db/repair/{id}` — migrar, sync, huérfanos, crear semana, purgar, pipeline.
+- UI en DEV → pestaña **Acciones** → «Base de datos segura».
+
+## [3.32.0] — 2026-09-26
+
+### Fase 2 — Panel DEV por pestañas
+- Pestañas: **Salud**, **Datos**, **Acciones**, **Técnico**.
+- **Datos**: folios sin avance, reasignaciones, folios repetidos, fichas dobles, historial de uniones, huérfanos y desajustes — con textos orientados a la acción.
+- Badge en Datos con conteo de pendientes. Tab recordada en localStorage / `?tab=datos`.
+
+## [3.31.0] — 2026-09-26
+
+### Unir fichas: nombre completo, mezcla, historial y rollback
+- Al unir se elige automáticamente la ficha con **nombre más completo** y se mezclan datos.
+- Snapshot + ids movidos permiten **deshacer** en DEV → Historial de uniones.
+- API: `GET /api/dev/fusiones`, `POST /api/dev/fusiones/{id}/deshacer`.
+
+## [3.30.0] — 2026-09-26
+
+### Fase 1 — Duplicados de trabajadores
+- Solo se sugieren fichas dobles con **misma ubicación** y nombre igual o similar estricto.
+- Distinta ubic = personas distintas (no aparecen como duplicados).
+- Sin ubicación no se sugiere. Similitud menos agresiva (no solo por nombre de pila corto).
+- Textos UI: «fichas dobles (misma ubic)».
+
+## [3.29.1] — 2026-09-26
+
+### Captura manual / sin avance
+- Exclusión reforzada de folios terminados/cerrados en listados y captura.
+- Export captura: cabeceras X-Fajos-* + aviso al descargar con conteo de excluidos.
+- Banner y nota en «sin avance» para limpiar terminados de esa lista.
+
+## [3.29.0] — 2026-09-25
+
+### E0+E1 — export parcial
+- `app/services/export/helpers.py`: linea_activa, filtrar_lineas, estilos, oficio.
+- `export/captura.py` + `export/suministro.py`: mixins de captura manual y suministro.
+- `export_service.py` fachada (~1280 líneas, antes ~1885); API pública intacta.
+- Respaldo: `export_service_monolith.py.bak`.
+
+## [3.28.0] — 2026-09-25
+
+### D — repository modular + offline + IA local
+- `app/db/repos/*`: un archivo por repositorio; `repository.py` reexporta.
+- Íconos Lucide **offline**: `static/vendor/lucide.min.js` (sin unpkg).
+- `AGENTS.md`, `docs/MAPA_CODIGO.md`, `docs/IA_LOCAL.md` para modelos locales.
+
+## [3.27.0] — 2026-09-25
+
+### Deuda técnica C — routes modulares
+- `app/api/routes.py` deja de ser monolito: reexporta el router agregado.
+- Routers por dominio en `app/api/routers/`:
+  pages, trabajadores, produccion, semanas, nominas, export, dev, insights, catalogos.
+- Helpers compartidos en `app/api/helpers.py`.
+- Copia de seguridad del monolito: `app/api/routes_monolith.py.bak`.
+
+## [3.26.0] — 2026-09-25
+
+### Deuda técnica A+B
+- **Jinja `tojson`**: registro único en `app/web/jinja_ext.py` + `templating.py` (ya no monkey-patch en routes.py).
+- **UTF-8 en Windows**: `PYTHONUTF8=1` / `chcp 65001` en start.bat, start_dev.bat, start.ps1 y setup_windows.ps1.
+- **cierre_dia**: migración `db/schema/006_cierre_dia.sql`; `DiaService.ensure_cierre_table` solo verifica (sin CREATE en runtime).
+
+## [3.25.7] — 2026-09-25
+
+### Duplicar semana
+- No copia a la semana siguiente folios terminados/cerrados (notas [terminado]/[cerrado] o trabajo inactivo).
 
 ## [3.25.5] — 2026-09-12
 
@@ -23,6 +144,13 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - Sin fórmulas ni fila de totales / pie pesado
 - Fuente 9, columnas y márgenes estrechos, fit a 1 hoja
 - Leyenda de pago (sábado) en encabezado compacto
+
+# Changelog
+
+Todos los cambios relevantes de este proyecto se documentan en este archivo.
+
+El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/),
+y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [3.23.6] — 2026-09-09
 

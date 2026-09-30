@@ -258,7 +258,16 @@ class InsightsService:
         except Exception as e:
             logger.warning("pronostico en avisos: %s", e)
 
-        if not avisos:
+        # Aprendizaje (resúmenes, sin listar cada folio)
+        try:
+            from app.services.aprendizaje_service import AprendizajeService
+            for a in AprendizajeService(self.db).alertas_operativas(sid):
+                avisos.append(a)
+        except Exception as e:
+            logger.warning("alertas aprendizaje: %s", e)
+
+        reales = [a for a in avisos if a.get("codigo") not in ("todo_bien", "pronostico")]
+        if not reales:
             avisos.append({
                 "nivel": "ok",
                 "codigo": "todo_bien",
@@ -267,30 +276,6 @@ class InsightsService:
                 "href": f"/produccion?semana_id={sid}",
                 "accion": "Ir a Plata",
             })
-
-
-        try:
-            from app.services.aprendizaje_service import AprendizajeService
-            for fx in AprendizajeService(self.db).detectar_folios_inactivos(sid)[:8]:
-                hint = fx.get("hint") or ""
-                if hint == "posible_reasignacion":
-                    tit = "Folio posiblemente reasignado"
-                elif hint == "posible_finalizado":
-                    tit = "Folio posiblemente terminado"
-                else:
-                    tit = "Folio sin avance"
-                folio_q = str(fx.get("folio") or "").strip()
-                from urllib.parse import quote
-                avisos.append({
-                    "nivel": "info",
-                    "codigo": "folio_inactivo",
-                    "titulo": f"{tit}: {fx.get('folio')}",
-                    "detalle": f"{fx.get('nombre')} (ubic {fx.get('ubic')})",
-                    "href": f"/produccion?semana_id={sid}&q={quote(folio_q)}&highlight=folio",
-                    "accion": "Ver folio",
-                })
-        except Exception:
-            pass
 
         return {
             "fecha": ref.isoformat(),
@@ -824,8 +809,72 @@ class InsightsService:
             except Exception as e:
                 logger.warning("top materiales: %s", e)
 
+        # Serie diaria (últimos ~28 días de Plata: gramos y $)
+        serie_diaria: list[dict] = []
+        try:
+            from app.core.dias import ORDERED_DAYS, DAY_LABELS, col_hoy
+            from datetime import timedelta as _td
+            ref = today()
+            # Tomar semanas que intersectan los últimos 28 días
+            lim = ref - _td(days=27)
+            dias_map: dict = {}  # fecha iso -> {gramos, efectivo}
+            for s in ordered:
+                fi = parse_db_date(s.get("fecha_inicio"))
+                ff = parse_db_date(s.get("fecha_fin"))
+                if not fi or not ff:
+                    continue
+                if ff < lim or fi > ref:
+                    continue
+                sid = int(s["id"])
+                try:
+                    lineas = self.prod.listar_por_semana(sid)
+                except Exception:
+                    lineas = []
+                d = fi
+                while d <= ff and d <= ref:
+                    if d >= lim:
+                        from app.core.dias import ORDERED_DAYS as OD
+                        wd = d.weekday()  # Mon=0 … Sun=6; nómina sáb→vie
+                        idx_map = {5: 0, 6: 1, 0: 2, 1: 3, 2: 4, 3: 5, 4: 6}
+                        ix = idx_map.get(wd)
+                        col = OD[ix] if ix is not None and ix < len(OD) else None
+                        if col:
+                            gsum = 0.0
+                            esum = 0.0
+                            for r in lineas:
+                                g = _safe_float(r.get(col))
+                                gsum += g
+                                # prorrateo simple del efectivo por gramos del día
+                                tg = _safe_float(r.get("total_gramos"))
+                                ef = _safe_float(r.get("efectivo"))
+                                if tg > 0 and g > 0:
+                                    esum += ef * (g / tg)
+                                elif g > 0 and ef > 0 and tg <= 0:
+                                    esum += ef  # fallback raro
+                            key = d.isoformat()
+                            slot = dias_map.setdefault(key, {"fecha": key, "gramos": 0.0, "efectivo": 0.0, "label": ""})
+                            slot["gramos"] += gsum
+                            slot["efectivo"] += esum
+                            try:
+                                slot["label"] = DAY_LABELS.get(col, d.strftime("%a"))
+                            except Exception:
+                                slot["label"] = d.strftime("%d/%m")
+                    d += _td(days=1)
+            for key in sorted(dias_map.keys()):
+                slot = dias_map[key]
+                serie_diaria.append({
+                    "fecha": slot["fecha"],
+                    "label": slot.get("label") or slot["fecha"][5:],
+                    "gramos": round(slot["gramos"], 2),
+                    "efectivo": round(slot["efectivo"], 2),
+                })
+        except Exception as e:
+            logger.warning("serie_diaria: %s", e)
+            serie_diaria = []
+
         return {
             "serie": serie,
+            "serie_diaria": serie_diaria,
             "comparacion": comparacion,
             "top_materiales": top_materiales,
         }

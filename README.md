@@ -1,6 +1,7 @@
 # Fajos Central — Sistema de Nóminas
 
-**Versión:** 3.25.6  
+**Versión:** 3.38.0  
+**IA / desarrollo:** ver [AGENTS.md](AGENTS.md) y [docs/IA_LOCAL.md](docs/IA_LOCAL.md)  
 **Licencia:** [GPL-3.0-or-later](LICENSE)  
 **Entorno:** Windows 10/11 · PowerShell 7 · Python 3.12+ · MariaDB / HeidiSQL  
 
@@ -48,7 +49,7 @@ Captura diaria, impresión de suministro, exportación formal, catálogos, seman
 ## Requisitos
 
 - **Windows** 10 u 11 (PowerShell 7 recomendado)
-- **Python** 3.12 o superior (no uses el Python embebido de otras apps en el PATH)
+- **Python** 3.12 o superior (recomendado 3.12–3.14; no uses el Python embebido de otras apps en el PATH)
 - **MariaDB** (o MySQL compatible) con la base `fajos_central`
 - Navegador moderno (Chrome, Edge, Firefox)
 

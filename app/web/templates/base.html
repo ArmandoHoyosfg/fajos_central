@@ -14,7 +14,7 @@
   <script src="/static/live_totals.js" defer></script>
   <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/logo.png">
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <script src="/static/vendor/lucide.min.js" defer></script>
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -68,10 +68,7 @@
       <a href="/semanas" class="{% if '/semanas' in request.url.path %}active{% endif %}">
         <i data-lucide="calendar-range"></i> Semanas
       </a>
-      <a href="/docs" target="_blank" rel="noopener">
-        <i data-lucide="book-open"></i> API
-      </a>
-      <div class="theme-switch" title="Tema visual">
+<div class="theme-switch" title="Tema visual">
         <button type="button" data-theme-set="oscuro">Oscuro</button>
         <button type="button" data-theme-set="claro">Claro</button>
         <button type="button" data-theme-set="taller">Taller</button>
@@ -93,7 +90,7 @@
   </footer>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      if (window.lucide) lucide.createIcons();
+      try { if (window.lucide && lucide.createIcons) lucide.createIcons(); } catch (e) {}
     });
   </script>
   {% block scripts %}{% endblock %}

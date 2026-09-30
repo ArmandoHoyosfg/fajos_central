@@ -33,7 +33,8 @@ class AprendizajeService:
         semana_id: int | None = None,
         payload: dict | None = None,
         peso: float = 1.0,
-    ) -> None:
+    ) -> int | None:
+        """Registra evento de aprendizaje; devuelve id del evento si es posible."""
         try:
             with self.db.cursor() as cur:
                 cur.execute(
@@ -51,9 +52,15 @@ class AprendizajeService:
                         peso,
                     ),
                 )
+                eid = getattr(cur, "lastrowid", None)
+                try:
+                    self.db.connect().commit()
+                except Exception:
+                    pass
+                return int(eid) if eid else None
         except Exception:
-            # Tabla puede no existir aún (migración 004)
             logger.debug("No se pudo registrar aprendizaje (%s)", tipo, exc_info=True)
+            return None
 
     def bump_stat(self, clave: str, valor_num: float | None = None, valor_txt: str | None = None) -> None:
         try:
@@ -163,8 +170,12 @@ class AprendizajeService:
                     "prod_id": r.get("id"),
                 })
 
+        from app.services.export.helpers import linea_activa
+
         out: list[dict] = []
         for r in lineas:
+            if not linea_activa(r):
+                continue
             folio = (r.get("folio") or "").strip()
             if not folio:
                 continue
@@ -661,21 +672,49 @@ class AprendizajeService:
 
     @classmethod
     def _nombres_similares(cls, a: str, b: str) -> bool:
+        """
+        Similitud estricta para posibles fichas dobles.
+        - Igual normalizado → sí
+        - Uno contiene al otro solo si ambos tienen ≥ 2 tokens (evita José vs José Luis Pérez en distinto contexto)
+        - Mismo primer token (≥4 letras) + al menos otro token en común
+        No empareja solo por nombre de pila genérico (Juan, José, María…).
+        """
         na, nb = cls._norm_nombre(a), cls._norm_nombre(b)
         if not na or not nb:
             return False
         if na == nb:
             return True
-        if na in nb or nb in na:
-            return True
         ta, tb = na.split(), nb.split()
-        if ta and tb and ta[0] == tb[0] and len(ta[0]) >= 3:
-            # mismo primer nombre + al menos un token extra en común, o uno es solo el nombre corto
-            if len(ta) == 1 or len(tb) == 1:
-                return True
-            if set(ta) & set(tb) - {ta[0]}:
-                return True
+        # Contención solo con nombres compuestos (2+ tokens cada lado o el corto ⊆ largo con 2+ tokens en el largo)
+        if na in nb or nb in na:
+            corto, largo = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+            if len(largo) >= 2 and len(corto) >= 1:
+                # todos los tokens del corto están en el largo
+                if set(corto) <= set(largo):
+                    return True
+            return False
+        if not ta or not tb:
+            return False
+        # Primer nombre genérico corto: no basta por sí solo
+        if ta[0] != tb[0] or len(ta[0]) < 4:
+            return False
+        extra = (set(ta) & set(tb)) - {ta[0]}
+        if extra and len(ta) >= 2 and len(tb) >= 2:
+            return True
         return False
+
+    @classmethod
+    def _ubic_key(cls, ubic) -> str | None:
+        """Normaliza ubicación; None si vacía/inválida (sin ubic no se sugiere duplicado)."""
+        if ubic is None:
+            return None
+        s = str(ubic).strip()
+        if s == "" or s.lower() in ("none", "null", "-"):
+            return None
+        try:
+            return str(int(float(s)))
+        except (TypeError, ValueError):
+            return s.lower()
 
     def _pares_descartados(self, dias: int = 7) -> set[tuple[int, int]]:
         """Pares (id_min, id_max) descartados hace menos de N días."""
@@ -716,9 +755,10 @@ class AprendizajeService:
 
     def candidatos_duplicados_trabajadores(self) -> list[dict]:
         """
-        Posibles duplicados:
-        - mismo nombre (sin importar ubic)
-        - nombres similares en la misma ubicación
+        Posibles fichas dobles (regla de negocio):
+        - Misma ubicación (obligatorio)
+        - Nombre igual (normalizado) o similar estricto
+        Sin ubicación no se sugiere. Distinta ubic = personas distintas.
         Respeta descartes recientes (7 días).
         """
         rows = self.trab.listar(solo_activos=False)
@@ -726,7 +766,7 @@ class AprendizajeService:
         seen_pairs: set[tuple[int, int]] = set()
         cands: list[dict] = []
 
-        def _detalle(group):
+        def _detalle(group: list) -> list[dict]:
             return [
                 {
                     "id": int(g["id"]),
@@ -738,105 +778,229 @@ class AprendizajeService:
                 for g in group
             ]
 
-        def _add(motivo: str, label: str, group: list):
-            ids = sorted(int(g["id"]) for g in group)
-            # si hay >2, generamos el grupo completo; filtramos si todos los pares están descartados
-            pairs_ok = False
-            for i in range(len(ids)):
-                for j in range(i + 1, len(ids)):
-                    p = (ids[i], ids[j])
-                    if p in seen_pairs:
-                        continue
-                    if p in skipped:
-                        continue
-                    pairs_ok = True
-                    seen_pairs.add(p)
-            if not pairs_ok and len(ids) == 2 and (ids[0], ids[1]) in skipped:
+        def _pair_ok(ia: int, ib: int) -> bool:
+            a, b = (ia, ib) if ia < ib else (ib, ia)
+            if a == b:
+                return False
+            if (a, b) in seen_pairs or (a, b) in skipped:
+                return False
+            return True
+
+        def _add_pair(motivo: str, label: str, a: dict, b: dict) -> None:
+            ia, ib = int(a["id"]), int(b["id"])
+            if not _pair_ok(ia, ib):
                 return
-            if len(ids) < 2:
-                return
-            # si solo 2 y descartado, ya salimos; si >2 y al menos un par vivo, mostrar grupo
-            if len(ids) == 2 and (ids[0], ids[1]) in skipped:
-                return
+            lo, hi = (ia, ib) if ia < ib else (ib, ia)
+            seen_pairs.add((lo, hi))
             cands.append({
                 "nombre": label,
                 "motivo": motivo,
-                "n": len(group),
-                "ids": ids,
-                "detalle": _detalle(group),
+                "n": 2,
+                "ids": [lo, hi],
+                "detalle": _detalle([a, b]),
+                "ubic": self._ubic_key(a.get("ubic")),
             })
 
-        # 1) mismo nombre exacto (normalizado)
-        by_name: dict[str, list] = {}
-        for r in rows:
-            k = self._norm_nombre(r.get("nombre_mostrar") or "")
-            if not k:
-                continue
-            by_name.setdefault(k, []).append(r)
-        for name, group in by_name.items():
-            if len(group) >= 2:
-                _add("mismo_nombre", name, group)
-
-        # 2) misma ubic + nombres similares (activos prioritarios)
+        # Agrupar por ubicación; solo comparar dentro del mismo grupo
         by_ubic: dict[str, list] = {}
         for r in rows:
-            if not r.get("activo"):
+            uk = self._ubic_key(r.get("ubic"))
+            if uk is None:
                 continue
-            u = str(r.get("ubic") if r.get("ubic") is not None else "").strip()
-            if not u:
-                continue
-            by_ubic.setdefault(u, []).append(r)
+            by_ubic.setdefault(uk, []).append(r)
+
         for ubic, group in by_ubic.items():
-            n = len(group)
-            for i in range(n):
-                for j in range(i + 1, n):
+            if len(group) < 2:
+                continue
+            # 1) mismo nombre exacto (normalizado) en esta ubic
+            by_name: dict[str, list] = {}
+            for r in group:
+                k = self._norm_nombre(r.get("nombre_mostrar") or "")
+                if not k:
+                    continue
+                by_name.setdefault(k, []).append(r)
+            for name, g2 in by_name.items():
+                if len(g2) < 2:
+                    continue
+                # pares dentro del grupo (no un mega-grupo de 5 sin revisar descartes)
+                for i in range(len(g2)):
+                    for j in range(i + 1, len(g2)):
+                        a, b = g2[i], g2[j]
+                        label = f"{a.get('nombre_mostrar')} · ubic {ubic}"
+                        _add_pair("mismo_nombre_misma_ubic", label, a, b)
+
+            # 2) nombres similares (no idénticos) en la misma ubic
+            for i in range(len(group)):
+                for j in range(i + 1, len(group)):
                     a, b = group[i], group[j]
-                    ia, ib = int(a["id"]), int(b["id"])
-                    pair = (min(ia, ib), max(ia, ib))
-                    if pair in skipped or pair in seen_pairs:
+                    na = self._norm_nombre(a.get("nombre_mostrar") or "")
+                    nb = self._norm_nombre(b.get("nombre_mostrar") or "")
+                    if not na or not nb or na == nb:
+                        continue  # exactos ya cubiertos arriba
+                    if not self._nombres_similares(a.get("nombre_mostrar") or "", b.get("nombre_mostrar") or ""):
                         continue
-                    if self._nombres_similares(a.get("nombre_mostrar") or "", b.get("nombre_mostrar") or ""):
-                        # evitar si ya entró por mismo nombre exacto
-                        if self._norm_nombre(a.get("nombre_mostrar") or "") == self._norm_nombre(b.get("nombre_mostrar") or ""):
-                            continue
-                        seen_pairs.add(pair)
-                        label = f"{a.get('nombre_mostrar')} / {b.get('nombre_mostrar')} · ubic {ubic}"
-                        cands.append({
-                            "nombre": label,
-                            "motivo": "similar_misma_ubic",
-                            "n": 2,
-                            "ids": [ia, ib],
-                            "detalle": _detalle([a, b]),
-                        })
+                    label = (
+                        f"{a.get('nombre_mostrar')} / {b.get('nombre_mostrar')} · ubic {ubic}"
+                    )
+                    _add_pair("similar_misma_ubic", label, a, b)
 
         return cands
 
-    def fusionar_trabajadores(self, id_keep: int, id_merge: int) -> dict:
+
+
+    @staticmethod
+    def _score_nombre_completo(row: dict | None) -> tuple[int, int, int]:
+        """Más alto = nombre más completo (preferir como ficha que se queda)."""
+        if not row:
+            return (0, 0, 0)
+        nm = (row.get("nombre_mostrar") or "").strip()
+        nc = (row.get("nombre_completo") or "").strip()
+        best = nc if len(nc) >= len(nm) else nm
+        tokens = [x for x in best.split() if x]
+        return (len(tokens), len(best), len(nc))
+
+    def _elegir_survivor(self, a: dict, b: dict) -> tuple[dict, dict]:
+        """Devuelve (keep_row, merge_row) priorizando nombre más completo; si empate, el activo; si empate, menor id."""
+        sa, sb = self._score_nombre_completo(a), self._score_nombre_completo(b)
+        if sa > sb:
+            return a, b
+        if sb > sa:
+            return b, a
+        act_a = bool(a.get("activo"))
+        act_b = bool(b.get("activo"))
+        if act_a and not act_b:
+            return a, b
+        if act_b and not act_a:
+            return b, a
+        if int(a["id"]) <= int(b["id"]):
+            return a, b
+        return b, a
+
+    def _mezclar_campos_trabajador(self, keep: dict, other: dict) -> dict:
+        """Rellena huecos del survivor con datos del fusionado; nombre = el más completo."""
+        out = dict(keep)
+        # Nombre: el más completo de ambos
+        sk, so = self._score_nombre_completo(keep), self._score_nombre_completo(other)
+        if so > sk:
+            if (other.get("nombre_mostrar") or "").strip():
+                out["nombre_mostrar"] = other["nombre_mostrar"]
+            if (other.get("nombre_completo") or "").strip():
+                out["nombre_completo"] = other["nombre_completo"]
+        else:
+            # Completar nombre_completo si keep solo tiene mostrar
+            if not (out.get("nombre_completo") or "").strip() and (other.get("nombre_completo") or "").strip():
+                out["nombre_completo"] = other["nombre_completo"]
+            if not (out.get("nombre_mostrar") or "").strip() and (other.get("nombre_mostrar") or "").strip():
+                out["nombre_mostrar"] = other["nombre_mostrar"]
+            # Si other tiene más texto en completo, usarlo
+            nc_k = (out.get("nombre_completo") or out.get("nombre_mostrar") or "")
+            nc_o = (other.get("nombre_completo") or other.get("nombre_mostrar") or "")
+            if len(nc_o.strip()) > len(nc_k.strip()):
+                if (other.get("nombre_completo") or "").strip():
+                    out["nombre_completo"] = other["nombre_completo"]
+                if (other.get("nombre_mostrar") or "").strip() and len((other.get("nombre_mostrar") or "")) > len((out.get("nombre_mostrar") or "")):
+                    out["nombre_mostrar"] = other["nombre_mostrar"]
+
+        def _fill(key):
+            kv, ov = out.get(key), other.get(key)
+            empty = kv is None or (isinstance(kv, str) and not str(kv).strip())
+            if empty and ov is not None and not (isinstance(ov, str) and not str(ov).strip()):
+                out[key] = ov
+
+        for key in (
+            "ubic", "tipo", "puesto", "sueldo_modo", "sueldo_base",
+            "fecha_incorporacion", "codigo_qr", "notas",
+        ):
+            _fill(key)
+        # tipo: unir flags tipo PLT/PIT/TLL si vienen en texto
+        # notas: concatenar referencia al fusionado
+        nota_extra = f" [unido desde id {other.get('id')}]"
+        notas = (out.get("notas") or "") + nota_extra
+        if other.get("notas") and str(other.get("notas")) not in notas:
+            notas = (out.get("notas") or "") + " | " + str(other.get("notas")) + nota_extra
+        out["notas"] = notas.strip()
+        out["activo"] = 1
+        return out
+
+    def fusionar_trabajadores(
+        self,
+        id_keep: int,
+        id_merge: int,
+        *,
+        auto_nombre: bool = True,
+    ) -> dict:
         """
-        Reasigna producción/pita/taller/trabajos de id_merge → id_keep
-        y desactiva id_merge. Actualiza nombre/ubic denormalizados del survivor.
+        Fusiona dos fichas.
+        - Por defecto se queda la de **nombre más completo** (auto_nombre=True),
+          aunque el formulario indique otro keep (se intercambian).
+        - Mezcla campos vacíos del survivor con datos del fusionado.
+        - Guarda snapshot + ids movidos para rollback en DEV.
         """
         if int(id_keep) == int(id_merge):
             return {"ok": False, "error": "ids iguales"}
         keep = self.trab.obtener(id_keep)
         merge = self.trab.obtener(id_merge)
+        if not keep or not merge:
+            return {"ok": False, "error": "trabajador no encontrado"}
+
+        auto_swapped = False
+        if auto_nombre:
+            keep, merge = self._elegir_survivor(keep, merge)
+            if int(keep["id"]) != int(id_keep):
+                auto_swapped = True
+            id_keep, id_merge = int(keep["id"]), int(merge["id"])
+
+        snapshot_keep = dict(keep)
+        snapshot_merge = dict(merge)
+        mezclado = self._mezclar_campos_trabajador(keep, merge)
+
+        moved: dict[str, list[int]] = {"plata": [], "pita": [], "taller": [], "trabajos": []}
         counts = {"plata": 0, "pita": 0, "taller": 0, "trabajos": 0}
+        tables = (
+            ("produccion_plata", "plata"),
+            ("produccion_pita", "pita"),
+            ("nomina_taller", "taller"),
+            ("trabajos", "trabajos"),
+        )
+
         with self.db.cursor() as cur:
-            for table, key in (
-                ("produccion_plata", "plata"),
-                ("produccion_pita", "pita"),
-                ("nomina_taller", "taller"),
-                ("trabajos", "trabajos"),
-            ):
+            for table, key in tables:
                 try:
                     cur.execute(
-                        f"UPDATE {table} SET trabajador_id = %s WHERE trabajador_id = %s",
-                        (id_keep, id_merge),
+                        f"SELECT id FROM {table} WHERE trabajador_id = %s",
+                        (id_merge,),
                     )
-                    counts[key] = max(0, cur.rowcount or 0)
+                    ids = [int(r["id"]) for r in (cur.fetchall() or []) if r.get("id") is not None]
+                    moved[key] = ids
+                    if ids:
+                        cur.execute(
+                            f"UPDATE {table} SET trabajador_id = %s WHERE trabajador_id = %s",
+                            (id_keep, id_merge),
+                        )
+                        counts[key] = max(0, cur.rowcount or 0)
                 except Exception as e:
                     logger.warning("merge %s: %s", table, e)
-            # desactivar el fusionado
+
+            # Actualizar survivor con campos mezclados
+            try:
+                sets = []
+                params: list = []
+                for col in (
+                    "nombre_mostrar", "nombre_completo", "ubic", "tipo", "puesto",
+                    "sueldo_modo", "sueldo_base", "fecha_incorporacion", "codigo_qr", "notas", "activo",
+                ):
+                    if col in mezclado:
+                        sets.append(f"{col} = %s")
+                        params.append(mezclado.get(col))
+                if sets:
+                    params.append(id_keep)
+                    cur.execute(
+                        f"UPDATE trabajadores SET {', '.join(sets)} WHERE id = %s",
+                        tuple(params),
+                    )
+            except Exception as e:
+                logger.warning("merge update keep: %s", e)
+
             cur.execute(
                 "UPDATE trabajadores SET activo = 0, notas = CONCAT(COALESCE(notas,''), %s) WHERE id = %s",
                 (f" [fusionado→{id_keep}]", id_merge),
@@ -845,18 +1009,290 @@ class AprendizajeService:
                 self.db.connect().commit()
             except Exception:
                 pass
-        # sync denormalizados del que se queda
+
         try:
             self.trab.sincronizar_denormalizados(id_keep)
         except Exception:
             pass
+
+        payload = {
+            "keep": id_keep,
+            "merged": id_merge,
+            "auto_swapped": auto_swapped,
+            "counts": counts,
+            "moved": moved,
+            "snapshot_keep": {k: snapshot_keep.get(k) for k in (
+                "id", "nombre_mostrar", "nombre_completo", "ubic", "tipo", "puesto",
+                "sueldo_modo", "sueldo_base", "fecha_incorporacion", "codigo_qr", "notas", "activo",
+            )},
+            "snapshot_merge": {k: snapshot_merge.get(k) for k in (
+                "id", "nombre_mostrar", "nombre_completo", "ubic", "tipo", "puesto",
+                "sueldo_modo", "sueldo_base", "fecha_incorporacion", "codigo_qr", "notas", "activo",
+            )},
+            "resultado_nombre": mezclado.get("nombre_mostrar"),
+        }
+        event_id = None
+        try:
+            event_id = self.registrar(
+                "merge",
+                entidad="trabajador",
+                entidad_id=id_keep,
+                payload=payload,
+            )
+        except Exception:
+            self.registrar(
+                "merge",
+                entidad="trabajador",
+                entidad_id=id_keep,
+                payload=payload,
+            )
+
+        return {
+            "ok": True,
+            "keep": id_keep,
+            "merged": id_merge,
+            "counts": counts,
+            "auto_swapped": auto_swapped,
+            "nombre_final": mezclado.get("nombre_mostrar"),
+            "event_id": event_id,
+            "msg": (
+                f"Unido: se conservó «{mezclado.get('nombre_mostrar')}» (id {id_keep}). "
+                f"La ficha id {id_merge} quedó inactiva. Puedes deshacerlo en DEV → Historial de uniones."
+            ),
+        }
+
+    def listar_fusiones(self, limit: int = 50) -> list[dict]:
+        """Historial de uniones (más recientes primero) para DEV."""
+        out: list[dict] = []
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, tipo, entidad, entidad_id, payload_json, creado_en
+                    FROM aprendizaje_eventos
+                    WHERE tipo = 'merge'
+                    ORDER BY id DESC
+                    LIMIT %s
+                    """,
+                    (int(limit),),
+                )
+                for r in cur.fetchall() or []:
+                    payload = {}
+                    raw = r.get("payload_json")
+                    if raw:
+                        try:
+                            payload = json.loads(raw) if isinstance(raw, str) else (raw or {})
+                        except Exception:
+                            payload = {}
+                    out.append({
+                        "id": r.get("id"),
+                        "creado_en": str(r.get("creado_en") or ""),
+                        "keep": payload.get("keep"),
+                        "merged": payload.get("merged"),
+                        "nombre_final": payload.get("resultado_nombre"),
+                        "counts": payload.get("counts") or {},
+                        "auto_swapped": payload.get("auto_swapped"),
+                        "deshecho": bool(payload.get("deshecho")),
+                        "payload": payload,
+                    })
+        except Exception as e:
+            logger.warning("listar_fusiones: %s", e)
+        return out
+
+    def deshacer_fusion(self, event_id: int) -> dict:
+        """
+        Rollback de una unión registrada en aprendizaje_eventos.
+        Restaura trabajador fusionado, reasigna filas movidas y snapshots.
+        """
+        import json as _json
+        with self.db.cursor() as cur:
+            cur.execute(
+                "SELECT id, payload_json FROM aprendizaje_eventos WHERE id = %s AND tipo = 'merge'",
+                (int(event_id),),
+            )
+            row = cur.fetchone()
+        if not row:
+            return {"ok": False, "error": "Evento de unión no encontrado"}
+        try:
+            payload = _json.loads(row["payload_json"]) if isinstance(row.get("payload_json"), str) else (row.get("payload_json") or {})
+        except Exception:
+            return {"ok": False, "error": "Payload de unión inválido"}
+        if payload.get("deshecho"):
+            return {"ok": False, "error": "Esta unión ya fue deshecha"}
+        id_keep = int(payload.get("keep") or 0)
+        id_merge = int(payload.get("merged") or 0)
+        moved = payload.get("moved") or {}
+        snap_k = payload.get("snapshot_keep") or {}
+        snap_m = payload.get("snapshot_merge") or {}
+        if not id_keep or not id_merge:
+            return {"ok": False, "error": "Payload incompleto (keep/merged)"}
+
+        tables = (
+            ("produccion_plata", "plata"),
+            ("produccion_pita", "pita"),
+            ("nomina_taller", "taller"),
+            ("trabajos", "trabajos"),
+        )
+        restored = {"plata": 0, "pita": 0, "taller": 0, "trabajos": 0}
+        with self.db.cursor() as cur:
+            for table, key in tables:
+                ids = [int(x) for x in (moved.get(key) or []) if x is not None]
+                if not ids:
+                    continue
+                try:
+                    placeholders = ",".join(["%s"] * len(ids))
+                    cur.execute(
+                        f"UPDATE {table} SET trabajador_id = %s WHERE id IN ({placeholders}) AND trabajador_id = %s",
+                        tuple([id_merge] + ids + [id_keep]),
+                    )
+                    restored[key] = max(0, cur.rowcount or 0)
+                except Exception as e:
+                    logger.warning("rollback %s: %s", table, e)
+
+            def _restore_trab(tid: int, snap: dict):
+                if not snap:
+                    return
+                cols = []
+                params = []
+                for col in (
+                    "nombre_mostrar", "nombre_completo", "ubic", "tipo", "puesto",
+                    "sueldo_modo", "sueldo_base", "fecha_incorporacion", "codigo_qr", "notas", "activo",
+                ):
+                    if col in snap:
+                        cols.append(f"{col} = %s")
+                        params.append(snap.get(col))
+                if not cols:
+                    return
+                params.append(tid)
+                cur.execute(
+                    f"UPDATE trabajadores SET {', '.join(cols)} WHERE id = %s",
+                    tuple(params),
+                )
+
+            _restore_trab(id_keep, snap_k)
+            _restore_trab(id_merge, snap_m)
+            # asegurar activo del merge según snapshot
+            try:
+                act = snap_m.get("activo")
+                if act is None:
+                    act = 1
+                cur.execute("UPDATE trabajadores SET activo = %s WHERE id = %s", (1 if act else 0, id_merge))
+            except Exception:
+                pass
+            try:
+                self.db.connect().commit()
+            except Exception:
+                pass
+
+        for tid in (id_keep, id_merge):
+            try:
+                self.trab.sincronizar_denormalizados(tid)
+            except Exception:
+                pass
+
+        payload["deshecho"] = True
+        payload["deshecho_restored"] = restored
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    "UPDATE aprendizaje_eventos SET payload_json = %s WHERE id = %s",
+                    (_json.dumps(payload, ensure_ascii=False, default=str), int(event_id)),
+                )
+                try:
+                    self.db.connect().commit()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning("mark deshecho: %s", e)
+
         self.registrar(
-            "merge",
+            "merge_rollback",
             entidad="trabajador",
             entidad_id=id_keep,
-            payload={"merged": id_merge, "counts": counts, "keep": keep.get("nombre_mostrar"), "from": merge.get("nombre_mostrar")},
+            payload={"event_id": int(event_id), "keep": id_keep, "merged": id_merge, "restored": restored},
         )
-        return {"ok": True, "keep": id_keep, "merged": id_merge, "counts": counts}
+        return {
+            "ok": True,
+            "event_id": int(event_id),
+            "keep": id_keep,
+            "merged": id_merge,
+            "restored": restored,
+            "msg": f"Unión deshecha: ficha {id_merge} restaurada; filas devueltas cuando fue posible.",
+        }
+
+
+
+    def alertas_operativas(self, semana_id: int | None = None) -> list[dict]:
+        """
+        Avisos accionables para Dashboard / Plata (Fase 4).
+        Resume conteos en lugar de listar cada folio (menos ruido).
+        """
+        from urllib.parse import quote
+        avisos: list[dict] = []
+        try:
+            inact = self.detectar_folios_inactivos(semana_id) or []
+        except Exception:
+            inact = []
+        try:
+            reasig = self.detectar_reasignaciones(semana_id) or []
+        except Exception:
+            reasig = []
+        try:
+            dups = self.candidatos_duplicados_trabajadores() or []
+        except Exception:
+            dups = []
+
+        n_inact = len(inact)
+        n_fin = sum(1 for x in inact if (x.get("hint") or "") == "posible_finalizado")
+        n_reasig_hint = sum(1 for x in inact if (x.get("hint") or "") == "posible_reasignacion")
+        sid_q = f"semana_id={int(semana_id)}&" if semana_id else ""
+
+        if n_inact:
+            detalle_parts = [f"{n_inact} folio(s) sin gramos esta semana"]
+            if n_fin:
+                detalle_parts.append(f"{n_fin} parecen terminados")
+            if n_reasig_hint:
+                detalle_parts.append(f"{n_reasig_hint} posibles reasignaciones")
+            avisos.append({
+                "nivel": "warn" if n_inact >= 5 else "info",
+                "codigo": "aprendizaje_sin_avance",
+                "titulo": f"{n_inact} folio(s) sin avance",
+                "detalle": " · ".join(detalle_parts) + ". Revisa en Plata o marca terminados en lote.",
+                "href": f"/produccion?{sid_q}filtro=sin_avance",
+                "accion": "Ver en Plata",
+                "count": n_inact,
+                "fuente": "aprendizaje",
+            })
+
+        if reasig:
+            sample = ", ".join(
+                str(x.get("folio") or "?") for x in reasig[:3]
+            )
+            extra = f" Ej: {sample}" if sample else ""
+            avisos.append({
+                "nivel": "info",
+                "codigo": "aprendizaje_reasignacion",
+                "titulo": f"{len(reasig)} folio(s) cambiaron de persona",
+                "detalle": "La semana pasada tenían avance con otro trabajador." + extra,
+                "href": f"/produccion?{sid_q}filtro=reasignados",
+                "accion": "Revisar",
+                "count": len(reasig),
+                "fuente": "aprendizaje",
+            })
+
+        if dups:
+            avisos.append({
+                "nivel": "info",
+                "codigo": "aprendizaje_fichas_dobles",
+                "titulo": f"{len(dups)} posible(s) ficha(s) doble(s)",
+                "detalle": "Misma ubicación y nombre igual o parecido. Unir o descartar en Trabajadores.",
+                "href": "/trabajadores#unir-fichas",
+                "accion": "Unir fichas",
+                "count": len(dups),
+                "fuente": "aprendizaje",
+            })
+
+        return avisos
 
     def resumen_aprendizaje(self) -> dict:
         """KPIs simples para panel Dev."""
@@ -886,6 +1322,7 @@ class AprendizajeService:
             out["folios_inactivos"] = self.detectar_folios_inactivos()[:40]
             out["reasignaciones"] = self.detectar_reasignaciones()[:40]
             out["candidatos_dup"] = self.candidatos_duplicados_trabajadores()[:30]
+            out["alertas"] = self.alertas_operativas()
         except Exception:
             logger.exception("resumen_aprendizaje")
         return out

@@ -21,7 +21,7 @@
   <a class="btn btn-secondary" href="/api/export/trabajadores" title="Descargar catálogo en Excel">Excel</a>
   <a class="btn btn-secondary" href="/api/export/trabajadores?activos=1" title="Solo activos">Excel activos</a>
   {% if duplicados %}
-  <a class="btn btn-secondary" href="#unir-fichas">Duplicados ({{ duplicados|length }})</a>
+  <a class="btn btn-secondary" href="#unir-fichas">Fichas dobles ({{ duplicados|length }})</a>
   {% endif %}
 </div>
 <div id="toast" class="toast-web" hidden></div>
@@ -29,8 +29,8 @@
 {% if duplicados %}
 <details class="folio-hints-compact" id="unir-fichas">
   <summary>
-    <span>{{ duplicados|length }} posible(s) duplicado(s)</span>
-    <span class="muted"> — unir o descartar 7 días</span>
+    <span>{{ duplicados|length }} posible(s) ficha(s) doble(s) (misma ubic)</span>
+    <span class="muted"> — misma ubicación + nombre igual/parecido · unir o descartar 7 días</span>
   </summary>
   <div class="folio-hint-block">
     <p class="muted" style="margin:0 0 0.4rem;font-size:0.82rem">
@@ -401,20 +401,26 @@ async function descartarDup(idA, idB) {
   } catch (e) { showToast('Error de red', true); }
 }
 async function unirFichas(e) {
-
   e.preventDefault();
   const form = e.target;
   const keep = form.querySelector('[name="id_keep"]').value;
   const merge = form.querySelector('[name="id_merge"]').value;
   if (!keep || !merge) { showToast('Elige las dos fichas', true); return false; }
   if (keep === merge) {
-    showToast('Elige dos fichas distintas: una se queda y la otra se da de baja', true);
+    showToast('Elige dos fichas distintas', true);
     return false;
   }
-  if (!confirm('Se quedará la ficha ID ' + keep + '.\nLa ficha ID ' + merge + ' pasará a baja y todas sus nóminas se moverán a la principal.\n\n¿Continuar?')) return false;
+  if (!confirm(
+    'Se unirán las fichas ID ' + keep + ' y ID ' + merge + '.\n\n' +
+    '• Se conservará la de nombre más completo\n' +
+    '• Se mezclarán el resto de datos (puesto, sueldo, notas…)\n' +
+    '• La otra quedará inactiva\n' +
+    '• Podrás deshacerlo en DEV → Historial de uniones\n\n¿Continuar?'
+  )) return false;
   const fd = new FormData();
   fd.set('id_keep', keep);
   fd.set('id_merge', merge);
+  fd.set('auto_nombre', '1');
   try {
     const res = await fetch('/api/trabajadores/merge', { method: 'POST', body: fd });
     const d = await res.json().catch(() => ({}));
@@ -423,8 +429,11 @@ async function unirFichas(e) {
       return false;
     }
     const c = d.counts || {};
-    showToast('Unido. Movidas: Plata ' + (c.plata||0) + ', Pita ' + (c.pita||0) + ', Taller ' + (c.taller||0));
-    setTimeout(() => location.reload(), 500);
+    let msg = d.msg || ('Unido → «' + (d.nombre_final || '') + '» (id ' + d.keep + ')');
+    msg += ' · Movidas: Plata ' + (c.plata||0) + ', Pita ' + (c.pita||0) + ', Taller ' + (c.taller||0);
+    if (d.auto_swapped) msg += ' · Se eligió automáticamente el nombre más completo';
+    showToast(msg);
+    setTimeout(() => location.reload(), 700);
   } catch (err) {
     showToast('Error de red', true);
   }

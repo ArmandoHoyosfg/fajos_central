@@ -1,29 +1,112 @@
 {% extends "base.html" %}
 {% block title %}Catálogos — Fajos{% endblock %}
 {% block content %}
-<div class="page-head">
-  <h1>Catálogos</h1>
-  <p class="muted">Los catálogos <strong>asisten</strong> la captura (listas y tarifas), no la bloquean: siempre puedes usar un material o modelo nuevo (sugerencias y tarifas). En Plata puedes escribir material o modelo que no estén aquí: se guardan en la nómina sin bloquear. Si eliges uno del catálogo, se aplica la tarifa o el material por defecto.</p>
+<style>
+  .cat-page { max-width: 1100px; }
+  .cat-intro { font-size: 0.92rem; line-height: 1.45; margin: 0 0 1rem; }
+  .cat-tabs { display:flex; flex-wrap:wrap; gap:0.35rem; margin:0 0 1rem; padding:0.25rem; border-radius:10px; background:rgba(0,0,0,0.18); }
+  .cat-tabs button { border:none; background:transparent; color:inherit; padding:0.45rem 0.95rem; border-radius:8px; cursor:pointer; opacity:0.8; font-size:0.9rem; }
+  .cat-tabs button:hover { opacity:1; background:rgba(255,255,255,0.06); }
+  .cat-tabs button.active { background:var(--accent,#c9a227); color:#1a1a1a; opacity:1; font-weight:600; }
+  .cat-panel { display:none; }
+  .cat-panel.active { display:block; }
+  .cat-toolbar { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; }
+  .cat-toolbar input[type="search"] { min-width:200px; flex:1; max-width:320px; }
+  .cat-form {
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap:0.65rem 0.85rem;
+    margin-top:1rem;
+    padding:1rem;
+    border:1px solid var(--border,#333);
+    border-radius:10px;
+    background:rgba(0,0,0,0.12);
+  }
+  .cat-form label { display:block; font-size:0.78rem; opacity:0.8; margin-bottom:0.2rem; }
+  .cat-form input, .cat-form select, .cat-form textarea {
+    width:100%; box-sizing:border-box; min-height:2.1rem;
+  }
+  .cat-form .full { grid-column: 1 / -1; }
+  .cat-form .actions { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; }
+  .cat-badge {
+    display:inline-block; font-size:0.72rem; padding:0.1rem 0.4rem; border-radius:6px;
+    background:rgba(255,255,255,0.08); margin-left:0.25rem;
+  }
+  .cat-badge.plt { background:rgba(137,180,250,0.25); }
+  .cat-badge.pit { background:rgba(166,227,161,0.25); }
+  .cat-badge.tll { background:rgba(249,226,175,0.25); }
+  .cat-hint-box {
+    font-size:0.85rem; padding:0.65rem 0.85rem; border-radius:8px; margin-bottom:0.85rem;
+    border-left:3px solid var(--accent,#c9a227); background:rgba(201,162,39,0.08);
+  }
+  .cat-price-diff { font-size:0.78rem; opacity:0.85; }
+  .cat-price-diff.warn { color:#f9e2af; }
+  #form-mat-title, #form-mod-title { margin:0 0 0.35rem; font-size:0.95rem; }
+</style>
+
+<div class="page-head cat-page">
+  <div>
+    <h1>Catálogos</h1>
+    <p class="muted cat-intro">
+      Guían la captura en Plata, Pita y Taller: listas, materiales por defecto y precios sugeridos.
+      <strong>No bloquean</strong> valores nuevos — si escribes otro material o modelo, se guarda igual.
+      El predictor usa: <em>catálogo → último precio usado (historial)</em>.
+    </p>
+  </div>
 </div>
 
-<section class="card" style="margin-bottom:1.25rem">
-  <h2 style="margin-top:0">Materiales / tarifas</h2>
-  <p class="muted" style="margin-top:0">Tabla <code>tarifas_material</code>. Solo activos aparecen como sugerencia en captura (siempre puedes escribir otro valor).</p>
+<nav class="cat-tabs" id="cat-tabs" role="tablist">
+  <button type="button" class="active" data-tab="materiales">Materiales / $/g</button>
+  <button type="button" data-tab="modelos">Modelos</button>
+  <button type="button" data-tab="pita">Pita / torcedores</button>
+  <button type="button" data-tab="ayuda">Cómo se usan</button>
+</nav>
+
+{# —— Materiales —— #}
+<div class="cat-panel active card" data-panel="materiales">
+  <h2 style="margin-top:0">Materiales y tarifas</h2>
+  <div class="cat-hint-box">
+    Cada material activo aparece en las listas de Plata. Su <strong>$/g</strong> se sugiere al capturar;
+    el usuario puede cambiarlo en el mismo campo. La columna «Historial» muestra el último precio realmente usado.
+  </div>
+  <div class="cat-toolbar">
+    <input type="search" id="flt-mat" placeholder="Filtrar material…" oninput="filterCat('mat')">
+    <span class="muted" id="mat-count">{{ materiales|length }} material(es)</span>
+  </div>
   <div class="table-wrap">
-    <table class="sortable">
+    <table class="sortable" id="tbl-mat">
       <thead>
-        <tr><th>Material</th><th>$/g</th><th>Descripción</th><th>Activo</th><th></th></tr>
+        <tr>
+          <th>Material</th>
+          <th>Catálogo $/g</th>
+          <th>Último usado</th>
+          <th>Descripción</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
       </thead>
       <tbody>
         {% for m in materiales %}
-        <tr>
+        {% set key = (m.material or '')|upper %}
+        {% set hist = hist_map.get(key) if hist_map is defined else none %}
+        <tr data-filter="{{ (m.material or '')|lower }} {{ (m.descripcion or '')|lower }}">
           <td><code>{{ m.material }}</code></td>
-          <td>{{ m.tarifa_por_gramo }}</td>
-          <td>{{ m.descripcion or '—' }}</td>
-          <td>{% if m.activo %}Sí{% else %}No{% endif %}</td>
+          <td><strong>{{ m.tarifa_por_gramo }}</strong></td>
           <td>
+            {% if hist is not none %}
+              {{ hist }}
+              {% if m.tarifa_por_gramo is not none and hist != m.tarifa_por_gramo %}
+              <span class="cat-price-diff warn" title="Difiere del catálogo">≠ cat</span>
+              {% endif %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>{{ m.descripcion or '—' }}</td>
+          <td>{% if m.activo %}<span class="cat-badge">Activo</span>{% else %}<span class="muted">Baja</span>{% endif %}</td>
+          <td style="white-space:nowrap">
             <button type="button" class="btn btn-secondary btn-xs"
-              onclick="editMat({{ m.id }}, {{ (m.material or '')|tojson }}, {{ m.tarifa_por_gramo or 0 }}, {{ (m.descripcion or '')|tojson }}, {{ m.activo|int }})">Editar</button>
+              onclick='editMat({{ m.id }}, {{ (m.material or "")|tojson }}, {{ m.tarifa_por_gramo if m.tarifa_por_gramo is not none else 0 }}, {{ (m.descripcion or "")|tojson }})'>Editar</button>
             {% if m.activo %}
             <button type="button" class="btn btn-secondary btn-xs" onclick="toggleMat({{ m.id }}, 0)">Desactivar</button>
             {% else %}
@@ -32,135 +115,318 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="muted">Sin materiales en BD. Agrega el primero abajo.</td></tr>
+        <tr><td colspan="6" class="muted">Sin materiales. Agrega el primero abajo.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <form id="form-mat" class="form-grid" style="margin-top:1rem" onsubmit="return saveMat(event)">
+
+  <form id="form-mat" class="cat-form" onsubmit="return saveMat(event)">
+    <h3 class="full" id="form-mat-title">Nuevo material</h3>
     <input type="hidden" name="mat_id" id="mat_id" value="">
-    <div><label>Material</label><input name="material" id="mat_nombre" required placeholder="AG3"></div>
-    <div><label>$/gramo</label><input name="tarifa_por_gramo" id="mat_tarifa" type="number" step="0.1" min="0" required value="12"></div>
-    <div class="full"><label>Descripción</label><input name="descripcion" id="mat_desc" placeholder="Opcional"></div>
+    <div>
+      <label for="mat_nombre">Código / nombre</label>
+      <input name="material" id="mat_nombre" required placeholder="AG3, DOL, PITA…" autocomplete="off">
+    </div>
+    <div>
+      <label for="mat_tarifa">$/gramo (sugerido)</label>
+      <input name="tarifa_por_gramo" id="mat_tarifa" type="number" step="0.1" min="0" required value="12">
+    </div>
+    <div class="full">
+      <label for="mat_desc">Descripción (opcional)</label>
+      <input name="descripcion" id="mat_desc" placeholder="Ej. plata AG3">
+    </div>
     <div class="full actions">
-      <button type="submit" class="btn">Guardar material</button>
+      <button type="submit" class="btn" id="btn-mat-save">Guardar material</button>
       <button type="button" class="btn btn-secondary" onclick="resetMat()">Limpiar</button>
     </div>
   </form>
-</section>
+</div>
 
-<section class="card">
+{# —— Modelos —— #}
+<div class="cat-panel card" data-panel="modelos">
   <h2 style="margin-top:0">Modelos</h2>
-  <p class="muted" style="margin-top:0">Tabla <code>modelos</code> (PLT / PTA / etc.).</p>
+  <div class="cat-hint-box">
+    Al elegir un modelo en captura se puede rellenar <strong>material</strong> y <strong>tarifa</strong> por defecto.
+    Tipo: PLT (Plata), PIT (Pita), TLL (Taller). «Precio variable» = sin tarifa fija en el modelo (usa la del material).
+  </div>
+  <div class="cat-toolbar">
+    <input type="search" id="flt-mod" placeholder="Filtrar modelo, material, tipo…" oninput="filterCat('mod')">
+    <select id="flt-mod-tipo" onchange="filterCat('mod')" style="min-width:120px">
+      <option value="">Todos los tipos</option>
+      <option value="PLT">PLT</option>
+      <option value="PIT">PIT</option>
+      <option value="TLL">TLL</option>
+    </select>
+    <span class="muted">{{ modelos|length }} modelo(s)</span>
+  </div>
   <div class="table-wrap">
-    <table class="sortable">
+    <table class="sortable" id="tbl-mod">
       <thead>
-        <tr><th>Modelo</th><th>Tipo</th><th>Material def.</th><th>Tarifa def.</th><th>Notas</th><th></th></tr>
+        <tr>
+          <th>Modelo</th>
+          <th>Tipo</th>
+          <th>Material def.</th>
+          <th>Tarifa def.</th>
+          <th>Notas</th>
+          <th></th>
+        </tr>
       </thead>
       <tbody>
         {% for m in modelos %}
-        <tr>
-          <td>{{ m.modelo }}</td>
-          <td>{{ m.tipo }}</td>
-          <td>{{ m.material_default or '—' }}</td>
-          <td>{{ m.tarifa_default or '—' }}</td>
-          <td>{{ m.notas or '—' }}</td>
+        <tr data-filter="{{ (m.modelo or '')|lower }} {{ (m.material_default or '')|lower }} {{ (m.tipo or '')|lower }} {{ (m.notas or '')|lower }}"
+            data-tipo="{{ (m.tipo or '')|upper }}">
+          <td><strong>{{ m.modelo }}</strong></td>
           <td>
+            <span class="cat-badge {{ (m.tipo or '')|lower }}">{{ m.tipo or '—' }}</span>
+          </td>
+          <td>{% if m.material_default %}<code>{{ m.material_default }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>
+            {% if m.tarifa_default is not none and m.tarifa_default != '' %}
+              {{ m.tarifa_default }}
+            {% else %}
+              <span class="muted">Precio variable</span>
+            {% endif %}
+          </td>
+          <td class="muted">{{ m.notas or '—' }}</td>
+          <td style="white-space:nowrap">
             <button type="button" class="btn btn-secondary btn-xs"
-              onclick="editMod({{ m.id }}, {{ (m.modelo or '')|tojson }}, {{ (m.tipo or 'PLT')|tojson }}, {{ (m.material_default or '')|tojson }}, {{ m.tarifa_default if m.tarifa_default is not none else 'null' }}, {{ (m.notas or '')|tojson }})">Editar</button>
+              onclick='editMod({{ m.id }}, {{ (m.modelo or "")|tojson }}, {{ (m.tipo or "PLT")|tojson }}, {{ (m.material_default or "")|tojson }}, {{ m.tarifa_default if m.tarifa_default is not none else "null" }}, {{ (m.notas or "")|tojson }})'>Editar</button>
             <button type="button" class="btn btn-secondary btn-xs" onclick="delMod({{ m.id }})">Eliminar</button>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="muted">Sin modelos.</td></tr>
+        <tr><td colspan="6" class="muted">Sin modelos. Agrega el primero abajo.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <form id="form-mod" class="form-grid" style="margin-top:1rem" onsubmit="return saveMod(event)">
+
+  <form id="form-mod" class="cat-form" onsubmit="return saveMod(event)">
+    <h3 class="full" id="form-mod-title">Nuevo modelo</h3>
     <input type="hidden" name="modelo_id" id="mod_id" value="">
-    <div><label>Modelo</label><input name="modelo" id="mod_nombre" required></div>
-    <div><label>Tipo</label>
+    <div>
+      <label for="mod_nombre">Nombre del modelo</label>
+      <input name="modelo" id="mod_nombre" required placeholder="GUÍA FLORES, ANILLO…" autocomplete="off">
+    </div>
+    <div>
+      <label for="mod_tipo">Área / tipo</label>
       <select name="tipo" id="mod_tipo">
         <option value="PLT">PLT (Plata)</option>
-        <option value="PTA">PTA (Pita)</option>
+        <option value="PIT">PIT (Pita)</option>
         <option value="TLL">TLL (Taller)</option>
       </select>
     </div>
-    <div><label>Material default</label><input name="material_default" id="mod_mat" placeholder="AG3"></div>
-    <div><label>Tarifa default</label><input name="tarifa_default" id="mod_tarifa" type="number" step="0.1" min="0"></div>
-    <div class="full"><label>Notas</label><input name="notas" id="mod_notas"></div>
+    <div>
+      <label for="mod_mat">Material por defecto</label>
+      <input name="material_default" id="mod_mat" list="list-materiales" placeholder="Elegir o escribir" autocomplete="off">
+      <datalist id="list-materiales">
+        {% for m in materiales if m.activo %}
+        <option value="{{ m.material }}">{{ m.tarifa_por_gramo }} $/g</option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div>
+      <label for="mod_tarifa">Tarifa default $/g (vacío = variable)</label>
+      <input name="tarifa_default" id="mod_tarifa" type="number" step="0.1" min="0" placeholder="Vacío = usar material">
+    </div>
+    <div class="full">
+      <label for="mod_notas">Notas</label>
+      <input name="notas" id="mod_notas" placeholder="Opcional">
+    </div>
     <div class="full actions">
-      <button type="submit" class="btn">Guardar modelo</button>
+      <button type="submit" class="btn" id="btn-mod-save">Guardar modelo</button>
       <button type="button" class="btn btn-secondary" onclick="resetMod()">Limpiar</button>
     </div>
   </form>
-</section>
-{% endblock %}
+</div>
 
-{% block scripts %}
+{# —— Pita / torcedores —— #}
+<div class="cat-panel card" data-panel="pita">
+  <h2 style="margin-top:0">Precio por pita (torcedores)</h2>
+  <div class="cat-hint-box">
+    En Taller, el sueldo de torcedores es <strong>pitas × $/pita</strong>.
+    Puedes fijar el precio por defecto como material <code>PITA</code> en el catálogo,
+    o editarlo en cada fila de Taller. Último precio usado:
+    {% if precio_pita_sugerido is defined and precio_pita_sugerido is not none %}
+      <strong>${{ precio_pita_sugerido }}</strong>
+    {% else %}
+      <strong>$3.20</strong> (predeterminado del sistema)
+    {% endif %}.
+  </div>
+  <form class="cat-form" onsubmit="return savePita(event)">
+    <div>
+      <label for="pita_tarifa">$/pita por defecto</label>
+      <input id="pita_tarifa" name="tarifa_por_gramo" type="number" step="0.1" min="0"
+        value="{{ precio_pita_sugerido if precio_pita_sugerido is defined and precio_pita_sugerido is not none else 3.2 }}" required>
+    </div>
+    <div class="full actions">
+      <button type="submit" class="btn">Guardar precio PITA en catálogo</button>
+    </div>
+  </form>
+  <p class="muted" style="font-size:0.85rem;margin-top:0.75rem">
+    Esto crea o actualiza el material <code>PITA</code>. En la nómina de Taller sigue pudiendo
+    cambiarse el $/pita por fila sin afectar el catálogo.
+  </p>
+</div>
+
+{# —— Ayuda —— #}
+<div class="cat-panel card" data-panel="ayuda">
+  <h2 style="margin-top:0">Cómo se usan los catálogos</h2>
+  <ul style="line-height:1.55;font-size:0.92rem">
+    <li><strong>Plata:</strong> al escribir material o modelo, se sugiere $/g (catálogo + historial de lo ya capturado). El campo de precio se puede editar siempre.</li>
+    <li><strong>Modelos:</strong> material default y tarifa default aceleran filas nuevas; «Precio variable» deja la tarifa al material.</li>
+    <li><strong>Taller / torcedores:</strong> pitas × $/pita; el default vive aquí como material PITA o se edita en la fila.</li>
+    <li><strong>Valores nuevos:</strong> no hace falta registrarlos antes. Si se repiten, conviene añadirlos al catálogo para la próxima vez.</li>
+    <li><strong>Desactivar material:</strong> deja de sugerirse, pero las nóminas antiguas no se borran.</li>
+  </ul>
+</div>
+
 <script>
-function resetMat() {
-  document.getElementById('mat_id').value = '';
-  document.getElementById('mat_nombre').value = '';
-  document.getElementById('mat_tarifa').value = '12';
-  document.getElementById('mat_desc').value = '';
-}
-function editMat(id, nombre, tarifa, desc, activo) {
-  document.getElementById('mat_id').value = id;
-  document.getElementById('mat_nombre').value = nombre || '';
-  document.getElementById('mat_tarifa').value = tarifa;
-  document.getElementById('mat_desc').value = desc || '';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-async function saveMat(e) {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  if (fd.get('mat_id')) fd.set('mat_id', fd.get('mat_id'));
-  fd.set('activo', '1');
-  const res = await fetch('/api/catalogos/material', { method: 'POST', body: fd });
-  const d = await res.json().catch(() => ({}));
-  if (!res.ok || d.ok === false) { alert(d.error || 'Error'); return false; }
-  location.reload();
-  return false;
-}
-async function toggleMat(id, activo) {
-  const fd = new FormData();
-  fd.set('activo', String(activo));
-  const res = await fetch('/api/catalogos/material/' + id + '/activo', { method: 'POST', body: fd });
-  if (!res.ok) { alert('No se pudo cambiar'); return; }
-  location.reload();
-}
-function resetMod() {
-  document.getElementById('mod_id').value = '';
-  document.getElementById('mod_nombre').value = '';
-  document.getElementById('mod_tipo').value = 'PLT';
-  document.getElementById('mod_mat').value = '';
-  document.getElementById('mod_tarifa').value = '';
-  document.getElementById('mod_notas').value = '';
-}
-function editMod(id, modelo, tipo, mat, tarifa, notas) {
-  document.getElementById('mod_id').value = id;
-  document.getElementById('mod_nombre').value = modelo || '';
-  document.getElementById('mod_tipo').value = tipo || 'PLT';
-  document.getElementById('mod_mat').value = mat || '';
-  document.getElementById('mod_tarifa').value = tarifa != null ? tarifa : '';
-  document.getElementById('mod_notas').value = notas || '';
-}
-async function saveMod(e) {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const res = await fetch('/api/catalogos/modelo', { method: 'POST', body: fd });
-  const d = await res.json().catch(() => ({}));
-  if (!res.ok || d.ok === false) { alert(d.error || 'Error'); return false; }
-  location.reload();
-  return false;
-}
-async function delMod(id) {
-  if (!confirm('¿Eliminar este modelo del catálogo?')) return;
-  const res = await fetch('/api/catalogos/modelo/' + id, { method: 'DELETE' });
-  if (!res.ok) { alert('No se pudo eliminar'); return; }
-  location.reload();
-}
+(function(){
+  var tabs = document.getElementById('cat-tabs');
+  function show(tab) {
+    tabs.querySelectorAll('button[data-tab]').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-tab') === tab);
+    });
+    document.querySelectorAll('.cat-panel').forEach(function(p){
+      p.classList.toggle('active', p.getAttribute('data-panel') === tab);
+    });
+    try { localStorage.setItem('fajos_cat_tab', tab); } catch(e) {}
+  }
+  tabs.querySelectorAll('button[data-tab]').forEach(function(b){
+    b.addEventListener('click', function(){ show(b.getAttribute('data-tab')); });
+  });
+  var initial = 'materiales';
+  try {
+    var q = new URLSearchParams(location.search).get('tab');
+    if (q) initial = q;
+    else initial = localStorage.getItem('fajos_cat_tab') || 'materiales';
+  } catch(e) {}
+  show(initial);
+
+  window.filterCat = function(kind) {
+    if (kind === 'mat') {
+      var q = (document.getElementById('flt-mat').value || '').toLowerCase();
+      document.querySelectorAll('#tbl-mat tbody tr[data-filter]').forEach(function(tr){
+        tr.style.display = !q || tr.getAttribute('data-filter').indexOf(q) >= 0 ? '' : 'none';
+      });
+    } else {
+      var q = (document.getElementById('flt-mod').value || '').toLowerCase();
+      var tipo = (document.getElementById('flt-mod-tipo').value || '').toUpperCase();
+      document.querySelectorAll('#tbl-mod tbody tr[data-filter]').forEach(function(tr){
+        var ok = !q || tr.getAttribute('data-filter').indexOf(q) >= 0;
+        if (tipo && tr.getAttribute('data-tipo') !== tipo) ok = false;
+        tr.style.display = ok ? '' : 'none';
+      });
+    }
+  };
+
+  window.resetMat = function() {
+    document.getElementById('mat_id').value = '';
+    document.getElementById('mat_nombre').value = '';
+    document.getElementById('mat_tarifa').value = '12';
+    document.getElementById('mat_desc').value = '';
+    document.getElementById('form-mat-title').textContent = 'Nuevo material';
+    document.getElementById('btn-mat-save').textContent = 'Guardar material';
+  };
+  window.editMat = function(id, nombre, tarifa, desc) {
+    document.getElementById('mat_id').value = id;
+    document.getElementById('mat_nombre').value = nombre || '';
+    document.getElementById('mat_tarifa').value = tarifa;
+    document.getElementById('mat_desc').value = desc || '';
+    document.getElementById('form-mat-title').textContent = 'Editar material';
+    document.getElementById('btn-mat-save').textContent = 'Actualizar material';
+    show('materiales');
+    document.getElementById('form-mat').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  window.saveMat = async function(e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    fd.set('activo', '1');
+    var res = await fetch('/api/catalogos/material', { method: 'POST', body: fd });
+    var d = await res.json().catch(function(){ return {}; });
+    if (!res.ok || d.ok === false) { alert(d.error || 'Error al guardar'); return false; }
+    location.reload();
+    return false;
+  };
+  window.toggleMat = async function(id, activo) {
+    var fd = new FormData();
+    fd.set('activo', String(activo));
+    var res = await fetch('/api/catalogos/material/' + id + '/activo', { method: 'POST', body: fd });
+    if (!res.ok) { alert('No se pudo cambiar'); return; }
+    location.reload();
+  };
+
+  window.resetMod = function() {
+    document.getElementById('mod_id').value = '';
+    document.getElementById('mod_nombre').value = '';
+    document.getElementById('mod_tipo').value = 'PLT';
+    document.getElementById('mod_mat').value = '';
+    document.getElementById('mod_tarifa').value = '';
+    document.getElementById('mod_notas').value = '';
+    document.getElementById('form-mod-title').textContent = 'Nuevo modelo';
+    document.getElementById('btn-mod-save').textContent = 'Guardar modelo';
+  };
+  window.editMod = function(id, modelo, tipo, mat, tarifa, notas) {
+    document.getElementById('mod_id').value = id;
+    document.getElementById('mod_nombre').value = modelo || '';
+    document.getElementById('mod_tipo').value = tipo || 'PLT';
+    document.getElementById('mod_mat').value = mat || '';
+    document.getElementById('mod_tarifa').value = (tarifa != null && tarifa !== '') ? tarifa : '';
+    document.getElementById('mod_notas').value = notas || '';
+    document.getElementById('form-mod-title').textContent = 'Editar modelo';
+    document.getElementById('btn-mod-save').textContent = 'Actualizar modelo';
+    show('modelos');
+    document.getElementById('form-mod').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  window.saveMod = async function(e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var res = await fetch('/api/catalogos/modelo', { method: 'POST', body: fd });
+    var d = await res.json().catch(function(){ return {}; });
+    if (!res.ok || d.ok === false) { alert(d.error || 'Error al guardar'); return false; }
+    location.reload();
+    return false;
+  };
+  window.delMod = async function(id) {
+    if (!confirm('¿Eliminar este modelo del catálogo?')) return;
+    var res = await fetch('/api/catalogos/modelo/' + id, { method: 'DELETE' });
+    if (!res.ok) { alert('No se pudo eliminar'); return; }
+    location.reload();
+  };
+
+  window.savePita = async function(e) {
+    e.preventDefault();
+    var fd = new FormData();
+    fd.set('material', 'PITA');
+    fd.set('tarifa_por_gramo', document.getElementById('pita_tarifa').value);
+    fd.set('descripcion', 'Precio por pita (torcedores Taller)');
+    fd.set('activo', '1');
+    var res = await fetch('/api/catalogos/material', { method: 'POST', body: fd });
+    var d = await res.json().catch(function(){ return {}; });
+    if (!res.ok || d.ok === false) { alert(d.error || 'Error'); return false; }
+    alert('Precio PITA guardado en catálogo. En Taller puedes seguir ajustando por fila.');
+    location.reload();
+    return false;
+  };
+
+  // Al elegir material en modelo, sugerir tarifa del catálogo
+  var modMat = document.getElementById('mod_mat');
+  if (modMat) {
+    modMat.addEventListener('change', function(){
+      var v = (modMat.value || '').trim();
+      if (!v) return;
+      fetch('/api/catalogos/sugerir-tarifa?material=' + encodeURIComponent(v))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (d && d.tarifa_gr != null) {
+            var t = document.getElementById('mod_tarifa');
+            if (t && !String(t.value || '').trim()) t.value = d.tarifa_gr;
+          }
+        }).catch(function(){});
+    });
+  }
+})();
 </script>
 {% endblock %}
