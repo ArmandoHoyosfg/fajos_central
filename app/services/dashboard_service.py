@@ -248,11 +248,32 @@ class DashboardService:
         except Exception:
             trabajos = []
 
+        # Complemento ortográfico si hay pocas coincidencias
+        spell_hints: list[str] = []
+        spell_status = {}
+        try:
+            from app.services.spell_service import get_spell_service
+            sp = get_spell_service()
+            spell_status = sp.status()
+            total_hits = len(trab) + len(folios) + len(trabajos) + len(sem)
+            if total_hits < 3 and tokens:
+                for tok in tokens[:3]:
+                    if len(tok) < 3:
+                        continue
+                    sug = sp.suggest(tok, limit=5)
+                    for s in sug.get("suggestions") or []:
+                        if s.lower() != tok and s not in spell_hints:
+                            spell_hints.append(s)
+        except Exception:
+            spell_hints = []
+
         return {
             "trabajadores": trab,
             "semanas": sem[:30],
             "folios": folios,
             "trabajos": trabajos,
             "db_ok": True,
+            "spell_hints": spell_hints[:8],
+            "spell_status": spell_status,
         }
 

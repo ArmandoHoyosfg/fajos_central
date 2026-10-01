@@ -195,6 +195,8 @@ async def page_buscar(
             semanas=data.get("semanas") or [],
             folios=data.get("folios") or [],
             trabajos=data.get("trabajos") or [],
+            spell_hints=data.get("spell_hints") or [],
+            spell_status=data.get("spell_status") or {},
         ),
     )
 

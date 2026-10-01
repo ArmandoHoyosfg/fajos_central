@@ -243,6 +243,39 @@ def render_debug_page(
     if apr and not apr.get("tabla_ok", True):
         apr_note = '<p class="flash err">Para guardar el historial de aprendizaje, ejecuta en HeidiSQL: <code>db/schema/004_aprendizaje_merge.sql</code></p>'
 
+    sp = meta.get("spell") or {}
+    if sp:
+        if sp.get("disponible"):
+            parts = []
+            if sp.get("dict_path"):
+                parts.append(f"<code>{_esc(sp.get('dict_path'))}</code>")
+            if sp.get("hunspell"):
+                parts.append("hunspell")
+            if sp.get("aspell"):
+                parts.append("aspell")
+            if sp.get("pyspellchecker"):
+                parts.append("pyspellchecker")
+            det = " · ".join(parts) if parts else "sí"
+            spell_html = (
+                '<div class="card" style="padding:0.75rem 1rem;margin:0.75rem 0">'
+                "<strong>Diccionario ortográfico</strong>"
+                f'<p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">Detectado: {det}. '
+                "Se combina con el vocabulario de la app (nombres, materiales, modelos) "
+                "en búsquedas y campos con sugerencias.</p></div>"
+            )
+        else:
+            spell_html = (
+                '<div class="card" style="padding:0.75rem 1rem;margin:0.75rem 0">'
+                "<strong>Diccionario ortográfico</strong>"
+                '<p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">'
+                "No se encontró hunspell/LibreOffice en este equipo. "
+                "Se usa el vocabulario de la app y el spellcheck del navegador "
+                "(idioma del SO). Opcional: diccionario español de LibreOffice "
+                "o pip install pyspellchecker.</p></div>"
+            )
+    else:
+        spell_html = ""
+
     html = f"""<!DOCTYPE html>
 <html lang="es" data-theme="oscuro">
 <head>
@@ -325,6 +358,7 @@ def render_debug_page(
     </div>
     {err_html}
     {action_html}
+    {spell_html}
 
     <div class="dev-kpis">
       <div class="card"><div class="label">Base de datos</div>

@@ -50,12 +50,19 @@ def _dev_page_payload(repo: TrabajadoresRepo, *, action_result=None, sync_result
         apr = AprendizajeService().resumen_aprendizaje()
     except Exception as e:
         apr = {"tabla_ok": False, "error": str(e), "folios_inactivos": [], "candidatos_dup": []}
+    spell_status = {}
+    try:
+        from app.services.spell_service import get_spell_service
+        spell_status = get_spell_service().status()
+    except Exception as e:
+        spell_status = {"disponible": False, "error": str(e)}
+    meta = {"version": __version__, "lan": lan, "spell": spell_status}
     return render_debug_page(
         db_ok=check_db(),
         columns=data.get("columns") or [],
         mismatches=data.get("mismatches") or [],
         sample_vela=data.get("sample_vela") or [],
-        meta={"version": __version__, "lan": lan},
+        meta=meta,
         counts=data.get("counts") or {},
         orphans=data.get("orphans") or [],
         migrations=data.get("migrations") or [],

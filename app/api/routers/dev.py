@@ -289,3 +289,17 @@ async def api_dev_db_repair(action_id: str):
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
+
+@router.get("/api/dev/spell/status")
+async def api_spell_status():
+    """Estado del diccionario ortográfico del sistema."""
+    from app.services.spell_service import get_spell_service
+    return get_spell_service().status()
+
+
+@router.get("/api/spell/suggest")
+async def api_spell_suggest(q: str = Query("", min_length=0), limit: int = Query(8, ge=1, le=20)):
+    """Sugerencias: diccionario del SO (si hay) + vocabulario de la app."""
+    from app.services.spell_service import get_spell_service
+    return get_spell_service().suggest(q, limit=limit)
+

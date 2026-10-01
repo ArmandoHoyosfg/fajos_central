@@ -1,3 +1,12 @@
+## [3.40.3] — 2026-10-01
+
+### Diccionario ortográfico del sistema (complemento)
+- Detecta hunspell, aspell, archivos `.dic` (LibreOffice en Windows/Linux) y pyspellchecker.
+- Si no hay diccionario, usa vocabulario de la app + spellcheck del navegador.
+- Buscar: bloque **¿Quisiste decir?** con sugerencias.
+- DEV muestra el estado del diccionario.
+- Campos de nombre/búsqueda con `spellcheck` y sugerencias API.
+
 ## [3.40.2] — 2026-09-30
 
 ### UI: acciones horizontales en Trabajadores y barras compartidas

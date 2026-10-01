@@ -274,3 +274,14 @@ Ver [LICENSE](LICENSE) y <https://www.gnu.org/licenses/>.
 ```
 SPDX-License-Identifier: GPL-3.0-or-later
 ```
+
+
+## Diccionario ortográfico (opcional)
+
+La app **revisa si el sistema tiene un diccionario** (hunspell, LibreOffice `es_*.dic`, o `pyspellchecker`) y lo usa como **complemento** junto al vocabulario interno (nombres, materiales, modelos):
+
+- Campos de texto: `spellcheck` del navegador (idioma del SO).
+- Buscar: sugerencias «¿Quisiste decir?» si hay pocas coincidencias.
+- DEV: estado del diccionario detectado.
+
+No es obligatorio. Sin diccionario externo todo sigue funcionando.
