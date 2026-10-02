@@ -1,3 +1,9 @@
+## [3.40.7] — 2026-10-02
+
+### UI: modales a tamaño intermedio
+- Edición de fila vuelve a ~520px (ya no 640–860px).
+- Confirmaciones de cierre de folio siguen visibles pero más compactas.
+
 ## [3.40.6] — 2026-10-02
 
 ### Cierre de folio con advertencia + popups más grandes

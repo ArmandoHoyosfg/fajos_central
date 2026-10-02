@@ -436,18 +436,18 @@ tbody tr:hover { background: rgba(201, 162, 39, 0.08); }
 .modal {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 1.5rem 1.75rem;
-  width: min(640px, 96vw);
-  max-height: 92vh;
+  border-radius: 14px;
+  padding: 1.15rem 1.35rem;
+  width: min(520px, 94vw);
+  max-height: 88vh;
   overflow: auto;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+  box-shadow: var(--shadow);
   color: var(--text);
-  font-size: 1rem;
+  font-size: 0.92rem;
 }
 .modal h2 {
-  margin: 0 0 0.85rem;
-  font-size: 1.35rem;
+  margin: 0 0 0.65rem;
+  font-size: 1.12rem;
   color: var(--text);
   font-weight: 700;
 }
@@ -1416,64 +1416,52 @@ main.container.wide {
   background: color-mix(in srgb, var(--blue) 35%, transparent);
 }
 .modal.modal-wide {
-  width: min(860px, 96vw);
+  width: min(640px, 94vw);
 }
+/* Solo el diálogo de confirmación es un poco más grande / visible */
 .modal.modal-confirm {
-  width: min(560px, 96vw);
-  padding: 1.75rem 2rem;
+  width: min(440px, 92vw);
+  padding: 1.25rem 1.4rem;
 }
 .modal-confirm-title {
-  font-size: 1.4rem !important;
-  margin-bottom: 0.75rem !important;
+  font-size: 1.15rem !important;
+  margin-bottom: 0.5rem !important;
 }
 .modal-confirm-msg {
-  font-size: 1.05rem;
-  line-height: 1.45;
-  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin: 0 0 0.55rem;
 }
 .modal-confirm-detail {
-  font-size: 0.95rem;
-  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
 }
 .modal-confirm-warn {
-  background: color-mix(in srgb, #f38ba8 18%, transparent);
-  border: 1px solid color-mix(in srgb, #f38ba8 55%, transparent);
+  background: color-mix(in srgb, #f38ba8 16%, transparent);
+  border: 1px solid color-mix(in srgb, #f38ba8 50%, transparent);
   color: var(--text);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-  margin: 0 0 1rem;
-  font-size: 0.98rem;
-  line-height: 1.45;
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
 }
 .modal-confirm-warn strong {
   color: #e64553;
-  font-size: 1.05rem;
+  font-size: 0.92rem;
 }
 .modal-confirm-actions {
-  gap: 0.65rem !important;
-  margin-top: 1.25rem !important;
+  gap: 0.5rem !important;
+  margin-top: 0.9rem !important;
 }
 .modal-confirm-actions .btn {
-  min-height: 2.4rem;
-  padding: 0.5rem 1.1rem;
-  font-size: 0.95rem;
+  min-height: 2.15rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.88rem;
 }
 .fajos-confirm-backdrop {
   z-index: 300 !important;
-  background: rgba(0,0,0,0.72) !important;
-  backdrop-filter: blur(3px);
-}
-/* Inputs más legibles en modales */
-.modal input,
-.modal select,
-.modal textarea {
-  min-height: 2.4rem;
-  font-size: 1rem;
-  padding: 0.5rem 0.7rem;
-}
-.modal label {
-  font-size: 0.92rem;
-  margin-bottom: 0.2rem;
+  background: rgba(0,0,0,0.55) !important;
 }
 
 .table-wrap td .btn-icon-del,
