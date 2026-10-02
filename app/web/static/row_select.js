@@ -82,10 +82,23 @@
       toast("Selecciona al menos una fila", true);
       return;
     }
-    if (!global.confirm(
-      "¿Cerrar " + ids.length + " folio(s) seleccionado(s)?\n" +
-      "Solo se cierran si llevan 2+ semanas sin avance."
-    )) return;
+    var okClose = true;
+    if (global.FajosModal && FajosModal.confirm) {
+      okClose = await FajosModal.confirm({
+        title: "Cerrar folios seleccionados",
+        message: "¿Cerrar " + ids.length + " folio(s) seleccionado(s)?",
+        detail: "Solo se cierran si llevan 2+ semanas sin avance. Los que tienen avance reciente se omiten.",
+        okLabel: "Cerrar seleccionados",
+        cancelLabel: "Cancelar",
+        danger: true,
+      });
+    } else {
+      okClose = global.confirm(
+        "¿Cerrar " + ids.length + " folio(s) seleccionado(s)?\n" +
+        "Solo se cierran si llevan 2+ semanas sin avance."
+      );
+    }
+    if (!okClose) return;
     var fd = new FormData();
     if (global.SEMANA_ID) fd.set("semana_id", String(global.SEMANA_ID));
     fd.set("min_semanas", "2");
@@ -119,12 +132,24 @@
       toast("Selecciona al menos una fila", true);
       return;
     }
-    if (!global.confirm(
-      "¿Duplicar " + ids.length + " fila(s) en material DOL?\n\n" +
-      "• Mismo trabajador, folio y modelo\n" +
-      "• Gramos en blanco\n" +
-      "• Si ya existía en DOL, se reutiliza"
-    )) return;
+    var okDup = true;
+    if (global.FajosModal && FajosModal.confirm) {
+      okDup = await FajosModal.confirm({
+        title: "Duplicar en DOL",
+        message: "¿Duplicar " + ids.length + " fila(s) en material DOL?",
+        detail: "Mismo trabajador, folio y modelo. Gramos en blanco. Si ya existía en DOL, se reutiliza.",
+        okLabel: "Duplicar en DOL",
+        cancelLabel: "Cancelar",
+      });
+    } else {
+      okDup = global.confirm(
+        "¿Duplicar " + ids.length + " fila(s) en material DOL?\n\n" +
+        "• Mismo trabajador, folio y modelo\n" +
+        "• Gramos en blanco\n" +
+        "• Si ya existía en DOL, se reutiliza"
+      );
+    }
+    if (!okDup) return;
     var ok = 0, fail = 0, reused = 0;
     toast("Duplicando…");
     for (var i = 0; i < ids.length; i++) {

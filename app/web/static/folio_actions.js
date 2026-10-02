@@ -201,14 +201,14 @@
     });
     if (!ok) return;
     try {
+      var fd = new FormData();
+      if (semanaId) fd.set("semana_id", String(semanaId));
+      fd.set("min_semanas", String(minSemanas || 2));
       var res = await fetch("/api/produccion/terminar-lote", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: { Accept: "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({
-          semana_id: semanaId,
-          min_semanas: minSemanas || 2,
-        }),
+        body: fd,
       });
       var data = await res.json().catch(function () { return {}; });
       if (!res.ok || data.ok === false) {
