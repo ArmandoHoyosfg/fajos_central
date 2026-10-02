@@ -1419,37 +1419,52 @@ main.container.wide {
   width: min(640px, 94vw);
 }
 
-/* Confirmaciones de aviso (export, cierre, etc.) — bien visibles */
+/* Confirmaciones de aviso — un solo scrollbar en el cuerpo */
 .modal.modal-confirm {
   width: min(440px, 92vw);
   padding: 1.25rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  max-height: min(85vh, 720px);
+  overflow: hidden; /* no scroll en el modal entero */
 }
 .modal.modal-confirm--lg {
   width: min(520px, 94vw);
-  max-height: 85vh;
   padding: 1.35rem 1.5rem;
 }
 .modal-confirm-title {
   font-size: 1.15rem !important;
   margin-bottom: 0.5rem !important;
+  flex: 0 0 auto;
 }
 .modal-confirm-msg {
   font-size: 0.95rem;
   line-height: 1.4;
   margin: 0 0 0.55rem;
+  flex: 0 0 auto;
 }
 .modal-confirm-body {
   font-size: 0.9rem;
   line-height: 1.4;
   margin: 0 0 0.75rem;
-  max-height: 50vh;
-  overflow: auto;
-  padding: 0.35rem 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto; /* único scroll */
+  overflow-x: hidden;
+  padding: 0.15rem 0.15rem 0.15rem 0;
 }
 .modal-confirm-body .checklist-box {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.modal-confirm-detail,
+.modal-confirm-warn,
+.modal-confirm-actions {
+  flex: 0 0 auto;
 }
 .modal-confirm-body .checklist-item {
   display: flex;

@@ -1,3 +1,8 @@
+## [3.40.9] — 2026-10-02
+
+### UI: un solo scrollbar en checklist de export
+- El modal de confirmación ya no tiene doble scroll (lista + ventana).
+
 ## [3.40.8] — 2026-10-02
 
 ### Avisos de exportación en modal grande
