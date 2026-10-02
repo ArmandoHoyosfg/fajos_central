@@ -1,3 +1,11 @@
+## [3.40.8] — 2026-10-02
+
+### Avisos de exportación en modal grande
+- Checklist formal (Plata) ya no usa el `confirm` nativo del navegador.
+- Muestra ítems ✓/! legibles y rarezas con scroll.
+- Pita/Taller: mismos avisos de export en modal de la app.
+- Modales de edición se mantienen en tamaño normal (~520px).
+
 ## [3.40.7] — 2026-10-02
 
 ### UI: modales a tamaño intermedio

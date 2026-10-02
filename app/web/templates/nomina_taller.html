@@ -420,7 +420,20 @@ async function exportFormalTaller(semanaId) {
     } else {
       msg += '\n¿Descargar Excel?';
     }
-    if (!confirm(msg)) return;
+    let goExp = true;
+    if (window.FajosModal && FajosModal.confirm) {
+      goExp = await FajosModal.confirm({
+        title: 'Exportar nómina formal Taller',
+        message: msg,
+        okLabel: 'Descargar Excel',
+        cancelLabel: 'Cancelar',
+        large: true,
+        danger: !!(typeof d !== 'undefined' && d && d.totales_incompletos),
+      });
+    } else {
+      goExp = confirm(msg);
+    }
+    if (!goExp) return;
     window.location.href = '/api/export/nomina-taller/' + semanaId;
   } catch (e) {
     alert('Error al preparar la exportación');

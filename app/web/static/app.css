@@ -1418,10 +1418,16 @@ main.container.wide {
 .modal.modal-wide {
   width: min(640px, 94vw);
 }
-/* Solo el diálogo de confirmación es un poco más grande / visible */
+
+/* Confirmaciones de aviso (export, cierre, etc.) — bien visibles */
 .modal.modal-confirm {
   width: min(440px, 92vw);
   padding: 1.25rem 1.4rem;
+}
+.modal.modal-confirm--lg {
+  width: min(520px, 94vw);
+  max-height: 85vh;
+  padding: 1.35rem 1.5rem;
 }
 .modal-confirm-title {
   font-size: 1.15rem !important;
@@ -1431,6 +1437,36 @@ main.container.wide {
   font-size: 0.95rem;
   line-height: 1.4;
   margin: 0 0 0.55rem;
+}
+.modal-confirm-body {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin: 0 0 0.75rem;
+  max-height: 50vh;
+  overflow: auto;
+  padding: 0.35rem 0;
+}
+.modal-confirm-body .checklist-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.modal-confirm-body .checklist-item {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border: 1px solid var(--border);
+}
+.modal-confirm-body .checklist-item.ok .mark { color: #40a02b; font-weight: 700; }
+.modal-confirm-body .checklist-item.bad .mark { color: #e64553; font-weight: 700; }
+.modal-confirm-body .checklist-item ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 .modal-confirm-detail {
   font-size: 0.85rem;
@@ -1463,6 +1499,7 @@ main.container.wide {
   z-index: 300 !important;
   background: rgba(0,0,0,0.55) !important;
 }
+
 
 .table-wrap td .btn-icon-del,
 .table-wrap td .btn-icon-edit {

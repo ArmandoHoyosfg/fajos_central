@@ -762,19 +762,28 @@ async function checklistExport(semanaId) {
       html += '<span class="mark">' + (ok ? '✓' : '!') + '</span>';
       html += '<div><div>' + (it.texto || '') + '</div>';
       if (it.detalle && it.detalle.length) {
-        html += '<ul>' + it.detalle.map(d => '<li>' + d + '</li>').join('') + '</ul>';
+        html += '<ul>' + it.detalle.slice(0, 8).map(d => '<li>' + d + '</li>').join('') + '</ul>';
       }
       html += '</div></div>';
     });
     html += '</div>';
-    const go = confirm(
-      'Checklist antes de exportar formal:\n\n' +
-      items.map(it => (it.ok ? '✓ ' : '! ') + it.texto).join('\n') +
-      (items.some(i => i.detalle && i.detalle.length)
-        ? '\n\nRarezas:\n' + items.filter(i => i.detalle).flatMap(i => i.detalle).slice(0,5).join('\n')
-        : '') +
-      '\n\n¿Descargar Excel formal de Plata?'
-    );
+    let go = true;
+    if (window.FajosModal && FajosModal.confirm) {
+      go = await FajosModal.confirm({
+        title: 'Checklist antes de exportar formal',
+        html: html,
+        detail: '¿Descargar Excel formal de Plata?',
+        okLabel: 'Descargar Excel',
+        cancelLabel: 'Cancelar',
+        large: true,
+      });
+    } else {
+      go = confirm(
+        'Checklist antes de exportar formal:\n\n' +
+        items.map(it => (it.ok ? '✓ ' : '! ') + it.texto).join('\n') +
+        '\n\n¿Descargar Excel formal de Plata?'
+      );
+    }
     if (go) {
       window.location.href = '/api/export/produccion/' + semanaId + '?fmt=xlsx&formal=1';
     }

@@ -287,7 +287,20 @@ async function exportFormalPita(semanaId) {
       msg += 'Se omitirán (efectivo = 0): ' + omit + '\n';
     }
     msg += '\nRegla: las filas en $0 no van al Excel.\n\n¿Descargar?';
-    if (!confirm(msg)) return;
+    let goExp = true;
+    if (window.FajosModal && FajosModal.confirm) {
+      goExp = await FajosModal.confirm({
+        title: 'Exportar nómina formal Pita',
+        message: msg,
+        okLabel: 'Descargar Excel',
+        cancelLabel: 'Cancelar',
+        large: true,
+        danger: !!(typeof d !== 'undefined' && d && d.totales_incompletos),
+      });
+    } else {
+      goExp = confirm(msg);
+    }
+    if (!goExp) return;
     window.location.href = '/api/export/nomina-pita/' + semanaId;
   } catch (e) {
     alert('Error al preparar la exportación');

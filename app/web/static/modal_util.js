@@ -1,5 +1,5 @@
 /**
- * Modales: cierre seguro + confirmaciones grandes y visibles.
+ * Modales: cierre seguro + confirmaciones visibles (sustituye window.confirm).
  */
 (function (global) {
   "use strict";
@@ -32,7 +32,6 @@
 
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
-    // Si hay un confirm pendiente, cancelarlo
     var conf = document.getElementById("fajos-confirm-backdrop");
     if (conf && !conf.hidden) {
       var cancel = conf.querySelector("[data-confirm-cancel]");
@@ -45,18 +44,29 @@
   });
 
   /**
-   * Confirmación grande (sustituye window.confirm).
+   * @param {object} opts
+   * @param {string} [opts.title]
+   * @param {string} [opts.message] texto plano
+   * @param {string} [opts.html] cuerpo HTML (checklist, listas…)
+   * @param {string} [opts.detail]
+   * @param {string} [opts.warn] advertencia destacada
+   * @param {string} [opts.okLabel]
+   * @param {string} [opts.cancelLabel]
+   * @param {boolean} [opts.danger]
+   * @param {boolean} [opts.large] modal más ancho (avisos / checklist)
    * @returns {Promise<boolean>}
    */
   function confirmDialog(opts) {
     opts = opts || {};
     var title = opts.title || "Confirmar";
-    var message = opts.message || "¿Continuar?";
+    var message = opts.message || "";
+    var html = opts.html || "";
     var detail = opts.detail || "";
     var warn = opts.warn || "";
-    var okLabel = opts.okLabel || "Confirmar";
+    var okLabel = opts.okLabel || "Aceptar";
     var cancelLabel = opts.cancelLabel || "Cancelar";
     var danger = !!opts.danger;
+    var large = !!opts.large;
 
     return new Promise(function (resolve) {
       var bg = document.getElementById("fajos-confirm-backdrop");
@@ -69,11 +79,12 @@
         bindBackdrop(bg);
       }
       bg.innerHTML =
-        '<div class="modal modal-confirm" role="dialog" aria-modal="true">' +
+        '<div class="modal modal-confirm' + (large ? " modal-confirm--lg" : "") + '" role="dialog" aria-modal="true">' +
           '<h2 class="modal-confirm-title"></h2>' +
-          '<p class="modal-confirm-msg"></p>' +
+          '<p class="modal-confirm-msg" hidden></p>' +
+          '<div class="modal-confirm-body" hidden></div>' +
           '<div class="modal-confirm-warn" hidden></div>' +
-          '<p class="modal-confirm-detail muted"></p>' +
+          '<p class="modal-confirm-detail muted" hidden></p>' +
           '<div class="actions modal-confirm-actions">' +
             '<button type="button" class="btn btn-secondary" data-confirm-cancel></button>' +
             '<button type="button" class="btn" data-confirm-ok></button>' +
@@ -81,21 +92,25 @@
         "</div>";
 
       bg.querySelector(".modal-confirm-title").textContent = title;
-      bg.querySelector(".modal-confirm-msg").textContent = message;
+      var msgEl = bg.querySelector(".modal-confirm-msg");
+      if (message) {
+        msgEl.textContent = message;
+        msgEl.hidden = false;
+      }
+      var bodyEl = bg.querySelector(".modal-confirm-body");
+      if (html) {
+        bodyEl.innerHTML = html;
+        bodyEl.hidden = false;
+      }
       var det = bg.querySelector(".modal-confirm-detail");
       if (detail) {
         det.textContent = detail;
         det.hidden = false;
-      } else {
-        det.hidden = true;
       }
       var warnEl = bg.querySelector(".modal-confirm-warn");
       if (warn) {
         warnEl.hidden = false;
         warnEl.innerHTML = "<strong>⚠ Atención</strong><br>" + String(warn).replace(/\n/g, "<br>");
-      } else {
-        warnEl.hidden = true;
-        warnEl.innerHTML = "";
       }
       var btnOk = bg.querySelector("[data-confirm-ok]");
       var btnCancel = bg.querySelector("[data-confirm-cancel]");
