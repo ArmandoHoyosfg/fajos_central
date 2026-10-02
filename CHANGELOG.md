@@ -1,3 +1,10 @@
+## [3.40.4] — 2026-10-02
+
+### Fix: ＋ Modelo / Material al catálogo
+- `CatalogAssist` alias (antes solo `FajosCatalogAssist` → botones sin handler).
+- Handlers de guardado con toast de error/éxito y aviso si el campo está vacío.
+- Hint «No está en catálogo» al escribir modelo/material libre.
+
 ## [3.40.3] — 2026-10-01
 
 ### Diccionario ortográfico del sistema (complemento)

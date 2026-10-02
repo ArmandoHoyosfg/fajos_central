@@ -2139,6 +2139,8 @@ th.col-actions, td.col-actions {
 }
 .cat-hint--ok { color: var(--green, #a6e3a1); }
 .cat-hint--free { color: var(--accent, #c9a227); }
+.cat-hint--warn { color: #e64553; }
+.cat-hint--info { color: var(--blue, #89b4fa); }
 .mat-chips {
   display: flex;
   flex-wrap: wrap;

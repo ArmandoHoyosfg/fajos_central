@@ -47,7 +47,7 @@
           data-tarifa="{{ m.tarifa_default if m.tarifa_default is not none else '' }}"></option>
   {% endfor %}
 </datalist>
-<script src="/static/catalog_assist.js" defer></script>
+<script src="/static/catalog_assist.js?v=3.40.4" defer></script>
 <script type="application/json" id="catalog-tarifas">{
   {
     {% for m in materiales or [] %}
