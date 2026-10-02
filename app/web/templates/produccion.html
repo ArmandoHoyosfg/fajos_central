@@ -663,7 +663,7 @@ function onMaterialChange_legacy_unused(sel) {
 }
 </script>
 
-<script src="/static/folio_actions.js?v=31913"></script>
+<script src="/static/folio_actions.js?v=3.40.6"></script>
 <script src="/static/table_sort.js?v=3180"></script>
 <script src="/static/capture_guard.js?v=3130"></script>
 
@@ -1110,29 +1110,7 @@ async function delLinea(id) {
   if (res.ok) location.reload();
   else showToast('Error al eliminar', true);
 }
-async function marcarTerminado(prodId, folio) {
-  if (prodId == null || prodId === '' || Number(prodId) <= 0) {
-    showToast('No se identificó la línea (recarga la página)', true);
-    return;
-  }
-  const label = folio ? ('folio ' + folio) : ('línea #' + prodId);
-  if (!confirm('¿Marcar ' + label + ' como terminado?\n\n• Se oculta de la captura\n• Los gramos de esta semana se conservan para el pago\n• Puedes reactivarlo desde «folios terminados»')) return;
-  try {
-    const res = await fetch('/api/produccion/linea/' + prodId + '/terminar', {
-      method: 'POST',
-      headers: { 'Accept': 'application/json' },
-    });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok || d.ok === false) {
-      showToast(d.error || d.user_message || d.message || ('Error HTTP ' + res.status), true);
-      return;
-    }
-    showToast('Terminado: ' + (d.folio || label));
-    setTimeout(() => location.reload(), 400);
-  } catch (e) {
-    showToast('Error de red al terminar folio', true);
-  }
-}
+/* marcarTerminado → app/web/static/folio_actions.js?v=3.40.6 */
 async function reactivarFolio(prodId, folio) {
   const label = folio ? ('folio ' + folio) : 'esta línea';
   if (!confirm('¿Reactivar ' + label + ' para seguir capturando?')) return;

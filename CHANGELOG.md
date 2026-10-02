@@ -1,3 +1,10 @@
+## [3.40.6] — 2026-10-02
+
+### Cierre de folio con advertencia + popups más grandes
+- Si el folio tiene avance en la semana activa, el diálogo avisa gramos/$ antes de cerrar.
+- Confirmaciones con modal grande (ya no el `confirm` pequeño del navegador).
+- Modales de edición más anchos y legibles.
+
 ## [3.40.5] — 2026-10-02
 
 ### Fix: efectivo desfasado con 0 gramos
