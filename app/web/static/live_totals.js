@@ -107,29 +107,42 @@
         const totCell = tr.querySelector(".cell-total");
         const efCell = tr.querySelector(".cell-efectivo");
         const hasInputs = !!tr.querySelector("input.cell-gm");
-        // Rellenar siempre si está vacío o si hay inputs (edición en vivo)
-        if (totCell && (hasInputs || !(totCell.textContent || "").trim())) {
+        // Siempre recalcular GR/$ desde días × tarifa (corrige $ stale con 0 g)
+        if (totCell) {
           if (g > 0) {
             totCell.textContent = fmtG(g);
             totCell.setAttribute("data-total", String(g));
+          } else if (hasInputs) {
+            totCell.textContent = "";
+            totCell.setAttribute("data-total", "0");
           }
         }
-        if (efCell && (hasInputs || !(efCell.textContent || "").trim())) {
+        if (efCell) {
           if (e > 0) {
             efCell.textContent = "$" + e.toFixed(2);
             efCell.setAttribute("data-efectivo", e.toFixed(2));
+          } else if (hasInputs || g <= 0) {
+            // 0 g → $ vacío (nunca dejar $150 huérfano)
+            efCell.textContent = "";
+            efCell.setAttribute("data-efectivo", "0");
           }
         }
       });
 
-      // Si la suma dio 0 pero el servidor mandó totales, no pisarlos con 0
+      // Fallback servidor solo si no hay filas visibles (tabla vacía / sin datos),
+      // NO cuando un filtro oculta todo o cuando hay filas con 0 g
       const sg = parseNum(kpi.getAttribute("data-server-gramos"));
       const se = parseNum(kpi.getAttribute("data-server-efectivo"));
       const sl = parseNum(kpi.getAttribute("data-server-lineas"));
-      if (gramos <= 0 && sg > 0) {
+      const anyFilter =
+        !!(document.getElementById("flt-texto") || {}).value ||
+        !!(document.getElementById("flt-sin-firma-avance") || {}).checked ||
+        !!(document.getElementById("flt-sin-firma-sin-avance") || {}).checked ||
+        !!(document.getElementById("flt-sin-hoy") || {}).checked;
+      if (!anyFilter && lineas <= 0 && gramos <= 0 && sg > 0) {
         gramos = sg;
         efectivo = se;
-        if (lineas <= 0 && sl > 0) lineas = sl;
+        if (sl > 0) lineas = sl;
       }
 
       kpi.innerHTML =

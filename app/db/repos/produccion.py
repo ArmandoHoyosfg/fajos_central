@@ -27,7 +27,9 @@ class ProduccionRepo(BaseRepo):
             except Exception:
                 return row
 
+        # Suma de días = fuente de verdad (no confiar en columnas stale)
         days = 0.0
+        has_day_cols = any(c in row for c in cls.DAY_COLS_LIST)
         for c in cls.DAY_COLS_LIST:
             raw = row.get(c)
             if raw is None or raw == "":
@@ -40,35 +42,51 @@ class ProduccionRepo(BaseRepo):
                 except (TypeError, ValueError):
                     pass
 
-        # Preferir suma SQL si viene
-        try:
-            gc = float(row.get("gramos_calc") or 0)
-            if gc > days:
-                days = gc
-        except (TypeError, ValueError):
-            pass
+        # gramos_calc de SQL (si viene); OJO: 0 es válido, no usar `or`
+        gc_raw = row.get("gramos_calc")
+        if gc_raw is not None and gc_raw != "":
+            try:
+                gc = float(gc_raw)
+                if gc > days:
+                    days = gc
+            except (TypeError, ValueError):
+                pass
 
-        try:
-            tg = float(row.get("total_gramos") or 0)
-        except (TypeError, ValueError):
-            tg = 0.0
-        if days > 0:
+        if has_day_cols or gc_raw is not None:
             tg = days
-        row["total_gramos"] = round(tg, 1) if tg else 0
+        else:
+            try:
+                tg = float(row.get("total_gramos") or 0)
+            except (TypeError, ValueError):
+                tg = 0.0
+        tg = round(tg, 1) if tg else 0.0
+        row["total_gramos"] = tg
 
         try:
             tarifa = float(row.get("tarifa_gr") or 0)
         except (TypeError, ValueError):
             tarifa = 0.0
-        try:
-            ef = float(row.get("efectivo_calc") or row.get("efectivo") or 0)
-        except (TypeError, ValueError):
-            ef = 0.0
+
+        # Efectivo siempre gramos × tarifa. Nunca conservar $ viejo si hay 0 g
+        # (bug: `efectivo_calc or efectivo` prefería 150 cuando calc era 0)
         if tg > 0 and tarifa > 0:
             ef = round(tg * tarifa, 2)
+        elif tg <= 0:
+            ef = 0.0
+        else:
+            ef_raw = row.get("efectivo_calc")
+            if ef_raw is not None and ef_raw != "":
+                try:
+                    ef = float(ef_raw)
+                except (TypeError, ValueError):
+                    ef = 0.0
+            else:
+                try:
+                    ef = float(row.get("efectivo") or 0)
+                except (TypeError, ValueError):
+                    ef = 0.0
         row["efectivo"] = ef if ef else 0
 
-        # Textos listos para la plantilla (sin lógica Jinja)
         if tg > 0:
             gtxt = f"{tg:.1f}".rstrip("0").rstrip(".")
             row["gr_display"] = gtxt
@@ -751,10 +769,14 @@ class ProduccionRepo(BaseRepo):
             ted = float(row.get("total_efectivo_dias") or 0)
         except (TypeError, ValueError):
             tg = te = tgd = ted = 0.0
-        if tgd > tg:
-            tg = tgd
-        if ted > te:
-            te = ted
+        # Preferir siempre suma de días (columnas generadas/stale pueden mentir)
+        if "total_gramos_dias" in row or "total_efectivo_dias" in row:
+            tg, te = tgd, ted
+        else:
+            if tgd > tg:
+                tg = tgd
+            if ted > te:
+                te = ted
         return {
             "lineas": int(row.get("lineas") or 0),
             "total_gramos": round(tg, 1),

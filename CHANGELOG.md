@@ -1,3 +1,11 @@
+## [3.40.5] — 2026-10-02
+
+### Fix: efectivo desfasado con 0 gramos
+- Servidor: no usar `efectivo_calc or efectivo` (0 era falsy y dejaba $ viejo).
+- Efectivo = gramos × tarifa; si gramos = 0 → $ = 0.
+- Cliente: siempre recalcula GR/$ en vivo y limpia $ cuando no hay avance.
+- KPI con filtros activos ya no vuelve a totales de servidor completos.
+
 ## [3.40.4] — 2026-10-02
 
 ### Fix: ＋ Modelo / Material al catálogo
