@@ -986,13 +986,34 @@ td.editable-hint:hover input.cell-edit[readonly] {
 .table-wrap.table-compact .col-folio { width: 9%; }
 .table-wrap.table-compact .col-mat { width: 11%; }
 .table-wrap.table-compact .col-prod { width: 11%; }
-.table-wrap.table-compact .col-pitas { width: 8%; }
+.table-wrap.table-compact .col-pitas { width: 7.5rem; min-width: 6.5rem; }
+.table-wrap.table-compact .col-precio-pita { width: 5rem; min-width: 4.5rem; }
 .table-wrap.table-compact .col-efec { width: 10%; }
-.table-wrap.table-compact .col-firma { width: 6%; text-align: center; }
-.table-wrap.table-compact .col-puesto { width: 14%; }
-.table-wrap.table-compact .col-sueldo { width: 12%; }
-.table-wrap.table-compact .col-extras { width: 12%; }
-.table-wrap.table-compact .col-total { width: 12%; text-align: right; }
+.table-wrap.table-compact .col-firma { width: 5%; text-align: center; }
+.table-wrap.table-compact .col-puesto { width: 12%; }
+.table-wrap.table-compact .col-sueldo { width: 9%; min-width: 5.5rem; }
+.table-wrap.table-compact .col-extras { width: 8%; min-width: 4.5rem; }
+.table-wrap.table-compact .col-total { width: 10%; text-align: right; }
+
+/* Taller: inputs de pitas más anchos; sueldo/extras un poco más compactos */
+.table-wrap.table-compact input.cell-edit[data-field="pitas"] {
+  width: 100%;
+  min-width: 5.5rem;
+  max-width: 8rem;
+  box-sizing: border-box;
+}
+.table-wrap.table-compact input.cell-edit[data-field="precio_pita"] {
+  width: 100%;
+  min-width: 3.5rem;
+  max-width: 5rem;
+  box-sizing: border-box;
+}
+.table-wrap.table-compact input.cell-edit[data-field="sueldo"],
+.table-wrap.table-compact input.cell-edit[data-field="extras"] {
+  width: 100%;
+  max-width: 6.5rem;
+  box-sizing: border-box;
+}
 
 /* Formulario alta: que se ajuste */
 .form-alta-compact {

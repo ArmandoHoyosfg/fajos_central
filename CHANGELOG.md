@@ -1,3 +1,9 @@
+## [3.40.10] — 2026-10-02
+
+### Taller: columna Pitas más ancha
+- Campos de pitas más anchos (p. ej. 475 visible).
+- Sueldo y extras ligeramente más compactos.
+
 ## [3.40.9] — 2026-10-02
 
 ### UI: un solo scrollbar en checklist de export
