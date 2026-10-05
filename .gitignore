@@ -1,0 +1,36 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Entorno y secretos
+.env
+config.ini
+*.local
+
+# Logs y exports generados
+logs/
+exports/
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Empaquetado
+dist/
+build/
+*.exe
+
+# Certificados SSL locales
+certs/

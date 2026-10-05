@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}Semanas — Fajos Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Gestión de semanas</h1>
+    <p class="muted">Hoy: <strong>{{ hoy }}</strong> · Nómina = <strong>sábado → viernes</strong>
+      · Sugerida: <code>{{ sugerida.label }}</code></p>
+  </div>
+  <div class="toolbar">
+    <a class="btn btn-secondary" href="/produccion">← Plata</a>
+    <button type="button" class="btn" onclick="crearActual()">★ Crear / ir a semana actual</button>
+  </div>
+</div>
+
+<div class="help-panel">
+  <strong>Corregir un duplicado mal fechado</strong>
+  <ol style="margin:0.4rem 0 0 1.2rem;padding:0;">
+    <li>En la semana <em>con datos</em> (gramos ya capturados) → <strong>Alinear a actual</strong>.</li>
+    <li>Si avisa conflicto, <strong>Eliminar</strong> primero la semana vacía de más.</li>
+    <li>Usa <strong>Editar</strong> solo si necesitas otras fechas distintas a “hoy”.</li>
+  </ol>
+</div>
+
+{% if not semanas %}
+<p class="muted">No hay semanas. Pulsa <strong>★ Crear / ir a semana actual</strong>.</p>
+{% endif %}
+
+<div class="sem-grid">
+{% for s in semanas %}
+  <article class="sem-card {% if s.es_actual %}is-actual{% endif %} {% if s.cerrada %}is-closed{% endif %}" data-id="{{ s.id }}">
+    <header class="sem-card-head">
+      <div>
+        <h2 class="sem-code">{{ s.codigo }}
+          {% if s.es_actual %}<span class="badge-actual">ACTUAL</span>{% endif %}
+          {% if s.cerrada %}<span class="badge-closed">Cerrada</span>{% endif %}
+        </h2>
+        <p class="sem-dates muted">{{ s.fecha_inicio }} → {{ s.fecha_fin }}</p>
+      </div>
+      <div class="sem-uso" title="Líneas por área">
+        <span>Plata <b>{{ s.uso.plt }}</b></span>
+        <span>Pita <b>{{ s.uso.pit }}</b></span>
+        <span>Taller <b>{{ s.uso.tll }}</b></span>
+      </div>
+    </header>
+
+    {% if s.es_actual %}
+    <p class="sem-hint ok">Esta semana contiene la fecha de hoy.</p>
+    {% elif s.uso.total > 0 %}
+    <p class="sem-hint warn">Tiene captura pero <strong>no es la de hoy</strong>. Si es un error de fechas, usa <em>Alinear a actual</em>.</p>
+    {% else %}
+    <p class="sem-hint muted">Vacía — se puede eliminar si sobra.</p>
+    {% endif %}
+
+    {% if s.notas %}
+    <p class="sem-notas muted faint">{{ s.notas }}</p>
+    {% endif %}
+
+    <div class="sem-actions">
+      <button type="button" class="btn btn-secondary" data-edit='{{ s|tojson }}'>Editar</button>
+      <button type="button" class="btn" data-alinear="{{ s.id }}" title="Poner sáb–vie de hoy sin perder datos">Alinear a actual</button>
+      <a class="btn btn-secondary" href="/produccion?semana_id={{ s.id }}">Abrir Plata</a>
+      <a class="btn btn-secondary" href="/nomina-pita?semana_id={{ s.id }}">Pita</a>
+      <a class="btn btn-secondary" href="/nomina-taller?semana_id={{ s.id }}">Taller</a>
+      {% if s.uso.total == 0 %}
+      <button type="button" class="btn btn-danger" data-del="{{ s.id }}">Eliminar</button>
+      {% else %}
+      <button type="button" class="btn btn-secondary" disabled title="{{ s.uso.total }} línea(s) — no se borra">Con datos</button>
+      {% endif %}
+      {% if not s.cerrada %}
+      <button type="button" class="btn btn-secondary" data-cerrar="{{ s.id }}">Cerrar semana</button>
+      {% else %}
+      <button type="button" class="btn btn-secondary" data-reabrir="{{ s.id }}">Reabrir</button>
+      {% endif %}
+    </div>
+  </article>
+{% endfor %}
+</div>
+
+<div class="modal-backdrop" id="modal-sem" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h2>Editar semana</h2>
+    <p class="muted faint">Si las fechas no son sáb–vie exactos, el sistema las ajusta al rango correcto.</p>
+    <form id="form-sem">
+      <input type="hidden" name="id" id="sem-id">
+      <label>Código</label>
+      <input name="codigo" id="sem-codigo" required placeholder="22-28">
+      <div class="form-row-2">
+        <div>
+          <label>Inicio (sábado)</label>
+          <input name="fecha_inicio" id="sem-fi" type="date" required>
+        </div>
+        <div>
+          <label>Fin (viernes)</label>
+          <input name="fecha_fin" id="sem-ff" type="date" required>
+        </div>
+      </div>
+      <label>Notas</label>
+      <input name="notas" id="sem-notas" placeholder="Opcional">
+      <div class="modal-actions">
+        <button type="submit" class="btn">Guardar</button>
+        <button type="button" class="btn btn-secondary" id="btn-sem-cancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  function toast(msg, err) {
+    if (window.FajosLive && FajosLive.showToast) return FajosLive.showToast(msg, !!err);
+    alert(msg);
+  }
+  function parseDetail(data) {
+    if (!data) return 'Error';
+    var d = data.detail || data.message || data.user_message || data.mensaje;
+    if (Array.isArray(d)) return d.map(function (x) { return x.msg || x; }).join('; ');
+    if (typeof d === 'object') return JSON.stringify(d);
+    return d || 'Error';
+  }
+
+  document.querySelectorAll('[data-edit]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var s;
+      try { s = JSON.parse(btn.getAttribute('data-edit')); } catch (e) { return; }
+      document.getElementById('sem-id').value = s.id;
+      document.getElementById('sem-codigo').value = s.codigo || '';
+      document.getElementById('sem-fi').value = String(s.fecha_inicio || '').slice(0, 10);
+      document.getElementById('sem-ff').value = String(s.fecha_fin || '').slice(0, 10);
+      document.getElementById('sem-notas').value = s.notas || '';
+      document.getElementById('modal-sem').hidden = false;
+      if (window.FajosModal) FajosModal.bindAll();
+    });
+  });
+
+  document.getElementById('btn-sem-cancel').addEventListener('click', function () {
+    document.getElementById('modal-sem').hidden = true;
+  });
+
+  document.getElementById('form-sem').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var id = document.getElementById('sem-id').value;
+    var fd = new FormData(e.target);
+    var res = await fetch('/api/semanas/' + id, { method: 'PATCH', body: fd });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) { alert(parseDetail(data)); return; }
+    location.reload();
+  });
+
+  document.querySelectorAll('[data-alinear]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var id = btn.getAttribute('data-alinear');
+      if (!confirm('¿Alinear esta semana al sáb–vie de hoy?\n\nSe conservan trabajos y gramos. Solo cambian código y fechas.')) return;
+      var res = await fetch('/api/semanas/' + id + '/alinear-actual', { method: 'POST' });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) { alert(parseDetail(data)); return; }
+      alert(data.mensaje || 'Alineada');
+      location.href = '/produccion?semana_id=' + id;
+    });
+  });
+
+  document.querySelectorAll('[data-del]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var id = btn.getAttribute('data-del');
+      if (!confirm('¿Eliminar esta semana vacía?')) return;
+      var res = await fetch('/api/semanas/' + id, { method: 'DELETE' });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) { alert(parseDetail(data)); return; }
+      location.reload();
+    });
+  });
+
+  document.querySelectorAll('[data-cerrar]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var id = btn.getAttribute('data-cerrar');
+      if (!confirm('¿Cerrar esta semana? No se podrá editar producción hasta reabrir.')) return;
+      var res = await fetch('/api/semanas/' + id + '/cerrar', { method: 'POST' });
+      if (!res.ok) {
+        var data = await res.json().catch(function () { return {}; });
+        alert(parseDetail(data));
+        return;
+      }
+      location.reload();
+    });
+  });
+
+  document.querySelectorAll('[data-reabrir]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var id = btn.getAttribute('data-reabrir');
+      if (!confirm('¿Reabrir esta semana?')) return;
+      var res = await fetch('/api/semanas/' + id + '/reabrir', { method: 'POST' });
+      if (!res.ok) {
+        var data = await res.json().catch(function () { return {}; });
+        alert(parseDetail(data));
+        return;
+      }
+      location.reload();
+    });
+  });
+
+  window.crearActual = async function () {
+    var res = await fetch('/api/semanas/actual', { method: 'POST' });
+    var data = await res.json().catch(function () { return {}; });
+    if (data.semana && data.semana.id) location.href = '/produccion?semana_id=' + data.semana.id;
+    else location.reload();
+  };
+})();
+</script>
+<style>
+.sem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.sem-card {
+  background: var(--surface, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.sem-card.is-actual {
+  border-color: var(--accent, #c9a227);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.sem-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.sem-code {
+  margin: 0;
+  font-size: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.sem-dates { margin: 0.2rem 0 0; font-size: 0.9rem; }
+.sem-uso {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 0.8rem;
+  gap: 0.15rem;
+  opacity: 0.9;
+}
+.sem-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--border) 35%, transparent);
+}
+.sem-hint.ok { background: color-mix(in srgb, #2e7d32 25%, transparent); }
+.sem-hint.warn { background: color-mix(in srgb, #f9a825 22%, transparent); }
+.sem-notas { margin: 0; font-size: 0.8rem; }
+.sem-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+.sem-actions .btn {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.65rem;
+}
+.badge-closed {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  background: #555;
+  color: #eee;
+}
+.btn-danger {
+  background: #8b2942 !important;
+  color: #fff !important;
+  border-color: #a33 !important;
+}
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+@media (max-width: 520px) {
+  .form-row-2 { grid-template-columns: 1fr; }
+  .sem-grid { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}

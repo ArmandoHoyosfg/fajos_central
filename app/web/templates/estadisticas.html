@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% block title %}Estadísticas — Fajos Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Estadísticas históricas</h1>
+    <p class="muted">Por trabajador, folio o día. Filtra por semanas, últimos N días, un solo día o un rango.</p>
+  </div>
+</div>
+
+<form method="get" action="/estadisticas" class="card" style="padding:1rem;margin-bottom:1rem">
+  <div class="stats-filters">
+    <label>Vista
+      <select name="vista" id="est-vista">
+        <option value="trabajador" {% if vista=='trabajador' %}selected{% endif %}>Por trabajador</option>
+        <option value="folio" {% if vista=='folio' %}selected{% endif %}>Por folio</option>
+        <option value="diario" {% if vista=='diario' %}selected{% endif %}>Por día (detalle)</option>
+      </select>
+    </label>
+    <label>Periodo
+      <select name="periodo" id="est-periodo">
+        <option value="semanas" {% if periodo=='semanas' %}selected{% endif %}>Semanas marcadas</option>
+        <option value="n_dias" {% if periodo=='n_dias' %}selected{% endif %}>Últimos N días</option>
+        <option value="un_dia" {% if periodo=='un_dia' %}selected{% endif %}>Un solo día</option>
+        <option value="rango" {% if periodo=='rango' %}selected{% endif %}>Rango de fechas</option>
+      </select>
+    </label>
+    <label id="wrap-n-dias" {% if periodo != 'n_dias' %}hidden{% endif %}>N días
+      <input type="number" name="n_dias" min="1" max="90" value="{{ n_dias or 14 }}">
+    </label>
+    <label id="wrap-un-dia" {% if periodo != 'un_dia' %}hidden{% endif %}>Día
+      <input type="date" name="fecha" value="{{ fecha or '' }}">
+    </label>
+    <label id="wrap-desde" {% if periodo != 'rango' %}hidden{% endif %}>Desde
+      <input type="date" name="fecha_desde" value="{{ fecha_desde or '' }}">
+    </label>
+    <label id="wrap-hasta" {% if periodo != 'rango' %}hidden{% endif %}>Hasta
+      <input type="date" name="fecha_hasta" value="{{ fecha_hasta or '' }}">
+    </label>
+    <label id="wrap-agrupar" {% if vista != 'diario' %}hidden{% endif %}>Agrupar diario
+      <select name="agrupar">
+        <option value="dia" {% if agrupar=='dia' %}selected{% endif %}>Solo por día</option>
+        <option value="trabajador" {% if agrupar=='trabajador' %}selected{% endif %}>Día + trabajador</option>
+        <option value="folio" {% if agrupar=='folio' %}selected{% endif %}>Día + folio</option>
+      </select>
+    </label>
+    <label class="stats-search">Buscar
+      <input name="q" value="{{ q or '' }}" placeholder="Nombre, ubic o folio…">
+    </label>
+  </div>
+
+  <details style="margin-top:0.75rem" {% if periodo=='semanas' %}open{% endif %} id="det-semanas">
+    <summary class="muted" style="cursor:pointer">Semanas a incluir (solo si el periodo es «Semanas marcadas»)</summary>
+    <div style="display:flex;flex-wrap:wrap;gap:0.35rem 0.85rem;margin-top:0.5rem;max-height:10rem;overflow:auto">
+      {% for s in semanas %}
+      <label style="font-size:0.85rem;white-space:nowrap">
+        <input type="checkbox" name="semana_id" value="{{ s.id }}"
+          {% if not selected_ids or s.id in selected_ids %}checked{% endif %}>
+        {{ s.codigo }}{% if s.cerrada %} · cerrada{% endif %}
+      </label>
+      {% endfor %}
+    </div>
+  </details>
+
+  <div class="stats-actions" style="margin-top:0.85rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+    <button type="submit" class="btn">Aplicar</button>
+    <a class="btn btn-secondary" href="/estadisticas">Limpiar</a>
+  </div>
+</form>
+
+<script>
+(function(){
+  const periodo = document.getElementById('est-periodo');
+  const vista = document.getElementById('est-vista');
+  function sync() {
+    const p = periodo.value;
+    var n = document.getElementById('wrap-n-dias');
+    var u = document.getElementById('wrap-un-dia');
+    var d = document.getElementById('wrap-desde');
+    var h = document.getElementById('wrap-hasta');
+    var a = document.getElementById('wrap-agrupar');
+    if (n) n.hidden = p !== 'n_dias';
+    if (u) u.hidden = p !== 'un_dia';
+    if (d) d.hidden = p !== 'rango';
+    if (h) h.hidden = p !== 'rango';
+    if (a) a.hidden = vista.value !== 'diario';
+  }
+  if (periodo) periodo.addEventListener('change', sync);
+  if (vista) vista.addEventListener('change', sync);
+  sync();
+})();
+</script>
+
+{% if rows is defined %}
+<div class="kpi-bar" style="margin-bottom:0.75rem">
+  <span class="kpi-item"><b>{{ rows|length }}</b> filas</span>
+  <span class="kpi-item"><b>{{ sum_gramos or 0 }}</b> g</span>
+  <span class="kpi-item money"><b>${{ '%.2f'|format(sum_efectivo or 0) }}</b></span>
+</div>
+{% endif %}
+
+{% if detalle_data %}
+<div class="card detalle-panel" style="padding:1rem;margin-bottom:1rem;border-left:3px solid var(--accent)">
+  {% if detalle == 'folio' %}
+  <div class="page-head" style="margin-bottom:0.75rem">
+    <div>
+      <h2 style="margin:0">Desglose · Folio <code>{{ detalle_data.folio }}</code></h2>
+      <p class="muted" style="margin:0.25rem 0 0">
+        {{ detalle_data.resumen.total_gramos }} g ·
+        ${{ '%.2f'|format(detalle_data.resumen.total_efectivo) }} ·
+        {{ detalle_data.resumen.n_semanas }} sem ·
+        {{ detalle_data.resumen.n_dias_con_avance }} días c/avance
+      </p>
+      <p class="muted" style="margin:0.2rem 0 0;font-size:0.85rem">
+        Trabajadores: {{ detalle_data.resumen.trabajadores|join(' · ') or '—' }}
+        {% if detalle_data.resumen.materiales %} · Mat: {{ detalle_data.resumen.materiales|join(', ') }}{% endif %}
+        {% if detalle_data.resumen.modelos %} · Mod: {{ detalle_data.resumen.modelos|join(', ') }}{% endif %}
+      </p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="/estadisticas?vista=folio&q={{ detalle_data.folio|urlencode }}">Cerrar desglose</a>
+  </div>
+
+  <h3 style="font-size:0.95rem;margin:0.75rem 0 0.35rem">Por semana</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Semana</th><th>Estado</th><th>g</th><th>$</th><th>Quién</th><th></th></tr></thead>
+    <tbody>
+    {% for s in detalle_data.semanas %}
+      <tr>
+        <td><strong>{{ s.codigo }}</strong></td>
+        <td>{% if s.cerrada %}<span class="badge badge-off">cerrada</span>{% else %}<span class="badge badge-ok">abierta</span>{% endif %}</td>
+        <td>{{ s.total_gramos }}</td>
+        <td>${{ '%.2f'|format(s.total_efectivo) }}</td>
+        <td style="font-size:0.82rem">
+          {% for L in s.lineas %}{{ L.nombre }} ({{ L.ubic }}) {{ L.total_gramos }}g{% if not loop.last %} · {% endif %}{% endfor %}
+        </td>
+        <td><a class="btn btn-sm btn-secondary" href="/produccion?semana_id={{ s.semana_id }}">Ver</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">Sin semanas con avance.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="font-size:0.95rem;margin:0.85rem 0 0.35rem">Por día</h3>
+  <div class="table-wrap" style="max-height:18rem;overflow:auto">
+  <table>
+    <thead><tr><th>Fecha</th><th>Día</th><th>g</th><th>$</th><th>Trabajador</th><th>Semana</th><th>Mat</th></tr></thead>
+    <tbody>
+    {% for d in detalle_data.dias %}
+      <tr>
+        <td>{{ d.fecha_label }}</td>
+        <td>{{ d.dia_semana }}</td>
+        <td>{{ d.gramos }}</td>
+        <td>${{ '%.2f'|format(d.efectivo) }}</td>
+        <td>{{ d.nombre }} ({{ d.ubic }})</td>
+        <td>{{ d.semana }}</td>
+        <td>{{ d.material or '—' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">Sin días con gramos.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {% elif detalle == 'trabajador' %}
+  <div class="page-head" style="margin-bottom:0.75rem">
+    <div>
+      <h2 style="margin:0">Desglose · {{ detalle_data.nombre }}
+        {% if detalle_data.ubic is not none %}<span class="muted">({{ detalle_data.ubic }})</span>{% endif %}
+      </h2>
+      <p class="muted" style="margin:0.25rem 0 0">
+        {{ detalle_data.resumen.total_gramos }} g ·
+        ${{ '%.2f'|format(detalle_data.resumen.total_efectivo) }} ·
+        {{ detalle_data.resumen.n_folios }} folios ·
+        {{ detalle_data.resumen.n_semanas }} sem ·
+        {{ detalle_data.resumen.n_dias_con_avance }} días c/avance
+      </p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="/estadisticas?vista=trabajador&q={{ detalle_data.nombre|urlencode }}">Cerrar desglose</a>
+  </div>
+
+  <h3 style="font-size:0.95rem;margin:0.75rem 0 0.35rem">Folios</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Folio</th><th>g</th><th>$</th><th>Semanas</th><th>Mat</th><th>Modelo</th><th></th></tr></thead>
+    <tbody>
+    {% for f in detalle_data.folios %}
+      <tr>
+        <td><strong>{{ f.folio }}</strong></td>
+        <td>{{ f.total_gramos }}</td>
+        <td>${{ '%.2f'|format(f.total_efectivo) }}</td>
+        <td>{{ f.n_semanas }}</td>
+        <td>{{ f.materiales|join(', ') }}</td>
+        <td>{{ f.modelos|join(', ') }}</td>
+        <td><a class="btn btn-sm" href="/estadisticas?vista=folio&q={{ f.folio|urlencode }}&detalle=folio&folio={{ f.folio|urlencode }}">Desglose</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">Sin folios.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="font-size:0.95rem;margin:0.85rem 0 0.35rem">Por semana</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Semana</th><th>g</th><th>$</th><th>Detalle</th><th></th></tr></thead>
+    <tbody>
+    {% for s in detalle_data.semanas %}
+      <tr>
+        <td><strong>{{ s.codigo }}</strong>{% if s.cerrada %} <span class="muted">cerrada</span>{% endif %}</td>
+        <td>{{ s.total_gramos }}</td>
+        <td>${{ '%.2f'|format(s.total_efectivo) }}</td>
+        <td style="font-size:0.82rem">
+          {% for L in s.lineas %}{{ L.folio }} {{ L.total_gramos }}g{% if not loop.last %} · {% endif %}{% endfor %}
+        </td>
+        <td><a class="btn btn-sm btn-secondary" href="/produccion?semana_id={{ s.semana_id }}">Ver</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted">Sin semanas.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="font-size:0.95rem;margin:0.85rem 0 0.35rem">Por día</h3>
+  <div class="table-wrap" style="max-height:16rem;overflow:auto">
+  <table>
+    <thead><tr><th>Fecha</th><th>Día</th><th>g</th><th>$</th><th>Folio</th><th>Semana</th></tr></thead>
+    <tbody>
+    {% for d in detalle_data.dias %}
+      <tr>
+        <td>{{ d.fecha_label }}</td>
+        <td>{{ d.dia_semana }}</td>
+        <td>{{ d.gramos }}</td>
+        <td>${{ '%.2f'|format(d.efectivo) }}</td>
+        <td>{{ d.folio }}</td>
+        <td>{{ d.semana }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">Sin días.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+
+{% if vista == 'diario' %}
+<div class="table-wrap">
+<table class="sortable" data-sortable="1">
+  <thead>
+    <tr>
+      <th>Fecha</th><th>Día</th>
+      {% if agrupar == 'trabajador' %}<th>Trabajador</th><th>Ubic</th>{% endif %}
+      {% if agrupar == 'folio' %}<th>Folio</th>{% endif %}
+      {% if agrupar == 'dia' %}<th>Detalle</th>{% endif %}
+      <th>Líneas</th><th>Gramos</th><th>$</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.fecha }}</td>
+      <td>{{ r.dia_semana }}</td>
+      {% if agrupar == 'trabajador' %}
+      <td>{{ r.nombre }}</td><td>{{ r.ubic }}</td>
+      {% elif agrupar == 'folio' %}
+      <td><strong>{{ r.folio }}</strong></td>
+      {% else %}
+      <td class="muted">{{ r.fecha_label }}</td>
+      {% endif %}
+      <td>{{ r.n_lineas }}</td>
+      <td>{{ r.total_gramos }}</td>
+      <td>${{ '%.2f'|format(r.total_efectivo) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">Sin datos para el filtro.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% elif vista == 'trabajador' %}
+<div class="table-wrap">
+<table class="sortable" data-sortable="1">
+  <thead>
+    <tr>
+      <th>Trabajador</th><th>Ubic</th><th>Gramos</th><th>$</th>
+      <th>Días c/avance</th><th>Semanas</th><th>Folios</th><th>Primera</th><th>Última</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><a href="/buscar?q={{ r.nombre|urlencode }}">{{ r.nombre }}</a></td>
+      <td>{{ r.ubic }}</td>
+      <td>{{ r.total_gramos }}</td>
+      <td>${{ '%.2f'|format(r.total_efectivo) }}</td>
+      <td>{{ r.dias_con_avance or '—' }}</td>
+      <td>{{ r.n_semanas }}</td>
+      <td title="{{ r.folios|join(', ') if r.folios else '' }}">{{ r.n_folios }}</td>
+      <td>{{ r.primera }}</td>
+      <td>{{ r.ultima }}</td>
+      <td><a class="btn btn-sm" href="/estadisticas?vista=trabajador&q={{ r.nombre|urlencode }}&detalle=trabajador&nombre={{ r.nombre|urlencode }}&ubic={{ r.ubic }}&periodo={{ periodo or 'semanas' }}">Desglose</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">Sin datos para el filtro.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if rows %}
+<div class="card" style="margin-top:1rem;padding:1rem">
+  <strong>Top gramos (vista actual)</strong>
+  {% set top = rows[:10] %}
+  {% set maxg = top[0].total_gramos if top and top[0].total_gramos else 1 %}
+  {% for r in top %}
+  <div style="display:grid;grid-template-columns:8rem 1fr 4rem;gap:0.4rem;align-items:center;margin:0.25rem 0;font-size:0.85rem">
+    <span title="{{ r.nombre }}">{{ r.nombre[:14] }}</span>
+    <div style="background:var(--surface);border-radius:4px;height:0.65rem;overflow:hidden;border:1px solid var(--border)">
+      <div style="height:100%;width:{{ (100 * r.total_gramos / maxg)|int }}%;background:var(--accent);border-radius:4px"></div>
+    </div>
+    <span>{{ r.total_gramos }} g</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="table-wrap">
+<table class="sortable" data-sortable="1">
+  <thead>
+    <tr>
+      <th>Folio</th><th>Gramos</th><th>$</th><th>Días c/avance</th><th>Semanas</th>
+      <th>Inicio</th><th>Materiales</th><th>Trabajadores</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><strong>{{ r.folio }}</strong></td>
+      <td>{{ r.total_gramos }}</td>
+      <td>${{ '%.2f'|format(r.total_efectivo) }}</td>
+      <td>{{ r.dias_con_avance or '—' }}</td>
+      <td>{{ r.n_semanas }}</td>
+      <td>{{ r.inicio }}</td>
+      <td>{{ r.materiales|join(', ') }}</td>
+      <td style="font-size:0.82rem">{{ r.trabajadores|join(' · ') }}</td>
+      <td><a class="btn btn-sm" href="/estadisticas?vista=folio&q={{ r.folio|urlencode }}&detalle=folio&folio={{ r.folio|urlencode }}&periodo={{ periodo or 'semanas' }}">Desglose</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">Sin datos.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

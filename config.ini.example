@@ -1,0 +1,25 @@
+; Fajos Piteados Central — plantilla de configuración
+; Copia como config.ini y completa tus datos.
+
+[database]
+host = localhost
+port = 3306
+user = root
+password =
+database = fajos_central
+
+[server]
+host = 0.0.0.0
+port = 8000
+debug = true
+; HTTPS local (tras: python scripts\generate_ssl_certs.py)
+force_https = true
+ssl_certfile = certs/cert.pem
+ssl_keyfile = certs/key.pem
+
+
+[launcher]
+# true = al minimizar va a la bandeja del sistema
+tray_on_minimize = true
+# no cambiar a mano; el launcher lo marca tras el primer aviso
+tray_notified = false

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Buscar — Fajos Piteados Central{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Buscar</h1>
+    <p class="muted">Trabajadores, folios (todas las semanas), trabajos y semanas. Acepta «tigre 02» o «tigre02».</p>
+  </div>
+</div>
+
+<form class="search-box" action="/buscar" method="get" style="max-width:560px;margin-bottom:1.25rem">
+  <input type="search" name="q" value="{{ q or '' }}" placeholder="Nombre, ubic, folio, material, modelo, semana…" autofocus data-spell="1" spellcheck="true" lang="es">
+  <button type="submit"><i data-lucide="search"></i></button>
+</form>
+
+{% if q %}
+  {% if spell_hints %}
+  <div class="card" style="padding:0.65rem 0.85rem;margin-bottom:0.75rem;border-left:3px solid var(--accent)">
+    <strong>¿Quisiste decir?</strong>
+    {% for h in spell_hints %}
+      <a class="btn btn-sm btn-secondary" href="/buscar?q={{ h|urlencode }}" style="margin:0.15rem">{{ h }}</a>
+    {% endfor %}
+    {% if spell_status and spell_status.disponible %}
+      <span class="muted" style="font-size:0.8rem;margin-left:0.5rem">diccionario del sistema activo</span>
+    {% elif spell_status %}
+      <span class="muted" style="font-size:0.8rem;margin-left:0.5rem">sugerencias del vocabulario de la app</span>
+    {% endif %}
+  </div>
+  {% endif %}
+  <p class="muted">Resultados para «{{ q }}»
+    · {{ trabajadores|length }} trabajadores
+    · {{ folios|length if folios else 0 }} folios
+    · {{ trabajos|length if trabajos else 0 }} trabajos
+    · {{ semanas|length }} semanas
+  </p>
+
+  <h2><i data-lucide="users" style="width:18px;height:18px;vertical-align:middle"></i> Trabajadores ({{ trabajadores|length }})</h2>
+  {% if trabajadores %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Nombre</th><th>Ubic</th><th>Tipo</th><th>Activo</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for t in trabajadores %}
+      <tr>
+        <td>{{ t.id }}</td>
+        <td><a href="/trabajadores?q={{ t.nombre_mostrar|urlencode }}">{{ t.nombre_mostrar }}</a></td>
+        <td>{{ t.ubic }}</td>
+        <td>
+          {% set tipo = (t.tipo or '')|upper %}
+          {% if 'PLT' in tipo and 'PIT' in tipo %}<span class="badge badge-mix">{{ t.tipo }}</span>
+          {% elif 'PLT' in tipo %}<span class="badge badge-plt">{{ t.tipo }}</span>
+          {% elif 'PIT' in tipo %}<span class="badge badge-pit">{{ t.tipo }}</span>
+          {% elif 'TLL' in tipo %}<span class="badge badge-tll">{{ t.tipo }}</span>
+          {% else %}<span class="badge badge-mix">{{ t.tipo or '—' }}</span>{% endif %}
+        </td>
+        <td>{% if t.activo %}<span class="badge badge-ok">Sí</span>{% else %}<span class="badge badge-off">No</span>{% endif %}</td>
+        <td>
+          <a class="btn btn-sm" href="/estadisticas?vista=trabajador&q={{ t.nombre_mostrar|urlencode }}&detalle=trabajador&nombre={{ t.nombre_mostrar|urlencode }}&ubic={{ t.ubic }}">Stats</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">Ningún trabajador coincide.</p>
+  {% endif %}
+
+  <h2>Folios ({{ folios|length if folios else 0 }})</h2>
+  {% if folios %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Folio</th><th>Trabajador</th><th>Ubic</th><th>Mat</th><th>Modelo</th>
+        <th>g acum.</th><th>Semanas</th><th>Última</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for f in folios %}
+      <tr>
+        <td><strong>{{ f.folio }}</strong></td>
+        <td>{{ f.nombre }}</td>
+        <td>{{ f.ubic }}</td>
+        <td>{{ f.material or '—' }}</td>
+        <td>{{ f.modelo or '—' }}</td>
+        <td>{{ f.gramos or '—' }}</td>
+        <td title="{{ f.semanas_txt or '' }}">{{ f.n_semanas or 1 }}</td>
+        <td>{{ f.semana }}</td>
+        <td style="white-space:nowrap">
+          <a class="btn btn-sm btn-secondary" href="/produccion?semana_id={{ f.semana_id }}">Ver</a>
+          <a class="btn btn-sm" href="/estadisticas?vista=folio&q={{ f.folio|urlencode }}&detalle=folio&folio={{ f.folio|urlencode }}">Desglose</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">Ningún folio coincide en el historial.</p>
+  {% endif %}
+
+  {% if trabajos is defined and trabajos %}
+  <h2>Trabajos registrados ({{ trabajos|length }})</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Folio</th><th>Trabajador</th><th>Ubic</th><th>Mat</th><th>Modelo</th><th>Activo</th></tr></thead>
+    <tbody>
+    {% for t in trabajos %}
+      <tr>
+        <td><strong>{{ t.folio or '—' }}</strong></td>
+        <td>{{ t.nombre_mostrar or t.nombre or '—' }}</td>
+        <td>{{ t.ubic or '—' }}</td>
+        <td>{{ t.material or '—' }}</td>
+        <td>{{ t.modelo or '—' }}</td>
+        <td>{% if t.activo %}Sí{% else %}No{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+  <h2><i data-lucide="calendar" style="width:18px;height:18px;vertical-align:middle"></i> Semanas ({{ semanas|length }})</h2>
+  {% if semanas %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Código</th><th>Inicio</th><th>Fin</th><th>Notas</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in semanas %}
+      <tr>
+        <td><strong>{{ s.codigo }}</strong></td>
+        <td>{{ s.fecha_inicio }}</td>
+        <td>{{ s.fecha_fin }}</td>
+        <td>{{ s.notas or '—' }}</td>
+        <td>
+          <a class="btn btn-sm btn-secondary" href="/produccion?semana_id={{ s.id }}">Producción</a>
+          <a class="btn btn-sm" href="/api/export/produccion/{{ s.id }}?fmt=xlsx&formal=1">Formal</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">Ninguna semana coincide.</p>
+  {% endif %}
+{% else %}
+  <p class="empty">Escribe nombre, ubicación, folio, material o código de semana. Puedes usar varias palabras.</p>
+{% endif %}
+{% endblock %}

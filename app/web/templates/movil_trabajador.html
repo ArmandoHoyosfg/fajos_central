@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ trabajador.nombre_mostrar }} — Móvil{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ trabajador.nombre_mostrar }}</h1>
+    <p class="muted">Ubic {{ trabajador.ubic }} · {{ trabajador.tipo or '' }}</p>
+  </div>
+</div>
+<div class="card" style="padding:1rem;">
+  <p><strong>Folios abiertos:</strong> {{ desempeno.folios_abiertos or 0 }}</p>
+  <p><strong>Terminados:</strong> {{ desempeno.folios_terminados or 0 }}</p>
+  <p><strong>Gramos (hist.):</strong> {% set g = desempeno.gramos_registrados if desempeno else 0 %}{{ '%.1f'|format(g|float) }}</p>
+</div>
+{% if desempeno.trabajos %}
+<div class="table-wrap" style="margin-top:1rem;">
+<table>
+  <thead><tr><th>Folio</th><th>Modelo</th><th>Material</th><th>Estado</th></tr></thead>
+  <tbody>
+  {% for w in desempeno.trabajos[:20] %}
+    <tr>
+      <td>{{ w.folio or '—' }}</td>
+      <td>{{ w.modelo or '—' }}</td>
+      <td>{{ w.material or '—' }}</td>
+      <td>{% if w.activo %}<span style="color:#a6e3a1">En progreso</span>{% else %}<span class="muted">Terminado</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+<p class="muted" style="margin-top:1rem;font-size:0.85rem;">Vista mínima para escaneo QR. Captura de gramos desde el celular vendrá después (HTTPS).</p>
+{% endblock %}
