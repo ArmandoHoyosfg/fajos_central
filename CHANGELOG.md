@@ -1,3 +1,11 @@
+## [3.41.0] — 2026-10-07
+
+### Captura por día (antes «Solo hoy»)
+- Selector de día sáb–vie de la semana elegida.
+- Tabla con todas las filas de esa semana y gramos del día.
+- «＋ Agregar avance»: varios parciales que se suman al total del día (como Un día en Plata).
+- Edición directa en la columna del día.
+
 ## [3.40.10] — 2026-10-02
 
 ### Taller: columna Pitas más ancha

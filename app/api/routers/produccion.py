@@ -894,12 +894,22 @@ async def api_del_produccion(prod_id: int, repo: ProduccionRepo = Depends(get_pr
 async def page_solo_hoy(
     request: Request,
     insights=Depends(get_insights_service),
+    semana_id: int | None = None,
+    dia: str | None = None,
 ):
-    data = insights.captura_solo_hoy()
+    """Captura por día: selector sáb–vie + todas las filas + varios avances."""
+    data = insights.captura_solo_hoy(semana_id=semana_id, dia=dia)
+    # Trabajadores activos para el formulario ＋ Avance
+    trab = []
+    try:
+        from app.db.repository import TrabajadoresRepo
+        trab = TrabajadoresRepo().listar(solo_activos=True) or []
+    except Exception:
+        trab = []
     return templates.TemplateResponse(
         request,
         "solo_hoy.html",
-        _ctx(request, captura=data),
+        _ctx(request, captura=data, trabajadores=trab),
     )
 
 

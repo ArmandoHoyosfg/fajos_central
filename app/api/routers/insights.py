@@ -128,8 +128,12 @@ async def api_tendencias(limit: int = 8, svc=Depends(get_insights_service)):
 
 
 @router.get("/api/insights/solo-hoy")
-async def api_solo_hoy(svc=Depends(get_insights_service)):
-    return svc.captura_solo_hoy()
+async def api_solo_hoy(
+    svc=Depends(get_insights_service),
+    semana_id: int | None = None,
+    dia: str | None = None,
+):
+    return svc.captura_solo_hoy(semana_id=semana_id, dia=dia)
 
 
 

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="help-panel">
   <strong>Trabajos = folios activos</strong> ligados a cada persona (catálogo).
-  La captura de gramos por día está en <a href="/solo-hoy">Solo hoy</a> o <a href="/produccion">Plata</a>.
+  La captura de gramos por día está en <a href="/solo-hoy">Por día</a> o <a href="/produccion">Plata</a>.
   Aquí administras folio/modelo/material y das de baja trabajos terminados.
 </div>
 
@@ -13,7 +13,7 @@
     <p class="muted">Folios y modelos activos · no es la captura semanal</p>
   </div>
   <div class="actions" style="display:flex;flex-wrap:wrap;gap:0.4rem;">
-    <a class="btn" href="/solo-hoy">Capturar hoy</a>
+    <a class="btn" href="/solo-hoy">Captura por día</a>
     <a class="btn btn-secondary" href="/produccion">Plata (semana)</a>
     <button type="button" class="btn btn-secondary" onclick="cerrarHoy()">Cerrar hoy</button>
     <a class="btn btn-secondary" href="/api/export/suministro">Suministro</a>

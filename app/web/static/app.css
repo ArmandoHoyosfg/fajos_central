@@ -2636,3 +2636,37 @@ th.col-actions, td.col-actions {
   width: auto !important;
   flex: 0 0 auto !important;
 }
+
+/* Captura por día — selector sáb–vie */
+.dia-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.5rem;
+}
+.dia-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.dia-chip:hover { border-color: var(--accent); text-decoration: none; }
+.dia-chip.active {
+  background: var(--accent);
+  color: #1e1e2e;
+  border-color: transparent;
+}
+.dia-chip.is-today:not(.active) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.gram-multi-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.gram-multi-row { display: flex; gap: 0.35rem; align-items: center; }
+.gram-multi-row .gram-partial { flex: 1; }
+.gram-preview { font-size: 0.88rem; color: var(--muted); }
+.gram-preview strong { color: var(--text); }
