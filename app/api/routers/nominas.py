@@ -174,13 +174,28 @@ async def api_patch_pita(
     request: Request,
     repo: ProduccionPitaRepo = Depends(get_produccion_pita_repo),
 ):
-    """Actualiza solo los campos enviados en el formulario."""
+    """Actualiza solo los campos enviados (incl. cambio de trabajador)."""
     form = await request.form()
     data = {}
-    for key in ("modelo", "folio", "material", "producto", "notas"):
+    for key in ("modelo", "folio", "material", "producto", "notas", "nombre"):
         if key in form:
             v = str(form.get(key) or "").strip()
             data[key] = v or None
+    if "ubic" in form:
+        try:
+            data["ubic"] = int(str(form.get("ubic")).strip())
+        except (TypeError, ValueError):
+            v = str(form.get("ubic") or "").strip()
+            data["ubic"] = v or None
+    if "trabajador_id" in form:
+        raw = str(form.get("trabajador_id") or "").strip()
+        if raw:
+            try:
+                data["trabajador_id"] = int(raw)
+            except ValueError:
+                pass
+        else:
+            data["trabajador_id"] = None
     if "pitas" in form:
         data["pitas"] = _parse_num(str(form.get("pitas")), allow_empty_none=True)
     if "efectivo" in form:

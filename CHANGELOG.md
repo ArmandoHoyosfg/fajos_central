@@ -1,3 +1,11 @@
+## [3.41.4] — 2026-10-09
+
+### Pita: editar trabajador con guardado diferido
+- En «Editar fila» se puede activar **Cambiar trabajador**.
+- **Aplicar a la fila** solo actualiza la pantalla (no la BD).
+- Barra de **Cambios pendientes** con detalle; **Guardar todo en la BD** confirma.
+- Filas pendientes resaltadas; aviso al salir si hay cambios sin guardar.
+
 ## [3.41.3] — 2026-10-09
 
 ### DEV → Settings
