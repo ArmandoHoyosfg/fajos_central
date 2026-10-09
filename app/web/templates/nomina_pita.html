@@ -128,15 +128,15 @@
 </div>
 
 <div class="modal-backdrop" id="modal-edit-pit" hidden>
-  <div class="modal" role="dialog" aria-modal="true">
+  <div class="modal modal-wide modal-pit-edit" role="dialog" aria-modal="true">
     <h2>Editar línea de pita</h2>
     <p class="muted" id="edit-pit-who" style="margin-top:0"></p>
     <p class="muted faint" style="margin:0 0 0.5rem">Los cambios se aplican a la <strong>fila en pantalla</strong>; se graban en la BD solo cuando confirmes en la barra de pendientes.</p>
     <form id="form-edit-pit" onsubmit="return applyPitEditToRow(event)">
       <div class="form-grid">
         <div class="full pit-trab-block">
-          <div class="pit-trab-toggle">
-            <label class="pit-trab-check">
+          <div class="pit-trab-row">
+            <label class="pit-trab-check" for="edit-pit-enable-trab">
               <input type="checkbox" id="edit-pit-enable-trab" onchange="togglePitTrabajador(this.checked)">
               <span>Editar trabajador</span>
             </label>
@@ -149,19 +149,19 @@
               {% endfor %}
             </select>
           </div>
-          <div class="form-grid pit-trab-fields" style="margin-top:0.5rem">
-            <div>
-              <label>Nombre</label>
-              <input name="nombre" id="edit-pit-nombre" disabled placeholder="Nombre del trabajador">
+          <div class="pit-trab-fields">
+            <div class="pit-field-nombre">
+              <label for="edit-pit-nombre">Nombre</label>
+              <input name="nombre" id="edit-pit-nombre" disabled placeholder="Nombre del trabajador" autocomplete="off">
             </div>
-            <div>
-              <label>Ubicación</label>
-              <input name="ubic" id="edit-pit-ubic" disabled placeholder="Ubic" inputmode="numeric">
+            <div class="pit-field-ubic">
+              <label for="edit-pit-ubic">Ubicación</label>
+              <input name="ubic" id="edit-pit-ubic" disabled placeholder="Ubic" inputmode="numeric" autocomplete="off">
             </div>
           </div>
           <input type="hidden" name="trabajador_id" id="edit-pit-tid">
-          <p class="muted faint" style="margin:0.35rem 0 0;font-size:0.8rem">
-            Activa la casilla para modificar nombre y ubicación. El catálogo solo ayuda a rellenar.
+          <p class="muted faint pit-trab-hint">
+            Marca la casilla para editar nombre y ubicación. El catálogo solo rellena esos campos.
           </p>
         </div>
         <div><label>Modelo</label><input name="modelo"></div>

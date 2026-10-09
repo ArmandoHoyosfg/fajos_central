@@ -1,3 +1,9 @@
+## [3.41.6] — 2026-10-09
+
+### UI: modal Pita sin solapamientos
+- Check + catálogo en una sola fila, sin encimarse.
+- Nombre y Ubicación en rejilla clara; modal un poco más ancho.
+
 ## [3.41.5] — 2026-10-09
 
 ### Pita: nombre y ubic editables
