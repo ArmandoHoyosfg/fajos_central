@@ -135,19 +135,34 @@
     <form id="form-edit-pit" onsubmit="return applyPitEditToRow(event)">
       <div class="form-grid">
         <div class="full pit-trab-block">
-          <label class="dev-check" style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.35rem">
-            <input type="checkbox" id="edit-pit-enable-trab" onchange="togglePitTrabajador(this.checked)">
-            Cambiar trabajador
-          </label>
-          <select name="trabajador_sel" id="edit-pit-trab" disabled title="Activa «Cambiar trabajador» para editar">
-            <option value="">— trabajador —</option>
-            {% for t in trabajadores %}
-            <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}">{{ t.nombre_mostrar }} ({{ t.ubic }})</option>
-            {% endfor %}
-          </select>
-          <input type="hidden" name="nombre" id="edit-pit-nombre">
-          <input type="hidden" name="ubic" id="edit-pit-ubic">
+          <div class="pit-trab-toggle">
+            <label class="pit-trab-check">
+              <input type="checkbox" id="edit-pit-enable-trab" onchange="togglePitTrabajador(this.checked)">
+              <span>Editar trabajador</span>
+            </label>
+            <select name="trabajador_sel" id="edit-pit-trab" disabled
+                    title="Opcional: rellena nombre y ubic desde el catálogo"
+                    onchange="fillPitTrabFromCatalog(this)">
+              <option value="">— catálogo (opcional) —</option>
+              {% for t in trabajadores %}
+              <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}">{{ t.nombre_mostrar }} ({{ t.ubic }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-grid pit-trab-fields" style="margin-top:0.5rem">
+            <div>
+              <label>Nombre</label>
+              <input name="nombre" id="edit-pit-nombre" disabled placeholder="Nombre del trabajador">
+            </div>
+            <div>
+              <label>Ubicación</label>
+              <input name="ubic" id="edit-pit-ubic" disabled placeholder="Ubic" inputmode="numeric">
+            </div>
+          </div>
           <input type="hidden" name="trabajador_id" id="edit-pit-tid">
+          <p class="muted faint" style="margin:0.35rem 0 0;font-size:0.8rem">
+            Activa la casilla para modificar nombre y ubicación. El catálogo solo ayuda a rellenar.
+          </p>
         </div>
         <div><label>Modelo</label><input name="modelo"></div>
         <div><label>Folio</label><input name="folio"></div>
@@ -187,7 +202,27 @@ function closePitEdit() {
 
 function togglePitTrabajador(on) {
   const sel = document.getElementById('edit-pit-trab');
+  const nom = document.getElementById('edit-pit-nombre');
+  const ubic = document.getElementById('edit-pit-ubic');
   if (sel) sel.disabled = !on;
+  if (nom) nom.disabled = !on;
+  if (ubic) ubic.disabled = !on;
+  if (on && nom) {
+    try { nom.focus(); nom.select(); } catch (e) {}
+  }
+}
+
+function fillPitTrabFromCatalog(sel) {
+  if (!sel || !sel.value) return;
+  const parts = sel.value.split('|');
+  const nom = document.getElementById('edit-pit-nombre');
+  const ubic = document.getElementById('edit-pit-ubic');
+  const tid = document.getElementById('edit-pit-tid');
+  if (nom) nom.value = parts[0] || '';
+  if (ubic) ubic.value = parts[1] != null ? parts[1] : '';
+  if (tid) tid.value = parts[2] || '';
+  const who = document.getElementById('edit-pit-who');
+  if (who) who.textContent = (parts[0] || '') + ' · ubic ' + (parts[1] || '');
 }
 
 function openEditPit(id, data) {
@@ -223,8 +258,10 @@ function openEditPit(id, data) {
   form.efectivo.value = data.efectivo != null && data.efectivo !== '' ? data.efectivo : '';
   if (form.firmado) form.firmado.checked = !!data.firmado;
 
-  document.getElementById('edit-pit-nombre').value = data.nombre || '';
-  document.getElementById('edit-pit-ubic').value = data.ubic != null ? data.ubic : '';
+  const nomEl = document.getElementById('edit-pit-nombre');
+  const ubicEl = document.getElementById('edit-pit-ubic');
+  if (nomEl) { nomEl.value = data.nombre || ''; nomEl.disabled = true; }
+  if (ubicEl) { ubicEl.value = data.ubic != null ? data.ubic : ''; ubicEl.disabled = true; }
   document.getElementById('edit-pit-tid').value = data.trabajador_id || '';
 
   const sel = document.getElementById('edit-pit-trab');
@@ -258,17 +295,25 @@ function applyPitEditToRow(ev) {
   let original = {};
   try { original = JSON.parse(form.dataset.original || '{}'); } catch (e) {}
 
-  // Trabajador
-  let nombre = document.getElementById('edit-pit-nombre').value;
-  let ubic = document.getElementById('edit-pit-ubic').value;
-  let tid = document.getElementById('edit-pit-tid').value;
+  // Trabajador (nombre y ubic editables; catálogo opcional ya rellenó los campos)
+  let nombre = (document.getElementById('edit-pit-nombre').value || '').trim();
+  let ubic = (document.getElementById('edit-pit-ubic').value || '').trim();
+  let tid = (document.getElementById('edit-pit-tid').value || '').trim();
   const en = document.getElementById('edit-pit-enable-trab');
-  const sel = document.getElementById('edit-pit-trab');
-  if (en && en.checked && sel && sel.value) {
-    const parts = sel.value.split('|');
-    nombre = parts[0] || nombre;
-    ubic = parts[1] != null ? parts[1] : ubic;
-    tid = parts[2] || tid;
+  // Si no activó edición de trabajador, conservar originales
+  if (!(en && en.checked)) {
+    nombre = original.nombre || nombre;
+    ubic = original.ubic != null ? String(original.ubic) : ubic;
+    tid = original.trabajador_id != null ? String(original.trabajador_id) : tid;
+  } else if (tid) {
+    // Si cambió nombre/ubic a mano respecto al catálogo, limpiar id para no forzar vínculo viejo
+    const sel = document.getElementById('edit-pit-trab');
+    if (sel && sel.value) {
+      const parts = sel.value.split('|');
+      if (parts[0] !== nombre || String(parts[1]) !== String(ubic)) {
+        tid = ''; // nombre/ubic manuales → sin forzar trabajador_id del catálogo
+      }
+    }
   }
 
   const pending = {

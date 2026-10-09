@@ -1,3 +1,10 @@
+## [3.41.5] — 2026-10-09
+
+### Pita: nombre y ubic editables
+- Check «Editar trabajador» al lado del selector de catálogo.
+- Campos **Nombre** y **Ubicación** editables a mano.
+- El catálogo solo rellena esos campos (opcional).
+
 ## [3.41.4] — 2026-10-09
 
 ### Pita: editar trabajador con guardado diferido

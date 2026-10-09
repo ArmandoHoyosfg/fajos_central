@@ -2829,3 +2829,27 @@ tr.row-pending-edit td {
   background: color-mix(in srgb, #f9e2af 18%, transparent) !important;
   box-shadow: inset 3px 0 0 #df8e1d;
 }
+
+/* Pita edit: trabajador en una sola fila */
+.pit-trab-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.pit-trab-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.pit-trab-toggle select {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+}
+.pit-trab-fields input:disabled {
+  opacity: 0.65;
+}
