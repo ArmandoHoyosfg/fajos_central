@@ -1,3 +1,10 @@
+## [3.41.1] — 2026-10-08
+
+### Por día: avances inline (sin popup)
+- Botón ＋ en cada fila despliega varios avances que se suman al día.
+- Tabla con encabezado fijo, filtro y «solo pendientes».
+- Visual completa (sin ceros engañosos, filas pendientes marcadas).
+
 ## [3.41.0] — 2026-10-07
 
 ### Captura por día (antes «Solo hoy»)
