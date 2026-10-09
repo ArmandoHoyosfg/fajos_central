@@ -1,3 +1,11 @@
+## [3.41.3] — 2026-10-09
+
+### DEV → Settings
+- Nueva pestaña **Settings** en Dev: filtros por defecto (Por día / Plata),
+  umbral de rarezas, confirmación de días pasados, export, tema y sync.
+- Preferencias en `data/ops_settings.json` (allowlist de claves).
+- Por día y Plata leen estas preferencias al abrir.
+
 ## [3.41.2] — 2026-10-09
 
 ### Sync Plata ↔ Por día

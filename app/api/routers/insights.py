@@ -160,29 +160,60 @@ async def api_solo_hoy_sync(
 
 @router.get("/api/ops/settings")
 async def api_ops_settings_get():
-    from app.core.ops_settings import load
-    return load()
-
+    from app.core.ops_settings import public_settings
+    return public_settings()
 
 
 @router.post("/api/ops/settings")
 async def api_ops_settings_set(request: Request):
-    from app.core.ops_settings import save, get_anomaly_pct
-    form = await request.form()
-    data = {}
-    if "anomaly_pct" in form:
+    """Guarda preferencias (form-urlencoded o JSON). Solo claves allowlist."""
+    from app.core.ops_settings import save, public_settings, DEFAULTS
+    data: dict = {}
+    ctype = (request.headers.get("content-type") or "").lower()
+    raw_body: dict = {}
+    if "application/json" in ctype:
         try:
-            # aceptar 30 o 0.30
-            raw = str(form.get("anomaly_pct") or "30").replace(",", ".").strip()
-            v = float(raw)
-            if v > 1:
-                v = v / 100.0
-            data["anomaly_pct"] = v
-        except ValueError:
-            from app.core.exceptions import ValidationAppError
-            raise ValidationAppError("Umbral inválido")
-    out = save(data)
-    out["anomaly_pct_display"] = int(round(get_anomaly_pct() * 100))
-    return out
+            raw_body = await request.json() or {}
+        except Exception:
+            raw_body = {}
+    else:
+        form = await request.form()
+        raw_body = {k: form.get(k) for k in form.keys()}
+
+    def _as_bool(v) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return bool(v)
+        return str(v or "").strip().lower() in ("1", "true", "yes", "si", "sí", "on")
+
+    for key, default in DEFAULTS.items():
+        if key not in raw_body:
+            continue
+        val = raw_body[key]
+        if key == "anomaly_pct":
+            try:
+                raw = str(val if val is not None else "30").replace(",", ".").strip()
+                v = float(raw)
+                if v > 1:
+                    v = v / 100.0
+                data["anomaly_pct"] = min(max(v, 0.05), 0.90)
+            except ValueError:
+                from app.core.exceptions import ValidationAppError
+                raise ValidationAppError("Umbral inválido")
+        elif key == "gramos_step":
+            try:
+                data["gramos_step"] = max(1, min(100, int(float(str(val)))))
+            except (TypeError, ValueError):
+                pass
+        elif key == "theme_default":
+            t = str(val or "").strip().lower()
+            data["theme_default"] = t if t in ("", "oscuro", "claro", "taller") else ""
+        elif isinstance(default, bool):
+            data[key] = _as_bool(val)
+        else:
+            data[key] = val
+    save(data)
+    return public_settings()
 
 

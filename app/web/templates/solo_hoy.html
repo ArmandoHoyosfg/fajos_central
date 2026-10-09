@@ -426,14 +426,14 @@ function applyFilters() {
     } catch (e) { /* silencioso */ }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkSync();
+    if (document.visibilityState === 'visible' && !window.__POR_DIA_NO_SYNC) checkSync();
   });
-  window.addEventListener('focus', () => checkSync());
+  window.addEventListener('focus', () => { if (!window.__POR_DIA_NO_SYNC) checkSync(); });
   // Primera comprobación al entrar (por si se abrió en pestaña vieja)
   setTimeout(checkSync, 400);
 })();
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   if (window.FajosCaptureGuard) FajosCaptureGuard.init();
   document.querySelectorAll('.avance-list .gram-partial').forEach(inp => {
     const expand = inp.closest('tr.por-dia-expand');
@@ -443,6 +443,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const chk = document.getElementById('flt-solo-pend');
   if (flt) flt.addEventListener('input', applyFilters);
   if (chk) chk.addEventListener('change', applyFilters);
+  // Preferencias DEV → Settings
+  try {
+    const res = await fetch('/api/ops/settings', { cache: 'no-store' });
+    if (res.ok) {
+      const s = await res.json();
+      window.__OPS_SETTINGS = s;
+      if (chk && s.por_dia_solo_pendientes) chk.checked = true;
+      if (s.por_dia_auto_sync === false) window.__POR_DIA_NO_SYNC = true;
+    }
+  } catch (e) {}
   applyFilters();
 });
 </script>
