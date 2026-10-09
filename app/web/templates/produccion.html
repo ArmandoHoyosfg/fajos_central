@@ -808,6 +808,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <script>
 const SEMANA_ID = {{ semana_id or 'null' }};
+try { if (SEMANA_ID) sessionStorage.setItem('fajos_semana_id', String(SEMANA_ID)); } catch (e) {}
+
 const COL_HOY = "{{ col_hoy|default('gm_lun') }}";
 let CACHE_TRABAJOS = [];
 

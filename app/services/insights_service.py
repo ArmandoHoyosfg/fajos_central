@@ -901,16 +901,30 @@ class InsightsService:
             dia_col = col_today
         label = DAY_LABELS.get(dia_col, dia_col)
 
-        semanas = self.semanas.listar()
-        actual = encontrar_semana_actual(semanas, ref)
+        from app.core.calendar_util import marcar_semanas
+
+        semanas_raw = self.semanas.listar() or []
+        semanas = marcar_semanas(semanas_raw, ref)
+        actual = encontrar_semana_actual(semanas_raw, ref)
         semana = None
-        if semana_id:
-            for s in semanas:
-                if int(s.get("id") or 0) == int(semana_id):
-                    semana = s
-                    break
+        if semana_id is not None:
+            try:
+                sid_req = int(semana_id)
+            except (TypeError, ValueError):
+                sid_req = None
+            if sid_req is not None:
+                for s in semanas_raw:
+                    try:
+                        if int(s.get("id") or 0) == sid_req:
+                            semana = s
+                            break
+                    except (TypeError, ValueError):
+                        continue
         if semana is None:
             semana = actual
+        if semana is None and semanas_raw:
+            # Último recurso: primera semana (misma lógica que Plata si no hay actual)
+            semana = semanas_raw[0]
         if not semana:
             return {
                 "ok": False,
@@ -919,7 +933,7 @@ class InsightsService:
                 "col_dia": dia_col,
                 "label": label,
                 "semana": None,
-                "semanas": semanas[:20],
+                "semanas": [],
                 "dias": [
                     {
                         "col": c,
@@ -936,7 +950,10 @@ class InsightsService:
             }
 
         sid = int(semana["id"])
-        lineas = self.prod.listar_por_semana(sid)
+        # Misma regla que Plata: semana abierta → ocultar terminados;
+        # cerrada → incluir para ver totales reales.
+        cerrada = bool(semana.get("cerrada"))
+        lineas = self.prod.listar_por_semana(sid, incluir_terminados=cerrada)
         rows = []
         capturados = pendientes = 0
         total_g = 0.0
@@ -987,11 +1004,12 @@ class InsightsService:
             },
             "semanas": [
                 {
-                    "id": s.get("id"),
+                    "id": int(s.get("id")),
                     "codigo": s.get("codigo"),
-                    "es_actual": bool(actual and int(s.get("id") or 0) == int(actual.get("id") or 0)),
+                    "es_actual": bool(s.get("es_actual")),
+                    "cerrada": bool(s.get("cerrada")),
                 }
-                for s in (semanas or [])[:40]
+                for s in (semanas or [])
             ],
             "dias": dias,
             "lineas": rows,

@@ -136,6 +136,27 @@ async def api_solo_hoy(
     return svc.captura_solo_hoy(semana_id=semana_id, dia=dia)
 
 
+@router.get("/api/insights/solo-hoy/sync")
+async def api_solo_hoy_sync(
+    svc=Depends(get_insights_service),
+    semana_id: int | None = None,
+    dia: str | None = None,
+):
+    """Solo contadores + ids: para detectar desync con Plata sin recargar todo."""
+    data = svc.captura_solo_hoy(semana_id=semana_id, dia=dia)
+    ids = [int(r["id"]) for r in (data.get("lineas") or []) if r.get("id") is not None]
+    return {
+        "ok": bool(data.get("ok")),
+        "semana_id": (data.get("semana") or {}).get("id"),
+        "col_dia": data.get("col_dia"),
+        "total": data.get("total") or 0,
+        "capturados": data.get("capturados") or 0,
+        "pendientes": data.get("pendientes") or 0,
+        "total_gramos_dia": data.get("total_gramos_dia") or 0,
+        "ids": ids,
+    }
+
+
 
 @router.get("/api/ops/settings")
 async def api_ops_settings_get():

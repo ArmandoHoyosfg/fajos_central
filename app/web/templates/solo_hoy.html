@@ -19,7 +19,8 @@
     <p class="muted">Selector de día · todas las filas · varios avances en la misma fila (desplegable).</p>
   </div>
   <div class="actions">
-    <a class="btn btn-secondary" href="/produccion?semana_id={{ captura.semana.id }}">Vista Plata</a>
+    <button type="button" class="btn btn-secondary" id="btn-refrescar-dia" title="Recargar filas desde la BD">↻ Actualizar</button>
+    <a class="btn btn-secondary" id="link-vista-plata" href="/produccion?semana_id={{ captura.semana.id }}">Vista Plata</a>
   </div>
 </div>
 
@@ -57,7 +58,7 @@
 
 <div class="por-dia-filters">
   <input type="search" id="flt-por-dia" placeholder="Filtrar nombre, ubic, folio…" autocomplete="off">
-  <label class="muted flt-chip"><input type="checkbox" id="flt-solo-pend" checked> Solo pendientes</label>
+  <label class="muted flt-chip"><input type="checkbox" id="flt-solo-pend"> Solo pendientes</label>
   {% if not captura.semana.cerrada %}
   <span class="muted faint">Clic en <strong>＋</strong> para varios avances en esa fila · Enter en el campo guarda el total del día.</span>
   {% else %}
@@ -383,6 +384,54 @@ function applyFilters() {
     }
   });
 }
+
+
+// --- Sincronización con Plata ---
+(function () {
+  const SID = window.SEMANA_ID;
+  const COL = window.COL_DIA;
+  if (SID) {
+    try { sessionStorage.setItem('fajos_semana_id', String(SID)); } catch (e) {}
+  }
+  function reloadSoft() {
+    const q = new URLSearchParams(window.location.search);
+    if (SID) q.set('semana_id', String(SID));
+    if (COL) q.set('dia', COL);
+    q.set('_', String(Date.now()));
+    window.location.replace('/solo-hoy?' + q.toString());
+  }
+  const btn = document.getElementById('btn-refrescar-dia');
+  if (btn) btn.addEventListener('click', reloadSoft);
+
+  async function checkSync() {
+    if (!SID) return;
+    try {
+      const url = '/api/insights/solo-hoy/sync?semana_id=' + encodeURIComponent(SID)
+        + (COL ? ('&dia=' + encodeURIComponent(COL)) : '');
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const domIds = Array.from(document.querySelectorAll('tr.por-dia-row[data-prod-id]'))
+        .map(tr => parseInt(tr.dataset.prodId, 10))
+        .filter(n => !isNaN(n))
+        .sort((a,b) => a-b);
+      const apiIds = (data.ids || []).slice().sort((a,b) => a-b);
+      const same = domIds.length === apiIds.length && domIds.every((v,i) => v === apiIds[i]);
+      if (!same) {
+        // Filas nuevas o eliminadas en Plata → recargar
+        reloadSoft();
+      } else {
+        updateKpis && updateKpis();
+      }
+    } catch (e) { /* silencioso */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkSync();
+  });
+  window.addEventListener('focus', () => checkSync());
+  // Primera comprobación al entrar (por si se abrió en pestaña vieja)
+  setTimeout(checkSync, 400);
+})();
 
 document.addEventListener('DOMContentLoaded', () => {
   if (window.FajosCaptureGuard) FajosCaptureGuard.init();

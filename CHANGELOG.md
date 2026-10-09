@@ -1,3 +1,12 @@
+## [3.41.2] — 2026-10-09
+
+### Sync Plata ↔ Por día
+- Misma resolución de semana y mismo filtro de filas (terminados) que Plata.
+- Al volver a la pestaña, compara ids con la BD y recarga si hay filas nuevas.
+- Nav «Por día» conserva la semana vista en Plata (sessionStorage).
+- Botón ↻ Actualizar; sin caché HTML.
+- Filtro «Solo pendientes» desactivado por defecto.
+
 ## [3.41.1] — 2026-10-08
 
 ### Por día: avances inline (sin popup)
