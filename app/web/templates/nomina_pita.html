@@ -225,11 +225,36 @@ function fillPitTrabFromCatalog(sel) {
   if (who) who.textContent = (parts[0] || '') + ' · ubic ' + (parts[1] || '');
 }
 
+function liveRowData(id, base) {
+  const data = Object.assign({}, base || {});
+  const tr = document.querySelector('tr[data-id="' + id + '"]');
+  if (!tr) return data;
+  const nameTd = tr.querySelector('[data-field-display="nombre"]');
+  const ubicTd = tr.querySelector('[data-field-display="ubic"]');
+  if (nameTd) data.nombre = nameTd.textContent.trim();
+  if (ubicTd) data.ubic = ubicTd.textContent.trim();
+  ['modelo', 'folio', 'material', 'producto', 'pitas', 'efectivo'].forEach(function (f) {
+    const inp = tr.querySelector('input[data-field="' + f + '"]');
+    if (inp) data[f] = inp.value;
+  });
+  const firm = tr.querySelector('input[type="checkbox"]');
+  if (firm) data.firmado = firm.checked ? 1 : 0;
+  return data;
+}
+
 function openEditPit(id, data) {
-  data = data || {};
-  // Si hay pendiente previa, editar sobre esa
+  data = liveRowData(id, data || {});
+  // Si hay pendiente previa, editar sobre esa (sin perder efectivo vivo)
   const pend = window.PitaPending[id];
-  if (pend && pend.pending) data = Object.assign({}, data, pend.pending);
+  if (pend && pend.pending) {
+    data = Object.assign({}, data, pend.pending);
+    // Si la celda de efectivo se editó después, preferir DOM
+    const tr = document.querySelector('tr[data-id="' + id + '"]');
+    const ef = tr && tr.querySelector('input[data-field="efectivo"]');
+    if (ef && ef.value !== '') data.efectivo = ef.value;
+    const pt = tr && tr.querySelector('input[data-field="pitas"]');
+    if (pt && pt.value !== '') data.pitas = pt.value;
+  }
 
   const form = document.getElementById('form-edit-pit');
   if (!form) return;
@@ -316,6 +341,26 @@ function applyPitEditToRow(ev) {
     }
   }
 
+  // Preferir valores del formulario; si efectivo/pitas vacíos, conservar celda actual
+  const trLive = document.querySelector('tr[data-id="' + id + '"]');
+  let pitasVal = form.pitas.value === '' ? '' : form.pitas.value;
+  let efectivoVal = form.efectivo.value === '' ? '' : form.efectivo.value;
+  if (trLive) {
+    const pInp = trLive.querySelector('input[data-field="pitas"]');
+    const eInp = trLive.querySelector('input[data-field="efectivo"]');
+    if (pitasVal === '' && pInp && pInp.value !== '') pitasVal = pInp.value;
+    if (efectivoVal === '' && eInp && eInp.value !== '') efectivoVal = eInp.value;
+  }
+  // Si el usuario no tocó pitas/efectivo en el modal (igual a original), usar live DOM
+  if (String(pitasVal) === String(original.pitas || '') && trLive) {
+    const pInp = trLive.querySelector('input[data-field="pitas"]');
+    if (pInp) pitasVal = pInp.value;
+  }
+  if (String(efectivoVal) === String(original.efectivo || '') && trLive) {
+    const eInp = trLive.querySelector('input[data-field="efectivo"]');
+    if (eInp) efectivoVal = eInp.value;
+  }
+
   const pending = {
     nombre: nombre,
     ubic: ubic,
@@ -324,8 +369,8 @@ function applyPitEditToRow(ev) {
     folio: (form.folio.value || '').trim(),
     material: (form.material.value || '').trim(),
     producto: (form.producto.value || '').trim(),
-    pitas: form.pitas.value === '' ? '' : form.pitas.value,
-    efectivo: form.efectivo.value === '' ? '' : form.efectivo.value,
+    pitas: pitasVal,
+    efectivo: efectivoVal,
     firmado: form.firmado && form.firmado.checked ? 1 : 0
   };
 
@@ -456,21 +501,48 @@ async function saveAllPitaPending() {
   for (const id of ids) {
     const p = window.PitaPending[id];
     if (!p || !p.pending) continue;
+    // Sincronizar con valores actuales de la fila (efectivo/pitas editados en celda)
+    const live = liveRowData(id, p.pending);
+    p.pending.efectivo = live.efectivo;
+    p.pending.pitas = live.pitas;
+    // Solo enviar campos que realmente cambiaron vs original de BD
+    const orig = p.original || {};
     const body = new FormData();
+    let nFields = 0;
     Object.keys(p.pending).forEach(k => {
       const v = p.pending[k];
       if (v === undefined || v === null) return;
-      body.set(k, String(v));
+      const a = String(orig[k] != null ? orig[k] : '');
+      const b = String(v);
+      if (a === b) return; // sin cambio → no tocar en BD
+      body.set(k, b);
+      nFields++;
     });
+    // Si solo cambió trabajador, asegurar nombre/ubic van
+    if (nFields === 0) {
+      delete window.PitaPending[id];
+      ok++;
+      continue;
+    }
     try {
       const res = await fetch('/api/nomina-pita/linea/' + id, { method: 'PATCH', body });
       if (res.ok) {
         ok++;
         const tr = document.querySelector('tr[data-id="' + id + '"]');
-        if (tr) { tr.classList.remove('row-pending-edit'); tr.title = ''; }
+        if (tr) {
+          tr.classList.remove('row-pending-edit');
+          tr.title = '';
+          // Actualizar "original" implícito: valores ya en pantalla
+        }
         delete window.PitaPending[id];
       } else {
         fail++;
+        let detail = 'Error en fila #' + id;
+        try {
+          const j = await res.json();
+          detail = j.detail || j.message || detail;
+        } catch (e) {}
+        if (msg) msg.textContent = detail;
       }
     } catch (e) {
       fail++;

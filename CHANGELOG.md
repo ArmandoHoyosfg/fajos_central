@@ -1,3 +1,10 @@
+## [3.41.7] — 2026-10-09
+
+### Pita: no perder efectivo al cambiar nombre
+- El modal lee valores vivos de la fila (efectivo/pitas editados en celda).
+- Al guardar pendientes solo se envían campos que cambiaron (no se pone efectivo en 0).
+- Sin recarga de página al confirmar pendientes.
+
 ## [3.41.6] — 2026-10-09
 
 ### UI: modal Pita sin solapamientos
