@@ -846,13 +846,14 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
             nonlocal row_i
             sueldo = float(r.get("sueldo") or 0)
             extras = float(r.get("extras") or 0)
-            # Extras en 0 → celda vacía (no $0.00)
-            extras_val = extras if extras else None
+            # Extras / sueldo en 0 → celda vacía (sin $0.00)
+            sueldo_val = sueldo if sueldo else ""
+            extras_val = extras if extras else ""
             vals = [
                 r.get("nombre") or "",
                 r.get("ubic"),
                 r.get("puesto") or "",
-                sueldo if sueldo else None,
+                sueldo_val,
                 extras_val,
                 f'=IF(AND(OR(D{row_i}="",D{row_i}=0),OR(E{row_i}="",E{row_i}=0)),"",IF(D{row_i}="",0,D{row_i})+IF(E{row_i}="",0,E{row_i}))',
                 "" if not r.get("firmado") else "✓",
@@ -860,7 +861,10 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
             for col, v in enumerate(vals, 1):
                 cell = ws.cell(row_i, col, v if v is not None else "")
                 cell.border = self.THIN
-                if col in (4, 5, 6) and (v is not None and v != ""):
+                # Solo formato moneda si hay número real
+                if col in (4, 5, 6) and isinstance(v, (int, float)):
+                    cell.number_format = money
+                elif col == 6:
                     cell.number_format = money
                 if row_i % 2 == 0:
                     cell.fill = self.ALT_FILL
@@ -897,15 +901,17 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
                 r.get("nombre") or "",
                 r.get("ubic"),
                 r.get("puesto") or "",
-                sueldo if sueldo else None,
-                col_e,
+                sueldo if sueldo else "",
+                col_e if col_e else "",
                 total_formula,
                 "" if not r.get("firmado") else "✓",
             ]
             for col, v in enumerate(vals, 1):
                 cell = ws.cell(row_i, col, v if v is not None else "")
                 cell.border = self.THIN
-                if col in (4, 5, 6) and (v is not None and v != ""):
+                if col in (4, 5) and isinstance(v, (int, float)):
+                    cell.number_format = money_precio
+                elif col == 6:
                     cell.number_format = money_precio
                 if row_i % 2 == 0:
                     cell.fill = self.ALT_FILL
@@ -919,14 +925,10 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
 
         if torcedores:
             row_i += 1
-            # Encabezados de sección torcedores (Precio en lugar de Extras)
-            torc_headers = ["Torcedor", "Ubic", "Puesto", "Sueldo", "Precio", "Total", "Firma"]
-            for col, h in enumerate(torc_headers, 1):
-                cell = ws.cell(row_i, col, h)
-                cell.fill = self.HEADER_FILL
-                cell.font = self.HEADER_FONT
-                cell.alignment = Alignment(horizontal="center")
-                cell.border = self.THIN
+            # Título minimalista (sin segunda fila de encabezados)
+            cell = ws.cell(row_i, 1, "Torcedores")
+            cell.font = Font(name="Calibri", bold=True, size=11, color="1F4E79")
+            ws.merge_cells(start_row=row_i, start_column=1, end_row=row_i, end_column=7)
             row_i += 1
             for r in torcedores:
                 _write_torcedor(r)
@@ -945,19 +947,24 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
             # D = sueldos; E = solo extras de personal (no precios de torcedor); F = totales
             for col, letter, rows in (
                 (4, "D", sum_sueldo_rows or data_rows_idx),
-                (5, "E", sum_extras_rows),  # puede quedar vacío / 0
+                (5, "E", sum_extras_rows),  # solo extras reales; precios torcedor no entran
                 (6, "F", sum_total_rows or data_rows_idx),
             ):
-                val = _sum_refs(letter, rows) if rows else 0
+                if col == 5 and not rows:
+                    val = ""  # sin extras → celda vacía (no $0.00)
+                else:
+                    val = _sum_refs(letter, rows) if rows else 0
                 cell = ws.cell(row_i, col, value=val)
                 cell.font = Font(bold=True)
-                cell.number_format = money
+                if val != "":
+                    cell.number_format = money
                 cell.fill = PatternFill("solid", fgColor="C6EFCE")
                 cell.border = self.THIN
         else:
             for col in (4, 5, 6):
-                cell = ws.cell(row_i, col, 0)
-                cell.number_format = money
+                cell = ws.cell(row_i, col, "" if col == 5 else 0)
+                if col != 5:
+                    cell.number_format = money
                 cell.fill = PatternFill("solid", fgColor="C6EFCE")
 
         if resumen:

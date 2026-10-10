@@ -1,3 +1,11 @@
+## [3.41.9] — 2026-10-09
+
+### Excel Taller minimalista
+- Sección Torcedores: solo título «Torcedores» (sin segunda fila de encabezados).
+- Precio por pita en columna Extras; **no** se suma al TOTAL.
+- Celdas con 0 en extras (personal) → vacías.
+- TOTAL columna Extras vacío si no hay extras reales.
+
 ## [3.41.8] — 2026-10-09
 
 ### Excel Taller: precio por pita real en torcedores

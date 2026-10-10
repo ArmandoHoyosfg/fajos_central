@@ -1,2 +1,2 @@
 """Fajos Piteados Central — Sistema de Nóminas."""
-__version__ = "3.41.8"
+__version__ = "3.41.9"
