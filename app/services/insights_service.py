@@ -879,32 +879,89 @@ class InsightsService:
             "top_materiales": top_materiales,
         }
 
-    def captura_solo_hoy(self, ref: date | None = None) -> dict[str, Any]:
-        """Vista reducida: trabajos/líneas de la semana actual + gramos del día."""
+    def captura_solo_hoy(
+        self,
+        ref: date | None = None,
+        *,
+        semana_id: int | None = None,
+        dia: str | None = None,
+    ) -> dict[str, Any]:
+        """Captura por día: selector sáb–vie, todas las filas de la semana, gramos del día elegido."""
+        from app.core.dias import DAY_SHORT
+
         ref = ref or today()
-        col = col_hoy(ref)
-        label = DAY_LABELS.get(col, col)
-        semanas = self.semanas.listar()
-        actual = encontrar_semana_actual(semanas, ref)
-        if not actual:
+        col_today = col_hoy(ref)
+        # Normalizar día pedido
+        dia_col = (dia or col_today or "gm_lun").strip().lower()
+        if not dia_col.startswith("gm_"):
+            # aceptar "lun", "sab", etc.
+            map_short = {c.replace("gm_", ""): c for c in ORDERED_DAYS}
+            dia_col = map_short.get(dia_col, col_today)
+        if dia_col not in ORDERED_DAYS:
+            dia_col = col_today
+        label = DAY_LABELS.get(dia_col, dia_col)
+
+        from app.core.calendar_util import marcar_semanas
+
+        semanas_raw = self.semanas.listar() or []
+        semanas = marcar_semanas(semanas_raw, ref)
+        actual = encontrar_semana_actual(semanas_raw, ref)
+        semana = None
+        if semana_id is not None:
+            try:
+                sid_req = int(semana_id)
+            except (TypeError, ValueError):
+                sid_req = None
+            if sid_req is not None:
+                for s in semanas_raw:
+                    try:
+                        if int(s.get("id") or 0) == sid_req:
+                            semana = s
+                            break
+                    except (TypeError, ValueError):
+                        continue
+        if semana is None:
+            semana = actual
+        if semana is None and semanas_raw:
+            # Último recurso: primera semana (misma lógica que Plata si no hay actual)
+            semana = semanas_raw[0]
+        if not semana:
             return {
                 "ok": False,
                 "fecha": ref.isoformat(),
-                "col_hoy": col,
+                "col_hoy": col_today,
+                "col_dia": dia_col,
                 "label": label,
                 "semana": None,
+                "semanas": [],
+                "dias": [
+                    {
+                        "col": c,
+                        "label": DAY_LABELS.get(c, c),
+                        "short": DAY_SHORT.get(c, c),
+                        "es_hoy": c == col_today,
+                    }
+                    for c in ORDERED_DAYS
+                ],
                 "lineas": [],
                 "capturados": 0,
                 "pendientes": 0,
+                "total": 0,
             }
-        sid = int(actual["id"])
-        lineas = self.prod.listar_por_semana(sid)
+
+        sid = int(semana["id"])
+        # Misma regla que Plata: semana abierta → ocultar terminados;
+        # cerrada → incluir para ver totales reales.
+        cerrada = bool(semana.get("cerrada"))
+        lineas = self.prod.listar_por_semana(sid, incluir_terminados=cerrada)
         rows = []
         capturados = pendientes = 0
+        total_g = 0.0
         for r in lineas:
-            g = _safe_float(r.get(col))
+            g = _safe_float(r.get(dia_col))
             if g > 0:
                 capturados += 1
+                total_g += g
             else:
                 pendientes += 1
             rows.append({
@@ -915,25 +972,51 @@ class InsightsService:
                 "modelo": r.get("modelo"),
                 "material": r.get("material"),
                 "tarifa_gr": _safe_float(r.get("tarifa_gr"), 12),
-                "gramos_hoy": g if g > 0 else None,
+                "gramos_dia": g if g > 0 else None,
+                "gramos_hoy": g if g > 0 else None,  # compat
                 "total_gramos": _safe_float(r.get("total_gramos")),
+                "trabajador_id": r.get("trabajador_id"),
             })
-        # orden: pendientes primero, luego nombre
-        rows.sort(key=lambda x: (0 if not x.get("gramos_hoy") else 1, str(x.get("nombre") or "")))
+        rows.sort(key=lambda x: (0 if not x.get("gramos_dia") else 1, str(x.get("nombre") or "")))
+        dias = [
+            {
+                "col": c,
+                "label": DAY_LABELS.get(c, c),
+                "short": DAY_SHORT.get(c, c),
+                "es_hoy": c == col_today,
+                "activo": c == dia_col,
+            }
+            for c in ORDERED_DAYS
+        ]
         return {
             "ok": True,
             "fecha": ref.isoformat(),
-            "col_hoy": col,
+            "col_hoy": col_today,
+            "col_dia": dia_col,
             "label": label,
+            "es_hoy": dia_col == col_today,
             "semana": {
                 "id": sid,
-                "codigo": actual.get("codigo"),
-                "cerrada": bool(actual.get("cerrada")),
+                "codigo": semana.get("codigo"),
+                "cerrada": bool(semana.get("cerrada")),
+                "fecha_inicio": str(semana.get("fecha_inicio") or ""),
+                "fecha_fin": str(semana.get("fecha_fin") or ""),
             },
+            "semanas": [
+                {
+                    "id": int(s.get("id")),
+                    "codigo": s.get("codigo"),
+                    "es_actual": bool(s.get("es_actual")),
+                    "cerrada": bool(s.get("cerrada")),
+                }
+                for s in (semanas or [])
+            ],
+            "dias": dias,
             "lineas": rows,
             "capturados": capturados,
             "pendientes": pendientes,
             "total": len(rows),
+            "total_gramos_dia": round(total_g, 1),
         }
 
 

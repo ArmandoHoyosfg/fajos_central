@@ -808,6 +808,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <script>
 const SEMANA_ID = {{ semana_id or 'null' }};
+try { if (SEMANA_ID) sessionStorage.setItem('fajos_semana_id', String(SEMANA_ID)); } catch (e) {}
+
 const COL_HOY = "{{ col_hoy|default('gm_lun') }}";
 let CACHE_TRABAJOS = [];
 
@@ -1458,6 +1460,34 @@ async function duplicarEnMaterial(prodId, material) {
 }
 
 </script>
+
+<script>
+(async function applyOpsPlataFilters(){
+  try {
+    const res = await fetch('/api/ops/settings', { cache: 'no-store' });
+    if (!res.ok) return;
+    const s = await res.json();
+    window.__OPS_SETTINGS = s;
+    const map = [
+      ['plata_solo_sin_firmar_avance', 'flt-sin-firmar-avance'],
+      ['plata_solo_sin_firmar_sin_avance', 'flt-sin-firmar-sin'],
+      ['plata_solo_sin_gramos_hoy', 'flt-sin-gramos-hoy'],
+    ];
+    // ids may vary — try common patterns
+    document.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      const id = (cb.id || '') + ' ' + (cb.name || '');
+      if (s.plata_solo_sin_firmar_avance && /sin.?firmar.*avance|firmar.*con/i.test(id + (cb.parentElement && cb.parentElement.textContent || ''))) {
+        if (/con avance/i.test(cb.parentElement.textContent || '')) cb.checked = true;
+      }
+      if (s.plata_solo_sin_firmar_sin_avance && /sin avance/i.test(cb.parentElement && cb.parentElement.textContent || '')) cb.checked = true;
+      if (s.plata_solo_sin_gramos_hoy && /sin gramos/i.test(cb.parentElement && cb.parentElement.textContent || '')) cb.checked = true;
+    });
+    if (typeof applyFilters === 'function') applyFilters();
+    else if (typeof filtrarTabla === 'function') filtrarTabla();
+  } catch(e) {}
+})();
+</script>
+
 {% endblock %}
 
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Fajos Piteados Central{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css?v=3.40.10">
+  <link rel="stylesheet" href="/static/app.css?v=3.41.6">
   <script>
 (function(){ try { var t = localStorage.getItem('fajos_theme') || 'oscuro';
   document.documentElement.setAttribute('data-theme', t === 'oscuro' ? 'oscuro' : t);
@@ -48,8 +48,8 @@
       <a href="/trabajadores" class="{% if '/trabajadores' in request.url.path %}active{% endif %}">
         <i data-lucide="users"></i> Trabajadores
       </a>
-      <a href="/solo-hoy" class="{% if request.url.path.startswith('/solo-hoy') %}active{% endif %}">
-        <i data-lucide="sun"></i> Solo hoy
+      <a href="/solo-hoy" id="nav-por-dia" class="{% if request.url.path.startswith('/solo-hoy') %}active{% endif %}">
+        <i data-lucide="sun"></i> Por día
       </a>
       <a href="/produccion" class="{% if '/produccion' in request.url.path %}active{% endif %}">
         <i data-lucide="hammer"></i> Plata
@@ -114,5 +114,19 @@
 })();
 </script>
 <script src="/static/modal_util.js?v=3.40.8"></script>
+
+<script>
+(function(){
+  try {
+    var sid = sessionStorage.getItem('fajos_semana_id');
+    var a = document.getElementById('nav-por-dia');
+    if (a && sid) {
+      var u = new URL(a.href, window.location.origin);
+      u.searchParams.set('semana_id', sid);
+      a.href = u.pathname + u.search;
+    }
+  } catch(e) {}
+})();
+</script>
 </body>
 </html>

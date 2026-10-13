@@ -36,6 +36,18 @@
 </div>
 
 {% if semana_id %}
+<div id="pita-pending-bar" class="pita-pending-bar" hidden>
+  <div class="pita-pending-head">
+    <strong>Cambios pendientes</strong>
+    <span id="pita-pending-count" class="muted">0 filas</span>
+  </div>
+  <ul id="pita-pending-list" class="pita-pending-list"></ul>
+  <div class="pita-pending-actions">
+    <button type="button" class="btn" id="pita-pending-save">Guardar todo en la BD</button>
+    <button type="button" class="btn btn-secondary" id="pita-pending-discard">Descartar cambios</button>
+    <span id="pita-pending-msg" class="muted"></span>
+  </div>
+</div>
 <div class="card" style="margin:1rem 0;">
   <strong>Agregar línea</strong>
   <form class="form-alta-compact" onsubmit="return addPit(event)">
@@ -82,7 +94,8 @@
           "efectivo": r.efectivo if r.efectivo is not none else "",
           "firmado": 1 if r.firmado else 0,
           "nombre": r.nombre,
-          "ubic": r.ubic
+          "ubic": r.ubic,
+          "trabajador_id": r.trabajador_id if r.trabajador_id is not none else ""
         } %}
         <div class="row-menu">
           <button type="button" class="btn-row-menu" title="Menú: editar o eliminar fila" aria-label="Menú de la fila" aria-expanded="false"
@@ -93,9 +106,9 @@
           </div>
         </div>
       </td>
-      <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
+      <td class="col-nombre name-edit" data-field-display="nombre" title="Doble clic para editar · {{ r.nombre }}"
           ondblclick='openEditPit({{ r.id }}, {{ row_data|tojson }})'>{{ r.nombre }}</td>
-      <td>{{ r.ubic }}</td>
+      <td data-field-display="ubic">{{ r.ubic }}</td>
       <td class="editable-hint"><input class="cell-edit" data-field="modelo" value="{{ r.modelo or '' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint"><input class="cell-edit" data-field="folio" value="{{ r.folio or '' }}" readonly title="Doble clic para editar"></td>
       <td class="editable-hint"><input class="cell-edit" data-field="material" value="{{ r.material or '' }}" readonly title="Doble clic para editar"></td>
@@ -115,11 +128,42 @@
 </div>
 
 <div class="modal-backdrop" id="modal-edit-pit" hidden>
-  <div class="modal" role="dialog" aria-modal="true">
+  <div class="modal modal-wide modal-pit-edit" role="dialog" aria-modal="true">
     <h2>Editar línea de pita</h2>
     <p class="muted" id="edit-pit-who" style="margin-top:0"></p>
-    <form id="form-edit-pit" onsubmit="return FajosRowEdit.submit({formId:'form-edit-pit', modalId:'modal-edit-pit', urlBase:'/api/nomina-pita/linea/'})">
+    <p class="muted faint" style="margin:0 0 0.5rem">Los cambios se aplican a la <strong>fila en pantalla</strong>; se graban en la BD solo cuando confirmes en la barra de pendientes.</p>
+    <form id="form-edit-pit" onsubmit="return applyPitEditToRow(event)">
       <div class="form-grid">
+        <div class="full pit-trab-block">
+          <div class="pit-trab-row">
+            <label class="pit-trab-check" for="edit-pit-enable-trab">
+              <input type="checkbox" id="edit-pit-enable-trab" onchange="togglePitTrabajador(this.checked)">
+              <span>Editar trabajador</span>
+            </label>
+            <select name="trabajador_sel" id="edit-pit-trab" disabled
+                    title="Opcional: rellena nombre y ubic desde el catálogo"
+                    onchange="fillPitTrabFromCatalog(this)">
+              <option value="">— catálogo (opcional) —</option>
+              {% for t in trabajadores %}
+              <option value="{{ t.nombre_mostrar }}|{{ t.ubic }}|{{ t.id }}">{{ t.nombre_mostrar }} ({{ t.ubic }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="pit-trab-fields">
+            <div class="pit-field-nombre">
+              <label for="edit-pit-nombre">Nombre</label>
+              <input name="nombre" id="edit-pit-nombre" disabled placeholder="Nombre del trabajador" autocomplete="off">
+            </div>
+            <div class="pit-field-ubic">
+              <label for="edit-pit-ubic">Ubicación</label>
+              <input name="ubic" id="edit-pit-ubic" disabled placeholder="Ubic" inputmode="numeric" autocomplete="off">
+            </div>
+          </div>
+          <input type="hidden" name="trabajador_id" id="edit-pit-tid">
+          <p class="muted faint pit-trab-hint">
+            Marca la casilla para editar nombre y ubicación. El catálogo solo rellena esos campos.
+          </p>
+        </div>
         <div><label>Modelo</label><input name="modelo"></div>
         <div><label>Folio</label><input name="folio"></div>
         <div><label>Material</label><input name="material" placeholder="PITA 6X6"></div>
@@ -129,8 +173,8 @@
         <div class="full"><label><input type="checkbox" name="firmado" value="1"> Firmado</label></div>
       </div>
       <div class="actions">
-        <button type="button" class="btn btn-secondary" onclick="FajosRowEdit.close('modal-edit-pit')">Cancelar</button>
-        <button type="submit" class="btn">Guardar fila</button>
+        <button type="button" class="btn btn-secondary" onclick="closePitEdit()">Cancelar</button>
+        <button type="submit" class="btn">Aplicar a la fila</button>
       </div>
     </form>
   </div>
@@ -148,11 +192,397 @@
 <script src="/static/row_menu.js?v=3113"></script>
 <script src="/static/row_edit.js?v=3112"></script>
 <script>
+/** Edición diferida de Pita: aplica a la fila y guarda en BD al confirmar. */
+window.PitaPending = window.PitaPending || {}; // id -> { original, pending, summary }
+
+function closePitEdit() {
+  const bg = document.getElementById('modal-edit-pit');
+  if (bg) bg.hidden = true;
+}
+
+function togglePitTrabajador(on) {
+  const sel = document.getElementById('edit-pit-trab');
+  const nom = document.getElementById('edit-pit-nombre');
+  const ubic = document.getElementById('edit-pit-ubic');
+  if (sel) sel.disabled = !on;
+  if (nom) nom.disabled = !on;
+  if (ubic) ubic.disabled = !on;
+  if (on && nom) {
+    try { nom.focus(); nom.select(); } catch (e) {}
+  }
+}
+
+function fillPitTrabFromCatalog(sel) {
+  if (!sel || !sel.value) return;
+  const parts = sel.value.split('|');
+  const nom = document.getElementById('edit-pit-nombre');
+  const ubic = document.getElementById('edit-pit-ubic');
+  const tid = document.getElementById('edit-pit-tid');
+  if (nom) nom.value = parts[0] || '';
+  if (ubic) ubic.value = parts[1] != null ? parts[1] : '';
+  if (tid) tid.value = parts[2] || '';
+  const who = document.getElementById('edit-pit-who');
+  if (who) who.textContent = (parts[0] || '') + ' · ubic ' + (parts[1] || '');
+}
+
+function liveRowData(id, base) {
+  const data = Object.assign({}, base || {});
+  const tr = document.querySelector('tr[data-id="' + id + '"]');
+  if (!tr) return data;
+  const nameTd = tr.querySelector('[data-field-display="nombre"]');
+  const ubicTd = tr.querySelector('[data-field-display="ubic"]');
+  if (nameTd) data.nombre = nameTd.textContent.trim();
+  if (ubicTd) data.ubic = ubicTd.textContent.trim();
+  ['modelo', 'folio', 'material', 'producto', 'pitas', 'efectivo'].forEach(function (f) {
+    const inp = tr.querySelector('input[data-field="' + f + '"]');
+    if (inp) data[f] = inp.value;
+  });
+  const firm = tr.querySelector('input[type="checkbox"]');
+  if (firm) data.firmado = firm.checked ? 1 : 0;
+  return data;
+}
+
 function openEditPit(id, data) {
+  data = liveRowData(id, data || {});
+  // Si hay pendiente previa, editar sobre esa (sin perder efectivo vivo)
+  const pend = window.PitaPending[id];
+  if (pend && pend.pending) {
+    data = Object.assign({}, data, pend.pending);
+    // Si la celda de efectivo se editó después, preferir DOM
+    const tr = document.querySelector('tr[data-id="' + id + '"]');
+    const ef = tr && tr.querySelector('input[data-field="efectivo"]');
+    if (ef && ef.value !== '') data.efectivo = ef.value;
+    const pt = tr && tr.querySelector('input[data-field="pitas"]');
+    if (pt && pt.value !== '') data.pitas = pt.value;
+  }
+
+  const form = document.getElementById('form-edit-pit');
+  if (!form) return;
+  form.dataset.rowId = String(id);
+  form.dataset.original = JSON.stringify({
+    nombre: data.nombre || '',
+    ubic: data.ubic != null ? data.ubic : '',
+    trabajador_id: data.trabajador_id || '',
+    modelo: data.modelo || '',
+    folio: data.folio || '',
+    material: data.material || '',
+    producto: data.producto || '',
+    pitas: data.pitas != null ? data.pitas : '',
+    efectivo: data.efectivo != null ? data.efectivo : '',
+    firmado: data.firmado ? 1 : 0
+  });
+
   const who = document.getElementById('edit-pit-who');
   if (who) who.textContent = (data.nombre || '') + ' · ubic ' + (data.ubic || '');
-  FajosRowEdit.open({ modalId: 'modal-edit-pit', formId: 'form-edit-pit', id: id, data: data });
+
+  form.modelo.value = data.modelo || '';
+  form.folio.value = data.folio || '';
+  form.material.value = data.material || '';
+  form.producto.value = data.producto || '';
+  form.pitas.value = data.pitas != null && data.pitas !== '' ? data.pitas : '';
+  form.efectivo.value = data.efectivo != null && data.efectivo !== '' ? data.efectivo : '';
+  if (form.firmado) form.firmado.checked = !!data.firmado;
+
+  const nomEl = document.getElementById('edit-pit-nombre');
+  const ubicEl = document.getElementById('edit-pit-ubic');
+  if (nomEl) { nomEl.value = data.nombre || ''; nomEl.disabled = true; }
+  if (ubicEl) { ubicEl.value = data.ubic != null ? data.ubic : ''; ubicEl.disabled = true; }
+  document.getElementById('edit-pit-tid').value = data.trabajador_id || '';
+
+  const sel = document.getElementById('edit-pit-trab');
+  const en = document.getElementById('edit-pit-enable-trab');
+  if (en) en.checked = false;
+  if (sel) {
+    sel.disabled = true;
+    // seleccionar opción actual si existe
+    const tid = String(data.trabajador_id || '');
+    let found = false;
+    Array.from(sel.options).forEach(opt => {
+      const parts = (opt.value || '').split('|');
+      if (tid && parts[2] === tid) { opt.selected = true; found = true; }
+      else if (!tid && parts[0] === (data.nombre || '') && String(parts[1]) === String(data.ubic || '')) {
+        opt.selected = true; found = true;
+      }
+    });
+    if (!found) sel.selectedIndex = 0;
+  }
+
+  const bg = document.getElementById('modal-edit-pit');
+  if (bg) bg.hidden = false;
 }
+
+function applyPitEditToRow(ev) {
+  ev.preventDefault();
+  const form = document.getElementById('form-edit-pit');
+  const id = form && form.dataset.rowId;
+  if (!id) return false;
+
+  let original = {};
+  try { original = JSON.parse(form.dataset.original || '{}'); } catch (e) {}
+
+  // Trabajador (nombre y ubic editables; catálogo opcional ya rellenó los campos)
+  let nombre = (document.getElementById('edit-pit-nombre').value || '').trim();
+  let ubic = (document.getElementById('edit-pit-ubic').value || '').trim();
+  let tid = (document.getElementById('edit-pit-tid').value || '').trim();
+  const en = document.getElementById('edit-pit-enable-trab');
+  // Si no activó edición de trabajador, conservar originales
+  if (!(en && en.checked)) {
+    nombre = original.nombre || nombre;
+    ubic = original.ubic != null ? String(original.ubic) : ubic;
+    tid = original.trabajador_id != null ? String(original.trabajador_id) : tid;
+  } else if (tid) {
+    // Si cambió nombre/ubic a mano respecto al catálogo, limpiar id para no forzar vínculo viejo
+    const sel = document.getElementById('edit-pit-trab');
+    if (sel && sel.value) {
+      const parts = sel.value.split('|');
+      if (parts[0] !== nombre || String(parts[1]) !== String(ubic)) {
+        tid = ''; // nombre/ubic manuales → sin forzar trabajador_id del catálogo
+      }
+    }
+  }
+
+  // Preferir valores del formulario; si efectivo/pitas vacíos, conservar celda actual
+  const trLive = document.querySelector('tr[data-id="' + id + '"]');
+  let pitasVal = form.pitas.value === '' ? '' : form.pitas.value;
+  let efectivoVal = form.efectivo.value === '' ? '' : form.efectivo.value;
+  if (trLive) {
+    const pInp = trLive.querySelector('input[data-field="pitas"]');
+    const eInp = trLive.querySelector('input[data-field="efectivo"]');
+    if (pitasVal === '' && pInp && pInp.value !== '') pitasVal = pInp.value;
+    if (efectivoVal === '' && eInp && eInp.value !== '') efectivoVal = eInp.value;
+  }
+  // Si el usuario no tocó pitas/efectivo en el modal (igual a original), usar live DOM
+  if (String(pitasVal) === String(original.pitas || '') && trLive) {
+    const pInp = trLive.querySelector('input[data-field="pitas"]');
+    if (pInp) pitasVal = pInp.value;
+  }
+  if (String(efectivoVal) === String(original.efectivo || '') && trLive) {
+    const eInp = trLive.querySelector('input[data-field="efectivo"]');
+    if (eInp) efectivoVal = eInp.value;
+  }
+
+  const pending = {
+    nombre: nombre,
+    ubic: ubic,
+    trabajador_id: tid,
+    modelo: (form.modelo.value || '').trim(),
+    folio: (form.folio.value || '').trim(),
+    material: (form.material.value || '').trim(),
+    producto: (form.producto.value || '').trim(),
+    pitas: pitasVal,
+    efectivo: efectivoVal,
+    firmado: form.firmado && form.firmado.checked ? 1 : 0
+  };
+
+  // Diff vs original (de BD o pendiente anterior)
+  const changes = [];
+  const labels = {
+    nombre: 'Trabajador', ubic: 'Ubic', trabajador_id: 'ID trab.',
+    modelo: 'Modelo', folio: 'Folio', material: 'Material', producto: 'Producto',
+    pitas: 'Pitas', efectivo: 'Efectivo', firmado: 'Firmado'
+  };
+  Object.keys(pending).forEach(k => {
+    const a = String(original[k] != null ? original[k] : '');
+    const b = String(pending[k] != null ? pending[k] : '');
+    if (a !== b) {
+      if (k === 'firmado') changes.push(labels[k] + ': ' + (a === '1' ? 'sí' : 'no') + ' → ' + (b === '1' ? 'sí' : 'no'));
+      else if (k === 'trabajador_id') { /* se refleja en nombre */ }
+      else changes.push(labels[k] + ': «' + a + '» → «' + b + '»');
+    }
+  });
+
+  if (!changes.length) {
+    if (window.FajosLive) FajosLive.showToast('Sin cambios');
+    else alert('Sin cambios');
+    closePitEdit();
+    return false;
+  }
+
+  // Aplicar a la fila DOM
+  const tr = document.querySelector('tr[data-id="' + id + '"]');
+  if (tr) {
+    const nameTd = tr.querySelector('[data-field-display="nombre"]');
+    const ubicTd = tr.querySelector('[data-field-display="ubic"]');
+    if (nameTd) nameTd.textContent = pending.nombre || '';
+    if (ubicTd) ubicTd.textContent = pending.ubic != null ? pending.ubic : '';
+    ['modelo', 'folio', 'material', 'producto', 'pitas', 'efectivo'].forEach(f => {
+      const inp = tr.querySelector('input[data-field="' + f + '"]');
+      if (inp) inp.value = pending[f] != null ? pending[f] : '';
+    });
+    const firm = tr.querySelector('input[type="checkbox"]');
+    if (firm) firm.checked = !!pending.firmado;
+    tr.classList.add('row-pending-edit');
+    tr.title = 'Cambios pendientes de guardar en la BD';
+  }
+
+  window.PitaPending[id] = {
+    original: original,
+    pending: pending,
+    summary: changes,
+    label: (pending.nombre || '') + ' (ubic ' + (pending.ubic || '') + ')'
+  };
+  renderPitaPendingBar();
+  closePitEdit();
+  if (window.FajosLive) FajosLive.showToast('Aplicado a la fila · confirma abajo para guardar');
+  return false;
+}
+
+function renderPitaPendingBar() {
+  const bar = document.getElementById('pita-pending-bar');
+  const list = document.getElementById('pita-pending-list');
+  const count = document.getElementById('pita-pending-count');
+  if (!bar || !list) return;
+  const ids = Object.keys(window.PitaPending || {});
+  if (!ids.length) {
+    bar.hidden = true;
+    list.innerHTML = '';
+    return;
+  }
+  bar.hidden = false;
+  if (count) count.textContent = ids.length + (ids.length === 1 ? ' fila' : ' filas');
+  list.innerHTML = ids.map(id => {
+    const p = window.PitaPending[id];
+    const items = (p.summary || []).map(s => '<li>' + s + '</li>').join('');
+    return '<li class="pita-pending-item" data-id="' + id + '">' +
+      '<div><strong>#' + id + '</strong> ' + (p.label || '') +
+      ' <button type="button" class="btn btn-secondary btn-xs" onclick="editPendingPit(' + id + ')">Revisar</button>' +
+      ' <button type="button" class="btn btn-secondary btn-xs" onclick="discardOnePit(' + id + ')">Quitar</button></div>' +
+      '<ul class="pita-pending-diff">' + items + '</ul></li>';
+  }).join('');
+}
+
+function editPendingPit(id) {
+  const p = window.PitaPending[id];
+  if (!p) return;
+  openEditPit(id, Object.assign({}, p.original, p.pending));
+}
+
+function discardOnePit(id) {
+  const p = window.PitaPending[id];
+  if (!p) return;
+  // Restaurar fila visual desde original
+  const tr = document.querySelector('tr[data-id="' + id + '"]');
+  const o = p.original || {};
+  if (tr) {
+    const nameTd = tr.querySelector('[data-field-display="nombre"]');
+    const ubicTd = tr.querySelector('[data-field-display="ubic"]');
+    if (nameTd) nameTd.textContent = o.nombre || '';
+    if (ubicTd) ubicTd.textContent = o.ubic != null ? o.ubic : '';
+    ['modelo', 'folio', 'material', 'producto', 'pitas', 'efectivo'].forEach(f => {
+      const inp = tr.querySelector('input[data-field="' + f + '"]');
+      if (inp) inp.value = o[f] != null ? o[f] : '';
+    });
+    const firm = tr.querySelector('input[type="checkbox"]');
+    if (firm) firm.checked = !!Number(o.firmado);
+    tr.classList.remove('row-pending-edit');
+    tr.title = '';
+  }
+  delete window.PitaPending[id];
+  renderPitaPendingBar();
+}
+
+async function saveAllPitaPending() {
+  const ids = Object.keys(window.PitaPending || {});
+  if (!ids.length) return;
+  const msg = document.getElementById('pita-pending-msg');
+  const okConfirm = window.FajosModal && FajosModal.confirm
+    ? await FajosModal.confirm({
+        title: 'Guardar cambios en la BD',
+        message: 'Se actualizarán ' + ids.length + ' fila(s) de Pita en la base de datos.',
+        detail: 'Revisa la lista de pendientes. Esta acción no se puede deshacer desde aquí.',
+        okLabel: 'Guardar en BD',
+        cancelLabel: 'Seguir editando',
+        large: true
+      })
+    : confirm('¿Guardar ' + ids.length + ' fila(s) en la base de datos?');
+  if (!okConfirm) return;
+
+  let ok = 0, fail = 0;
+  for (const id of ids) {
+    const p = window.PitaPending[id];
+    if (!p || !p.pending) continue;
+    // Sincronizar con valores actuales de la fila (efectivo/pitas editados en celda)
+    const live = liveRowData(id, p.pending);
+    p.pending.efectivo = live.efectivo;
+    p.pending.pitas = live.pitas;
+    // Solo enviar campos que realmente cambiaron vs original de BD
+    const orig = p.original || {};
+    const body = new FormData();
+    let nFields = 0;
+    Object.keys(p.pending).forEach(k => {
+      const v = p.pending[k];
+      if (v === undefined || v === null) return;
+      const a = String(orig[k] != null ? orig[k] : '');
+      const b = String(v);
+      if (a === b) return; // sin cambio → no tocar en BD
+      body.set(k, b);
+      nFields++;
+    });
+    // Si solo cambió trabajador, asegurar nombre/ubic van
+    if (nFields === 0) {
+      delete window.PitaPending[id];
+      ok++;
+      continue;
+    }
+    try {
+      const res = await fetch('/api/nomina-pita/linea/' + id, { method: 'PATCH', body });
+      if (res.ok) {
+        ok++;
+        const tr = document.querySelector('tr[data-id="' + id + '"]');
+        if (tr) {
+          tr.classList.remove('row-pending-edit');
+          tr.title = '';
+          // Actualizar "original" implícito: valores ya en pantalla
+        }
+        delete window.PitaPending[id];
+      } else {
+        fail++;
+        let detail = 'Error en fila #' + id;
+        try {
+          const j = await res.json();
+          detail = j.detail || j.message || detail;
+        } catch (e) {}
+        if (msg) msg.textContent = detail;
+      }
+    } catch (e) {
+      fail++;
+    }
+  }
+  renderPitaPendingBar();
+  // KPI
+  let sum = 0;
+  document.querySelectorAll('tr[data-id] input[data-field="efectivo"]').forEach(inp => {
+    const v = parseFloat(String(inp.value || '0').replace(',', '.'));
+    if (!isNaN(v)) sum += v;
+  });
+  const el = document.getElementById('kpi-total');
+  if (el) el.textContent = '$' + sum.toFixed(2);
+
+  const text = 'Guardado: ' + ok + (fail ? ' · errores: ' + fail : '');
+  if (msg) msg.textContent = text;
+  if (window.FajosLive) FajosLive.showToast(text, fail > 0);
+}
+
+function discardAllPitaPending() {
+  const ids = Object.keys(window.PitaPending || {});
+  if (!ids.length) return;
+  if (!confirm('¿Descartar todos los cambios pendientes (' + ids.length + ')?')) return;
+  ids.forEach(id => discardOnePit(id));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const saveBtn = document.getElementById('pita-pending-save');
+  const discBtn = document.getElementById('pita-pending-discard');
+  if (saveBtn) saveBtn.addEventListener('click', saveAllPitaPending);
+  if (discBtn) discBtn.addEventListener('click', discardAllPitaPending);
+  // Aviso al salir con pendientes
+  window.addEventListener('beforeunload', (e) => {
+    if (Object.keys(window.PitaPending || {}).length) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+});
 </script>
 
 <script>

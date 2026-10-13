@@ -32,6 +32,12 @@ def render_debug_page(
     aprendizaje: dict | None = None,
 ) -> HTMLResponse:
     meta = meta or {}
+    try:
+        from app.core.ops_settings import public_settings
+        ops = public_settings()
+    except Exception:
+        ops = {}
+
     counts = counts or {}
     orphans = orphans or []
     migrations = migrations or []
@@ -276,6 +282,8 @@ def render_debug_page(
     else:
         spell_html = ""
 
+    import json as _json
+    ops_json = _json.dumps(ops if isinstance(ops, dict) else {}, ensure_ascii=False)
     html = f"""<!DOCTYPE html>
 <html lang="es" data-theme="oscuro">
 <head>
@@ -300,6 +308,17 @@ def render_debug_page(
     .dev-tabs button.active {{ background: var(--accent, #c9a227); color:#1a1a1a; opacity:1; font-weight:600; }}
     .dev-tab-panel {{ display:none; }}
     .dev-tab-panel.active {{ display:block; }}
+    .dev-settings-form fieldset {{
+      border: 1px solid var(--border, #444); border-radius: 8px;
+      padding: 0.65rem 0.85rem; margin: 0 0 0.75rem;
+    }}
+    .dev-settings-form legend {{ padding: 0 0.35rem; font-weight: 600; font-size: 0.9rem; }}
+    .dev-settings-form label {{ display: block; margin: 0.35rem 0; font-size: 0.9rem; }}
+    .dev-settings-form .dev-check {{ display: flex; align-items: center; gap: 0.45rem; }}
+    .dev-settings-form input[type="number"], .dev-settings-form select {{
+      margin-left: 0.35rem; padding: 0.25rem 0.4rem; border-radius: 6px;
+      border: 1px solid var(--border,#555); background: var(--bg,#1e1e2e); color: inherit;
+    }}
     .dev-callout {{ padding:0.65rem 0.85rem; border-radius:8px; margin-bottom:0.75rem; font-size:0.88rem; border-left:3px solid var(--accent, #c9a227); background: rgba(201,162,39,0.1); }}
     .dev-callout.warn {{ border-left-color:#f9e2af; background: rgba(249,226,175,0.08); }}
     .dev-callout.ok {{ border-left-color:#a6e3a1; background: rgba(166,227,161,0.08); }}
@@ -382,6 +401,7 @@ def render_debug_page(
       </button>
       <button type="button" data-tab="acciones" role="tab">Acciones</button>
       <button type="button" data-tab="tecnico" role="tab">Técnico</button>
+      <button type="button" data-tab="settings" role="tab">Settings</button>
     </nav>
 
     <div class="dev-tab-panel active" data-panel="salud">
@@ -775,7 +795,132 @@ def render_debug_page(
 
     </div><!-- /panel tecnico -->
 
+    <div class="dev-tab-panel" data-panel="settings">
+      <div class="dev-callout">
+        Preferencias de filtrado y captura. Se guardan en
+        <code>data/ops_settings.json</code> (no en la BD). Afectan Por día, Plata y avisos.
+      </div>
 
+<section class="dev-section">
+      <h2>Filtrado por defecto</h2>
+      <p class="dev-hint">Cómo se abre cada vista la primera vez (el usuario puede cambiar el filtro en pantalla).</p>
+      <form id="form-ops-settings" class="dev-settings-form" onsubmit="return saveOpsSettings(event)">
+        <fieldset>
+          <legend>Por día</legend>
+          <label class="dev-check"><input type="checkbox" name="por_dia_solo_pendientes" id="set-pdp"> Solo pendientes al abrir</label>
+          <label class="dev-check"><input type="checkbox" name="por_dia_auto_sync" id="set-pdas"> Auto-sincronizar con Plata al volver a la pestaña</label>
+        </fieldset>
+        <fieldset>
+          <legend>Plata</legend>
+          <label class="dev-check"><input type="checkbox" name="plata_solo_sin_firmar_avance" id="set-psfa"> Filtro «Sin firmar · con avance»</label>
+          <label class="dev-check"><input type="checkbox" name="plata_solo_sin_firmar_sin_avance" id="set-psfs"> Filtro «Sin firmar · sin avance»</label>
+          <label class="dev-check"><input type="checkbox" name="plata_solo_sin_gramos_hoy" id="set-psgh"> Filtro «Sin gramos hoy»</label>
+        </fieldset>
+        <fieldset>
+          <legend>Captura y rarezas</legend>
+          <label>Umbral de rarezas (± %)
+            <input type="number" name="anomaly_pct" id="set-anomaly" min="5" max="90" step="1" style="width:5rem">
+          </label>
+          <label class="dev-check"><input type="checkbox" name="confirm_edit_past_days" id="set-cep"> Confirmar al editar días pasados con gramos</label>
+          <label>Paso de gramos (flechas / atajos)
+            <input type="number" name="gramos_step" id="set-gstep" min="1" max="100" step="1" style="width:5rem">
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Exportación</legend>
+          <label class="dev-check"><input type="checkbox" name="export_omit_zero" id="set-eoz"> Omitir filas en $0 / 0 g al exportar</label>
+          <label class="dev-check"><input type="checkbox" name="export_checklist" id="set-ecl"> Checklist antes de exportar formal Plata</label>
+        </fieldset>
+        <fieldset>
+          <legend>Interfaz</legend>
+          <label>Tema al abrir (vacío = el último usado en el navegador)
+            <select name="theme_default" id="set-theme">
+              <option value="">— no forzar —</option>
+              <option value="oscuro">Oscuro</option>
+              <option value="claro">Claro</option>
+              <option value="taller">Taller</option>
+            </select>
+          </label>
+          <label class="dev-check"><input type="checkbox" name="remember_semana" id="set-rsem"> Recordar semana entre Plata y Por día</label>
+          <label class="dev-check"><input type="checkbox" name="hide_zeros_in_tables" id="set-hz"> Ocultar ceros vacíos en tablas</label>
+        </fieldset>
+        <div class="dev-actions" style="margin-top:0.75rem">
+          <button type="submit" class="btn">Guardar preferencias</button>
+          <button type="button" class="btn btn-secondary" onclick="resetOpsSettings()">Restablecer defaults</button>
+          <span id="ops-settings-msg" class="muted" style="margin-left:0.5rem"></span>
+        </div>
+      </form>
+    </section>
+    </div><!-- /panel settings -->
+
+
+
+<script>
+window.__OPS_SETTINGS = {ops_json};
+(function(){{
+  function fillOpsForm(s) {{
+    if (!s) return;
+    var $ = function(id){{ return document.getElementById(id); }};
+    if ($('set-pdp')) $('set-pdp').checked = !!s.por_dia_solo_pendientes;
+    if ($('set-pdas')) $('set-pdas').checked = s.por_dia_auto_sync !== false;
+    if ($('set-psfa')) $('set-psfa').checked = !!s.plata_solo_sin_firmar_avance;
+    if ($('set-psfs')) $('set-psfs').checked = !!s.plata_solo_sin_firmar_sin_avance;
+    if ($('set-psgh')) $('set-psgh').checked = !!s.plata_solo_sin_gramos_hoy;
+    if ($('set-anomaly')) $('set-anomaly').value = s.anomaly_pct_display != null ? s.anomaly_pct_display : Math.round((s.anomaly_pct||0.3)*100);
+    if ($('set-cep')) $('set-cep').checked = s.confirm_edit_past_days !== false;
+    if ($('set-gstep')) $('set-gstep').value = s.gramos_step || 10;
+    if ($('set-eoz')) $('set-eoz').checked = s.export_omit_zero !== false;
+    if ($('set-ecl')) $('set-ecl').checked = s.export_checklist !== false;
+    if ($('set-theme')) $('set-theme').value = s.theme_default || '';
+    if ($('set-rsem')) $('set-rsem').checked = s.remember_semana !== false;
+    if ($('set-hz')) $('set-hz').checked = s.hide_zeros_in_tables !== false;
+  }}
+  fillOpsForm(window.__OPS_SETTINGS || {{}});
+  window.saveOpsSettings = async function(ev) {{
+    if (ev) ev.preventDefault();
+    var form = document.getElementById('form-ops-settings');
+    if (!form) return false;
+    var fd = new FormData(form);
+    ['por_dia_solo_pendientes','por_dia_auto_sync','plata_solo_sin_firmar_avance',
+     'plata_solo_sin_firmar_sin_avance','plata_solo_sin_gramos_hoy','confirm_edit_past_days',
+     'export_omit_zero','export_checklist','remember_semana','hide_zeros_in_tables'].forEach(function(k){{
+      if (!fd.has(k)) fd.set(k, '0');
+      else fd.set(k, '1');
+    }});
+    var msg = document.getElementById('ops-settings-msg');
+    try {{
+      var res = await fetch('/api/ops/settings', {{ method: 'POST', body: fd }});
+      var j = await res.json();
+      if (!res.ok) throw new Error(j.user_message || j.message || 'Error');
+      window.__OPS_SETTINGS = j;
+      fillOpsForm(j);
+      try {{ localStorage.setItem('fajos_ops_settings', JSON.stringify(j)); }} catch(e) {{}}
+      if (msg) msg.textContent = 'Guardado ✓';
+    }} catch (e) {{
+      if (msg) msg.textContent = 'Error: ' + (e.message || e);
+    }}
+    return false;
+  }};
+  window.resetOpsSettings = async function() {{
+    if (!confirm('¿Restablecer todas las preferencias a los valores de fábrica?')) return;
+    var defaults = {{
+      anomaly_pct: 30, por_dia_solo_pendientes: 0, por_dia_auto_sync: 1,
+      plata_solo_sin_firmar_avance: 0, plata_solo_sin_firmar_sin_avance: 0,
+      plata_solo_sin_gramos_hoy: 0, confirm_edit_past_days: 1, gramos_step: 10,
+      export_omit_zero: 1, export_checklist: 1, theme_default: '',
+      remember_semana: 1, hide_zeros_in_tables: 1
+    }};
+    var fd = new FormData();
+    Object.keys(defaults).forEach(function(k){{ fd.set(k, defaults[k]); }});
+    var res = await fetch('/api/ops/settings', {{ method: 'POST', body: fd }});
+    var j = await res.json();
+    window.__OPS_SETTINGS = j;
+    fillOpsForm(j);
+    var msg = document.getElementById('ops-settings-msg');
+    if (msg) msg.textContent = 'Defaults restaurados';
+  }};
+}})();
+</script>
 
 <script>
 (function(){{

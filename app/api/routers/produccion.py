@@ -894,13 +894,26 @@ async def api_del_produccion(prod_id: int, repo: ProduccionRepo = Depends(get_pr
 async def page_solo_hoy(
     request: Request,
     insights=Depends(get_insights_service),
+    semana_id: int | None = None,
+    dia: str | None = None,
 ):
-    data = insights.captura_solo_hoy()
-    return templates.TemplateResponse(
+    """Captura por día: misma semana/filas que Plata (sincronizado)."""
+    data = insights.captura_solo_hoy(semana_id=semana_id, dia=dia)
+    trab = []
+    try:
+        from app.db.repository import TrabajadoresRepo
+        trab = TrabajadoresRepo().listar(solo_activos=True) or []
+    except Exception:
+        trab = []
+    resp = templates.TemplateResponse(
         request,
         "solo_hoy.html",
-        _ctx(request, captura=data),
+        _ctx(request, captura=data, trabajadores=trab),
     )
+    # Evitar HTML cacheado: al volver de Plata deben verse filas nuevas
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 
 

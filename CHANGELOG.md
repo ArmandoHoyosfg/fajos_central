@@ -1,3 +1,63 @@
+## [3.41.7] — 2026-10-09
+
+### Pita: no perder efectivo al cambiar nombre
+- El modal lee valores vivos de la fila (efectivo/pitas editados en celda).
+- Al guardar pendientes solo se envían campos que cambiaron (no se pone efectivo en 0).
+- Sin recarga de página al confirmar pendientes.
+
+## [3.41.6] — 2026-10-09
+
+### UI: modal Pita sin solapamientos
+- Check + catálogo en una sola fila, sin encimarse.
+- Nombre y Ubicación en rejilla clara; modal un poco más ancho.
+
+## [3.41.5] — 2026-10-09
+
+### Pita: nombre y ubic editables
+- Check «Editar trabajador» al lado del selector de catálogo.
+- Campos **Nombre** y **Ubicación** editables a mano.
+- El catálogo solo rellena esos campos (opcional).
+
+## [3.41.4] — 2026-10-09
+
+### Pita: editar trabajador con guardado diferido
+- En «Editar fila» se puede activar **Cambiar trabajador**.
+- **Aplicar a la fila** solo actualiza la pantalla (no la BD).
+- Barra de **Cambios pendientes** con detalle; **Guardar todo en la BD** confirma.
+- Filas pendientes resaltadas; aviso al salir si hay cambios sin guardar.
+
+## [3.41.3] — 2026-10-09
+
+### DEV → Settings
+- Nueva pestaña **Settings** en Dev: filtros por defecto (Por día / Plata),
+  umbral de rarezas, confirmación de días pasados, export, tema y sync.
+- Preferencias en `data/ops_settings.json` (allowlist de claves).
+- Por día y Plata leen estas preferencias al abrir.
+
+## [3.41.2] — 2026-10-09
+
+### Sync Plata ↔ Por día
+- Misma resolución de semana y mismo filtro de filas (terminados) que Plata.
+- Al volver a la pestaña, compara ids con la BD y recarga si hay filas nuevas.
+- Nav «Por día» conserva la semana vista en Plata (sessionStorage).
+- Botón ↻ Actualizar; sin caché HTML.
+- Filtro «Solo pendientes» desactivado por defecto.
+
+## [3.41.1] — 2026-10-08
+
+### Por día: avances inline (sin popup)
+- Botón ＋ en cada fila despliega varios avances que se suman al día.
+- Tabla con encabezado fijo, filtro y «solo pendientes».
+- Visual completa (sin ceros engañosos, filas pendientes marcadas).
+
+## [3.41.0] — 2026-10-07
+
+### Captura por día (antes «Solo hoy»)
+- Selector de día sáb–vie de la semana elegida.
+- Tabla con todas las filas de esa semana y gramos del día.
+- «＋ Agregar avance»: varios parciales que se suman al total del día (como Un día en Plata).
+- Edición directa en la columna del día.
+
 ## [3.40.10] — 2026-10-02
 
 ### Taller: columna Pitas más ancha

@@ -1,68 +1,325 @@
 {% extends "base.html" %}
-{% block title %}Solo hoy — Fajos Central{% endblock %}
+{% block title %}Por día — Fajos Central{% endblock %}
 {% block content %}
 <script>document.addEventListener('DOMContentLoaded',()=>{const m=document.querySelector('main.container');if(m)m.classList.add('wide');});</script>
-<div class="page-head">
-  <div>
-    <h1>Captura de hoy</h1>
-    <p class="muted">{{ captura.label }} · {{ captura.fecha }}{% if captura.semana %} · Semana {{ captura.semana.codigo }}{% endif %}</p>
-  </div>
-  <div class="actions">
-    <a class="btn btn-secondary" href="/produccion{% if captura.semana %}?semana_id={{ captura.semana.id }}{% endif %}">Vista completa</a>
-  </div>
-</div>
 
 {% if not captura.ok %}
-<div class="flash err">No hay semana actual. Créala desde Plata.</div>
+<div class="page-head">
+  <div>
+    <h1>Captura por día</h1>
+    <p class="muted">Elige el día y captura gramos en todas las filas de la semana.</p>
+  </div>
+</div>
+<div class="flash err">No hay semana. Créala desde Plata (★ Actual).</div>
 {% else %}
-<div class="kpi-bar" style="margin-bottom:1rem;">
-  <span class="kpi-item"><b>{{ captura.capturados }}</b> con gramos</span>
-  <span class="kpi-item"><b>{{ captura.pendientes }}</b> pendientes</span>
-  <span class="kpi-item muted">{{ captura.total }} líneas</span>
-</div>
-<div class="progress-bar-wrap" title="Avance del día">
-  {% set pct = (100 * captura.capturados / captura.total) if captura.total else 0 %}
-  <div class="progress-bar" style="width:{{ '%.1f'|format(pct) }}%"></div>
-</div>
-<p class="muted faint">Escribe gramos y Enter o sal del campo para guardar. Los pendientes van primero.</p>
 
-<div class="table-wrap table-compact no-sticky-col">
-<table>
+<div class="page-head por-dia-head">
+  <div>
+    <h1>Captura por día</h1>
+    <p class="muted">Selector de día · todas las filas · varios avances en la misma fila (desplegable).</p>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="btn-refrescar-dia" title="Recargar filas desde la BD">↻ Actualizar</button>
+    <a class="btn btn-secondary" id="link-vista-plata" href="/produccion?semana_id={{ captura.semana.id }}">Vista Plata</a>
+  </div>
+</div>
+
+<div class="por-dia-toolbar card-soft">
+  <form class="inline por-dia-semana" method="get" action="/solo-hoy">
+    <label class="muted">Semana</label>
+    <select name="semana_id" onchange="this.form.submit()">
+      {% for s in captura.semanas or [] %}
+      <option value="{{ s.id }}" {% if captura.semana and s.id == captura.semana.id %}selected{% endif %}>
+        {{ s.codigo }}{% if s.es_actual %} ★{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="dia" value="{{ captura.col_dia }}">
+  </form>
+
+  <div class="dia-selector" role="tablist" aria-label="Día de la semana">
+    {% for d in captura.dias or [] %}
+    <a class="dia-chip {% if d.activo %}active{% endif %} {% if d.es_hoy %}is-today{% endif %}"
+       href="/solo-hoy?semana_id={{ captura.semana.id }}&dia={{ d.col }}"
+       title="{{ d.label }}{% if d.es_hoy %} (hoy){% endif %}">
+      {{ d.short }}{% if d.es_hoy %}<span class="dia-chip-hoy">hoy</span>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="kpi-bar por-dia-kpi">
+    <span class="kpi-item"><b>{{ captura.label }}</b>{% if captura.es_hoy %} · hoy{% endif %}</span>
+    <span class="kpi-item"><b id="kpi-capt">{{ captura.capturados }}</b> con gramos</span>
+    <span class="kpi-item"><b id="kpi-pend">{{ captura.pendientes }}</b> pendientes</span>
+    <span class="kpi-item"><b id="kpi-g">{{ captura.total_gramos_dia or 0 }}</b> g del día</span>
+    <span class="kpi-item muted">{{ captura.total }} líneas</span>
+  </div>
+</div>
+
+<div class="por-dia-filters">
+  <input type="search" id="flt-por-dia" placeholder="Filtrar nombre, ubic, folio…" autocomplete="off">
+  <label class="muted flt-chip"><input type="checkbox" id="flt-solo-pend"> Solo pendientes</label>
+  {% if not captura.semana.cerrada %}
+  <span class="muted faint">Clic en <strong>＋</strong> para varios avances en esa fila · Enter en el campo guarda el total del día.</span>
+  {% else %}
+  <span class="muted">Semana cerrada — solo consulta.</span>
+  {% endif %}
+</div>
+
+<div class="table-wrap table-por-dia no-sticky-col">
+<table class="table-por-dia-tbl">
   <thead>
-    <tr><th>Nombre</th><th>Ubic</th><th>Folio</th><th>Modelo</th><th>Mat</th><th>{{ captura.label }}</th><th>Total g</th></tr>
+    <tr>
+      <th class="col-exp" title="Varios avances"></th>
+      <th>Nombre</th>
+      <th>Ubic</th>
+      <th>Folio</th>
+      <th>Modelo</th>
+      <th>Mat</th>
+      <th class="col-dia">{{ captura.label }}</th>
+      <th class="col-tg">Total g</th>
+    </tr>
   </thead>
   <tbody>
   {% for r in captura.lineas %}
-    <tr data-prod-id="{{ r.id }}" class="{% if not r.gramos_hoy %}row-pendiente{% endif %}">
-      <td>{{ r.nombre }}</td>
-      <td>{{ r.ubic }}</td>
-      <td>{{ r.folio or '—' }}</td>
-      <td>{{ r.modelo or '—' }}</td>
-      <td>{{ r.material or '—' }}</td>
-      <td>
-        {% if captura.semana.cerrada %}
-          {{ r.gramos_hoy or '' }}
-        {% else %}
-          <input class="cell-gm hoy-input" type="number" step="0.1" min="0"
-                 data-id="{{ r.id }}" data-dia="{{ captura.col_hoy }}"
-                 value="{{ r.gramos_hoy if r.gramos_hoy else '' }}"
-                 placeholder="0">
+    <tr class="por-dia-row {% if not r.gramos_dia %}row-pendiente{% else %}row-ok{% endif %}"
+        data-prod-id="{{ r.id }}"
+        data-g="{{ r.gramos_dia or 0 }}"
+        data-search="{{ (r.nombre or '')|lower }} {{ r.ubic or '' }} {{ (r.folio or '')|lower }} {{ (r.modelo or '')|lower }} {{ (r.material or '')|lower }}">
+      <td class="col-exp">
+        {% if not captura.semana.cerrada %}
+        <button type="button" class="btn-exp" title="Varios avances" aria-expanded="false"
+                onclick="toggleAvanceRow(this)">＋</button>
         {% endif %}
       </td>
-      <td class="cell-total">{{ r.total_gramos or '' }}</td>
+      <td class="col-nombre">{{ r.nombre }}</td>
+      <td class="col-ubic">{{ r.ubic }}</td>
+      <td class="col-folio">{{ r.folio or '—' }}</td>
+      <td class="col-modelo">{{ r.modelo or '—' }}</td>
+      <td class="col-mat">{{ r.material or '—' }}</td>
+      <td class="col-dia">
+        {% if captura.semana.cerrada %}
+          {% if r.gramos_dia %}{{ r.gramos_dia }}{% else %}<span class="muted">—</span>{% endif %}
+        {% else %}
+          <input class="cell-gm hoy-input" type="number" step="0.1" min="0"
+                 data-id="{{ r.id }}" data-dia="{{ captura.col_dia }}"
+                 value="{{ r.gramos_dia if r.gramos_dia else '' }}"
+                 placeholder="—"
+                 title="Total del día · Enter guarda">
+        {% endif %}
+      </td>
+      <td class="col-tg cell-total">{% if r.total_gramos %}{{ r.total_gramos }}{% else %}<span class="muted">—</span>{% endif %}</td>
     </tr>
+    {% if not captura.semana.cerrada %}
+    <tr class="por-dia-expand" data-for="{{ r.id }}" hidden>
+      <td colspan="8">
+        <div class="avance-panel">
+          <div class="avance-panel-head">
+            <strong>Varios avances</strong>
+            <span class="muted">· {{ r.nombre }}{% if r.folio %} · {{ r.folio }}{% endif %}</span>
+            <span class="muted avance-ya">Ya en el día: <b class="ya-g">{{ r.gramos_dia or 0 }}</b> g</span>
+          </div>
+          <div class="gram-multi-list avance-list">
+            <div class="gram-multi-row">
+              <input type="number" class="gram-partial" step="any" min="0" placeholder="Avance 1" inputmode="decimal">
+              <button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="rmPartial(this)" hidden>×</button>
+            </div>
+          </div>
+          <div class="avance-panel-actions">
+            <button type="button" class="btn btn-secondary btn-xs" onclick="addPartial(this)">＋ Otro</button>
+            <span class="avance-preview muted">
+              Parciales <strong class="p-sum">0</strong> g
+              → total día <strong class="p-tot">{{ r.gramos_dia or 0 }}</strong> g
+            </span>
+            <button type="button" class="btn btn-xs" onclick="saveMultiAvance(this, {{ r.id }})">Sumar y guardar</button>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="toggleAvanceRow(this, true)">Cerrar</button>
+          </div>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
   {% else %}
-    <tr><td colspan="7" class="muted">Sin líneas esta semana. Agrega filas en Plata.</td></tr>
+    <tr><td colspan="8" class="muted empty-row">Sin líneas esta semana. Agrega filas en Plata.</td></tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
+
+<div id="toast" class="toast-web" hidden></div>
 {% endif %}
 {% endblock %}
+
 {% block scripts %}
 <script src="/static/capture_guard.js?v=3130"></script>
 <script>
-window.COL_HOY = {{ (captura.col_hoy|tojson) if captura else 'null' }};
+window.COL_DIA = {{ (captura.col_dia|tojson) if captura else 'null' }};
+window.SEMANA_ID = {{ (captura.semana.id if captura and captura.semana else none)|tojson }};
+
+function toast(msg, err) {
+  if (window.FajosLive && FajosLive.showToast) { FajosLive.showToast(msg, !!err); return; }
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = msg;
+  el.className = 'toast-web' + (err ? ' err' : ' ok');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => { el.hidden = true; }, 2800);
+}
+
+function parseN(v) {
+  const n = parseFloat(String(v || '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+function fmtG(n) {
+  if (!n) return '0';
+  const x = Math.round(n * 10) / 10;
+  return (x % 1 === 0) ? String(x) : x.toFixed(1);
+}
+
+function toggleAvanceRow(btn, forceClose) {
+  const main = btn.closest('tr.por-dia-row') || document.querySelector('tr.por-dia-row[data-prod-id="' + (btn.closest('tr.por-dia-expand') || {}).dataset?.for + '"]');
+  let expand;
+  if (btn.closest('tr.por-dia-expand')) {
+    expand = btn.closest('tr.por-dia-expand');
+  } else {
+    const id = btn.closest('tr.por-dia-row').dataset.prodId;
+    expand = document.querySelector('tr.por-dia-expand[data-for="' + id + '"]');
+  }
+  if (!expand) return;
+  const mainRow = document.querySelector('tr.por-dia-row[data-prod-id="' + expand.dataset.for + '"]');
+  const open = forceClose ? false : expand.hidden;
+  // cerrar otros
+  document.querySelectorAll('tr.por-dia-expand').forEach(tr => {
+    if (tr !== expand) {
+      tr.hidden = true;
+      const m = document.querySelector('tr.por-dia-row[data-prod-id="' + tr.dataset.for + '"]');
+      if (m) {
+        m.classList.remove('expanded');
+        const b = m.querySelector('.btn-exp');
+        if (b) { b.textContent = '＋'; b.setAttribute('aria-expanded', 'false'); }
+      }
+    }
+  });
+  expand.hidden = !open;
+  if (mainRow) {
+    mainRow.classList.toggle('expanded', open);
+    const b = mainRow.querySelector('.btn-exp');
+    if (b) {
+      b.textContent = open ? '−' : '＋';
+      b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+  }
+  if (open) {
+    const first = expand.querySelector('.gram-partial');
+    if (first) first.focus();
+    // sync ya-g from main input
+    const inp = mainRow && mainRow.querySelector('.hoy-input');
+    const ya = inp ? parseN(inp.value) : parseN(mainRow && mainRow.dataset.g);
+    const yaEl = expand.querySelector('.ya-g');
+    if (yaEl) yaEl.textContent = fmtG(ya);
+    expand.dataset.ya = String(ya);
+    recalcPanel(expand);
+  }
+}
+
+function panelOf(el) {
+  return el.closest('tr.por-dia-expand') || el.closest('.avance-panel');
+}
+
+function addPartial(btn) {
+  const expand = btn.closest('tr.por-dia-expand');
+  const list = expand.querySelector('.avance-list');
+  const n = list.querySelectorAll('.gram-partial').length + 1;
+  const row = document.createElement('div');
+  row.className = 'gram-multi-row';
+  row.innerHTML =
+    '<input type="number" class="gram-partial" step="any" min="0" placeholder="Avance ' + n + '" inputmode="decimal">' +
+    '<button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="rmPartial(this)">×</button>';
+  list.appendChild(row);
+  list.querySelectorAll('.gram-rm').forEach(b => {
+    b.hidden = list.querySelectorAll('.gram-partial').length <= 1;
+  });
+  row.querySelector('.gram-partial').addEventListener('input', () => recalcPanel(expand));
+  row.querySelector('.gram-partial').focus();
+  recalcPanel(expand);
+}
+
+function rmPartial(btn) {
+  const expand = btn.closest('tr.por-dia-expand');
+  const list = expand.querySelector('.avance-list');
+  const row = btn.closest('.gram-multi-row');
+  if (row && list.querySelectorAll('.gram-partial').length > 1) row.remove();
+  list.querySelectorAll('.gram-rm').forEach(b => {
+    b.hidden = list.querySelectorAll('.gram-partial').length <= 1;
+  });
+  recalcPanel(expand);
+}
+
+function recalcPanel(expand) {
+  if (!expand) return;
+  let sum = 0;
+  expand.querySelectorAll('.gram-partial').forEach(inp => {
+    const v = parseN(inp.value);
+    if (v > 0) sum += v;
+  });
+  const ya = parseN(expand.dataset.ya || expand.querySelector('.ya-g')?.textContent);
+  const pSum = expand.querySelector('.p-sum');
+  const pTot = expand.querySelector('.p-tot');
+  if (pSum) pSum.textContent = fmtG(sum);
+  if (pTot) pTot.textContent = fmtG(ya + sum);
+  return sum;
+}
+
+async function saveMultiAvance(btn, prodId) {
+  const expand = btn.closest('tr.por-dia-expand');
+  const parcial = recalcPanel(expand);
+  if (!(parcial > 0)) {
+    toast('Indica al menos un avance', true);
+    return;
+  }
+  const ya = parseN(expand.dataset.ya || expand.querySelector('.ya-g')?.textContent);
+  const total = Math.round((ya + parcial) * 10) / 10;
+  const body = new FormData();
+  body.set('dia', window.COL_DIA);
+  body.set('gramos', String(total));
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/produccion/linea/' + prodId + '/dia', { method: 'PATCH', body });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast(data.user_message || data.message || 'No se pudo guardar', true);
+      btn.disabled = false;
+      return;
+    }
+    const main = document.querySelector('tr.por-dia-row[data-prod-id="' + prodId + '"]');
+    if (main) {
+      const inp = main.querySelector('.hoy-input');
+      if (inp) inp.value = total > 0 ? String(total) : '';
+      main.dataset.g = String(total);
+      main.classList.toggle('row-pendiente', !(total > 0));
+      main.classList.toggle('row-ok', total > 0);
+    }
+    expand.dataset.ya = String(total);
+    const yaEl = expand.querySelector('.ya-g');
+    if (yaEl) yaEl.textContent = fmtG(total);
+    // limpiar parciales
+    const list = expand.querySelector('.avance-list');
+    list.innerHTML =
+      '<div class="gram-multi-row">' +
+      '<input type="number" class="gram-partial" step="any" min="0" placeholder="Avance 1" inputmode="decimal">' +
+      '<button type="button" class="btn btn-secondary btn-xs gram-rm" onclick="rmPartial(this)" hidden>×</button>' +
+      '</div>';
+    list.querySelector('.gram-partial').addEventListener('input', () => recalcPanel(expand));
+    recalcPanel(expand);
+    updateKpis();
+    toast('Guardado: ' + fmtG(total) + ' g');
+    toggleAvanceRow(btn, true);
+  } catch (e) {
+    toast('Error de red', true);
+  }
+  btn.disabled = false;
+}
+
 async function saveHoy(inp) {
   if (window.FajosCaptureGuard) FajosCaptureGuard.normalizeInput(inp);
   const body = new FormData();
@@ -71,20 +328,132 @@ async function saveHoy(inp) {
   const res = await fetch('/api/produccion/linea/' + inp.dataset.id + '/dia', { method: 'PATCH', body });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    if (window.FajosLive) FajosLive.showToast(data.user_message || 'No se pudo guardar', true);
-    else alert('No se pudo guardar');
+    toast(data.user_message || 'No se pudo guardar', true);
     throw new Error('save');
   }
-  const tr = inp.closest('tr');
+  const tr = inp.closest('tr.por-dia-row');
+  const g = parseN(inp.value);
   if (tr) {
-    if (parseFloat(inp.value || '0') > 0) tr.classList.remove('row-pendiente');
-    else tr.classList.add('row-pendiente');
+    tr.dataset.g = String(g);
+    tr.classList.toggle('row-pendiente', !(g > 0));
+    tr.classList.toggle('row-ok', g > 0);
+    const expand = document.querySelector('tr.por-dia-expand[data-for="' + tr.dataset.prodId + '"]');
+    if (expand) {
+      expand.dataset.ya = String(g);
+      const yaEl = expand.querySelector('.ya-g');
+      if (yaEl) yaEl.textContent = fmtG(g);
+      recalcPanel(expand);
+    }
   }
-  if (window.FajosLive) FajosLive.showToast('Guardado');
+  updateKpis();
+  toast('Guardado');
 }
 window.__fajosSaveGram = saveHoy;
-document.addEventListener('DOMContentLoaded', () => {
+
+function updateKpis() {
+  let capt = 0, pend = 0, gSum = 0;
+  document.querySelectorAll('tr.por-dia-row').forEach(tr => {
+    if (tr.style.display === 'none') return;
+    const g = parseN(tr.dataset.g || (tr.querySelector('.hoy-input') || {}).value);
+    if (g > 0) { capt += 1; gSum += g; }
+    else pend += 1;
+  });
+  const a = document.getElementById('kpi-capt');
+  const b = document.getElementById('kpi-pend');
+  const c = document.getElementById('kpi-g');
+  if (a) a.textContent = capt;
+  if (b) b.textContent = pend;
+  if (c) c.textContent = fmtG(gSum);
+}
+
+function applyFilters() {
+  const q = ((document.getElementById('flt-por-dia') || {}).value || '').trim().toLowerCase();
+  const soloPend = !!(document.getElementById('flt-solo-pend') || {}).checked;
+  document.querySelectorAll('tr.por-dia-row').forEach(tr => {
+    let show = true;
+    if (q && !(tr.dataset.search || '').includes(q)) show = false;
+    const g = parseN(tr.dataset.g || (tr.querySelector('.hoy-input') || {}).value);
+    if (soloPend && g > 0) show = false;
+    tr.style.display = show ? '' : 'none';
+    const exp = document.querySelector('tr.por-dia-expand[data-for="' + tr.dataset.prodId + '"]');
+    if (exp && !show) {
+      exp.hidden = true;
+      tr.classList.remove('expanded');
+      const b = tr.querySelector('.btn-exp');
+      if (b) { b.textContent = '＋'; b.setAttribute('aria-expanded', 'false'); }
+    }
+  });
+}
+
+
+// --- Sincronización con Plata ---
+(function () {
+  const SID = window.SEMANA_ID;
+  const COL = window.COL_DIA;
+  if (SID) {
+    try { sessionStorage.setItem('fajos_semana_id', String(SID)); } catch (e) {}
+  }
+  function reloadSoft() {
+    const q = new URLSearchParams(window.location.search);
+    if (SID) q.set('semana_id', String(SID));
+    if (COL) q.set('dia', COL);
+    q.set('_', String(Date.now()));
+    window.location.replace('/solo-hoy?' + q.toString());
+  }
+  const btn = document.getElementById('btn-refrescar-dia');
+  if (btn) btn.addEventListener('click', reloadSoft);
+
+  async function checkSync() {
+    if (!SID) return;
+    try {
+      const url = '/api/insights/solo-hoy/sync?semana_id=' + encodeURIComponent(SID)
+        + (COL ? ('&dia=' + encodeURIComponent(COL)) : '');
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const domIds = Array.from(document.querySelectorAll('tr.por-dia-row[data-prod-id]'))
+        .map(tr => parseInt(tr.dataset.prodId, 10))
+        .filter(n => !isNaN(n))
+        .sort((a,b) => a-b);
+      const apiIds = (data.ids || []).slice().sort((a,b) => a-b);
+      const same = domIds.length === apiIds.length && domIds.every((v,i) => v === apiIds[i]);
+      if (!same) {
+        // Filas nuevas o eliminadas en Plata → recargar
+        reloadSoft();
+      } else {
+        updateKpis && updateKpis();
+      }
+    } catch (e) { /* silencioso */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !window.__POR_DIA_NO_SYNC) checkSync();
+  });
+  window.addEventListener('focus', () => { if (!window.__POR_DIA_NO_SYNC) checkSync(); });
+  // Primera comprobación al entrar (por si se abrió en pestaña vieja)
+  setTimeout(checkSync, 400);
+})();
+
+document.addEventListener('DOMContentLoaded', async () => {
   if (window.FajosCaptureGuard) FajosCaptureGuard.init();
+  document.querySelectorAll('.avance-list .gram-partial').forEach(inp => {
+    const expand = inp.closest('tr.por-dia-expand');
+    inp.addEventListener('input', () => recalcPanel(expand));
+  });
+  const flt = document.getElementById('flt-por-dia');
+  const chk = document.getElementById('flt-solo-pend');
+  if (flt) flt.addEventListener('input', applyFilters);
+  if (chk) chk.addEventListener('change', applyFilters);
+  // Preferencias DEV → Settings
+  try {
+    const res = await fetch('/api/ops/settings', { cache: 'no-store' });
+    if (res.ok) {
+      const s = await res.json();
+      window.__OPS_SETTINGS = s;
+      if (chk && s.por_dia_solo_pendientes) chk.checked = true;
+      if (s.por_dia_auto_sync === false) window.__POR_DIA_NO_SYNC = true;
+    }
+  } catch (e) {}
+  applyFilters();
 });
 </script>
 {% endblock %}
