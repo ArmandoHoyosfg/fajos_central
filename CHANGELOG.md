@@ -1,3 +1,10 @@
+## [3.41.10] — 2026-10-13
+
+### Por día: totales en tiempo real
+- Al guardar gramos (campo o varios avances) se actualizan de inmediato:
+  columna del día, **TOTAL G**, KPIs y panel «Ya en el día».
+- Sin necesidad de recargar la página.
+
 ## [3.41.9] — 2026-10-09
 
 ### Excel Taller minimalista
