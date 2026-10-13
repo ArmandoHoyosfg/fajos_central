@@ -738,14 +738,29 @@ async def api_patch_dia(
 ):
     """Registra o corrige un solo día de trabajo en una línea existente."""
     repo.actualizar_gramos_dia(prod_id, dia, gramos)
-    row = repo.obtener(prod_id)
-    out = {"ok": True, "prod_id": prod_id, "dia": dia, "gramos": gramos}
-    if row:
-        try:
-            out["total_gramos"] = float(row.get("total_gramos") or 0)
-            out["total_efectivo"] = float(row.get("total_efectivo") or 0)
-        except (TypeError, ValueError):
-            pass
+    row = repo.obtener(prod_id) or {}
+    # Valor del día normalizado (None/0 → 0 para la UI)
+    day_val = 0.0
+    try:
+        if gramos is not None:
+            day_val = round(float(gramos), 1)
+    except (TypeError, ValueError):
+        day_val = 0.0
+    out = {
+        "ok": True,
+        "prod_id": prod_id,
+        "dia": dia,
+        "gramos": day_val if day_val else None,
+        "gramos_dia": day_val,
+    }
+    try:
+        out["total_gramos"] = float(row.get("total_gramos") or 0)
+    except (TypeError, ValueError):
+        out["total_gramos"] = day_val
+    try:
+        out["total_efectivo"] = float(row.get("total_efectivo") or row.get("efectivo") or 0)
+    except (TypeError, ValueError):
+        out["total_efectivo"] = 0
     return out
 
 

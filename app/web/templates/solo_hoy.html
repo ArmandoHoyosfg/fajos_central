@@ -85,6 +85,7 @@
     <tr class="por-dia-row {% if not r.gramos_dia %}row-pendiente{% else %}row-ok{% endif %}"
         data-prod-id="{{ r.id }}"
         data-g="{{ r.gramos_dia or 0 }}"
+        data-total-g="{{ r.total_gramos or 0 }}"
         data-search="{{ (r.nombre or '')|lower }} {{ r.ubic or '' }} {{ (r.folio or '')|lower }} {{ (r.modelo or '')|lower }} {{ (r.material or '')|lower }}">
       <td class="col-exp">
         {% if not captura.semana.cerrada %}
@@ -108,7 +109,7 @@
                  title="Total del día · Enter guarda">
         {% endif %}
       </td>
-      <td class="col-tg cell-total">{% if r.total_gramos %}{{ r.total_gramos }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="col-tg cell-total" data-role="total-g">{% if r.total_gramos %}{{ r.total_gramos }}{% else %}<span class="muted">—</span>{% endif %}</td>
     </tr>
     {% if not captura.semana.cerrada %}
     <tr class="por-dia-expand" data-for="{{ r.id }}" hidden>
@@ -270,6 +271,56 @@ function recalcPanel(expand) {
   return sum;
 }
 
+
+/** Actualiza fila + TOTAL G + KPIs tras guardar un día (sin recargar). */
+function applyDaySaveToRow(prodId, dayGrams, weekTotalOpt) {
+  const main = document.querySelector('tr.por-dia-row[data-prod-id="' + prodId + '"]');
+  if (!main) return;
+  const g = parseN(dayGrams);
+  const prevDay = parseN(main.dataset.g);
+  let weekTotal = weekTotalOpt;
+  if (weekTotal == null || isNaN(parseN(weekTotal))) {
+    const prevWeek = parseN(main.dataset.totalG || main.dataset.totalg);
+    // ajustar por delta del día
+    weekTotal = Math.round((prevWeek - prevDay + g) * 10) / 10;
+    if (weekTotal < 0) weekTotal = 0;
+  } else {
+    weekTotal = parseN(weekTotal);
+  }
+
+  main.dataset.g = String(g);
+  main.dataset.totalG = String(weekTotal);
+  main.classList.toggle('row-pendiente', !(g > 0));
+  main.classList.toggle('row-ok', g > 0);
+
+  const inp = main.querySelector('.hoy-input');
+  if (inp) {
+    inp.value = g > 0 ? String(g) : '';
+    try { inp.dataset._prev = inp.value; } catch (e) {}
+  }
+
+  const totTd = main.querySelector('.cell-total, [data-role="total-g"]');
+  if (totTd) {
+    if (weekTotal > 0) {
+      totTd.textContent = fmtG(weekTotal);
+    } else {
+      totTd.innerHTML = '<span class="muted">—</span>';
+    }
+  }
+
+  const expand = document.querySelector('tr.por-dia-expand[data-for="' + prodId + '"]');
+  if (expand) {
+    expand.dataset.ya = String(g);
+    const yaEl = expand.querySelector('.ya-g');
+    if (yaEl) yaEl.textContent = fmtG(g);
+    const pTot = expand.querySelector('.p-tot');
+    if (pTot) pTot.textContent = fmtG(g);
+    if (typeof recalcPanel === 'function') recalcPanel(expand);
+  }
+
+  if (typeof updateKpis === 'function') updateKpis();
+}
+
 async function saveMultiAvance(btn, prodId) {
   const expand = btn.closest('tr.por-dia-expand');
   const parcial = recalcPanel(expand);
@@ -291,17 +342,8 @@ async function saveMultiAvance(btn, prodId) {
       btn.disabled = false;
       return;
     }
-    const main = document.querySelector('tr.por-dia-row[data-prod-id="' + prodId + '"]');
-    if (main) {
-      const inp = main.querySelector('.hoy-input');
-      if (inp) inp.value = total > 0 ? String(total) : '';
-      main.dataset.g = String(total);
-      main.classList.toggle('row-pendiente', !(total > 0));
-      main.classList.toggle('row-ok', total > 0);
-    }
-    expand.dataset.ya = String(total);
-    const yaEl = expand.querySelector('.ya-g');
-    if (yaEl) yaEl.textContent = fmtG(total);
+    const weekTot = (data.total_gramos != null) ? data.total_gramos : null;
+    applyDaySaveToRow(prodId, total, weekTot);
     // limpiar parciales
     const list = expand.querySelector('.avance-list');
     list.innerHTML =
@@ -311,7 +353,6 @@ async function saveMultiAvance(btn, prodId) {
       '</div>';
     list.querySelector('.gram-partial').addEventListener('input', () => recalcPanel(expand));
     recalcPanel(expand);
-    updateKpis();
     toast('Guardado: ' + fmtG(total) + ' g');
     toggleAvanceRow(btn, true);
   } catch (e) {
@@ -326,27 +367,16 @@ async function saveHoy(inp) {
   body.set('dia', inp.dataset.dia);
   body.set('gramos', inp.value === '' ? '' : inp.value);
   const res = await fetch('/api/produccion/linea/' + inp.dataset.id + '/dia', { method: 'PATCH', body });
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    toast(data.user_message || 'No se pudo guardar', true);
+    toast(data.user_message || data.message || 'No se pudo guardar', true);
     throw new Error('save');
   }
-  const tr = inp.closest('tr.por-dia-row');
+  const prodId = inp.dataset.id;
   const g = parseN(inp.value);
-  if (tr) {
-    tr.dataset.g = String(g);
-    tr.classList.toggle('row-pendiente', !(g > 0));
-    tr.classList.toggle('row-ok', g > 0);
-    const expand = document.querySelector('tr.por-dia-expand[data-for="' + tr.dataset.prodId + '"]');
-    if (expand) {
-      expand.dataset.ya = String(g);
-      const yaEl = expand.querySelector('.ya-g');
-      if (yaEl) yaEl.textContent = fmtG(g);
-      recalcPanel(expand);
-    }
-  }
-  updateKpis();
-  toast('Guardado');
+  const weekTot = (data.total_gramos != null) ? data.total_gramos : null;
+  applyDaySaveToRow(prodId, g, weekTot);
+  toast('Guardado: ' + fmtG(g) + ' g');
 }
 window.__fajosSaveGram = saveHoy;
 

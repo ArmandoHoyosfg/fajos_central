@@ -1,3 +1,26 @@
+## [3.41.10] — 2026-10-13
+
+### Por día: totales en tiempo real
+- Al guardar gramos (campo o varios avances) se actualizan de inmediato:
+  columna del día, **TOTAL G**, KPIs y panel «Ya en el día».
+- Sin necesidad de recargar la página.
+
+## [3.41.9] — 2026-10-09
+
+### Excel Taller minimalista
+- Sección Torcedores: solo título «Torcedores» (sin segunda fila de encabezados).
+- Precio por pita en columna Extras; **no** se suma al TOTAL.
+- Celdas con 0 en extras (personal) → vacías.
+- TOTAL columna Extras vacío si no hay extras reales.
+
+## [3.41.8] — 2026-10-09
+
+### Excel Taller: precio por pita real en torcedores
+- Columna **Precio** (tarifa por pita desde BD) en la sección Torcedores.
+- Encabezados: Torcedor · Ubic · Puesto · Sueldo · Precio · Total · Firma.
+- Ya no se fija $3.20 en el título; cada fila usa su `precio_pita`.
+- Extras en 0 → celda vacía en personal; el precio no se suma al total.
+
 ## [3.41.7] — 2026-10-09
 
 ### Pita: no perder efectivo al cambiar nombre
