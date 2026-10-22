@@ -265,21 +265,21 @@
     <tr>
       <th class="col-sel" title="Seleccionar"><input type="checkbox" id="sel-all-folios" onclick="toggleSelAll(this)"></th>
       <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
-      <th class="col-nombre" data-sort-col="1">Nombre</th>
-      <th class="col-ubic" data-sort-col="2">Ubic</th>
-      <th class="col-folio" data-sort-col="3">Folio</th>
-      <th class="col-mod" data-sort-col="4">Modelo</th>
-      <th class="col-mat" data-sort-col="5">Mat</th>
-      <th class="col-tar" data-sort-col="6">$/g</th>
-      <th class="col-dia" data-sort-col="7">Sáb</th>
-      <th class="col-dia" data-sort-col="8">Dom</th>
-      <th class="col-dia" data-sort-col="9">Lun</th>
-      <th class="col-dia" data-sort-col="10">Mar</th>
-      <th class="col-dia" data-sort-col="11">Mié</th>
-      <th class="col-dia" data-sort-col="12">Jue</th>
-      <th class="col-dia" data-sort-col="13">Vie</th>
-      <th class="col-tot" data-sort-col="14">Gr</th>
-      <th class="col-efe" data-sort-col="15">$</th>
+      <th class="col-nombre" data-sort-col="2">Nombre</th>
+      <th class="col-ubic" data-sort-col="3" data-sort-type="num">Ubic</th>
+      <th class="col-folio" data-sort-col="4">Folio</th>
+      <th class="col-mod" data-sort-col="5">Modelo</th>
+      <th class="col-mat" data-sort-col="6">Mat</th>
+      <th class="col-tar" data-sort-col="7" data-sort-type="num">$/g</th>
+      <th class="col-dia" data-sort-col="8" data-sort-type="num">Sáb</th>
+      <th class="col-dia" data-sort-col="9" data-sort-type="num">Dom</th>
+      <th class="col-dia" data-sort-col="10" data-sort-type="num">Lun</th>
+      <th class="col-dia" data-sort-col="11" data-sort-type="num">Mar</th>
+      <th class="col-dia" data-sort-col="12" data-sort-type="num">Mié</th>
+      <th class="col-dia" data-sort-col="13" data-sort-type="num">Jue</th>
+      <th class="col-dia" data-sort-col="14" data-sort-type="num">Vie</th>
+      <th class="col-tot" data-sort-col="15" data-sort-type="num">Gr</th>
+      <th class="col-efe" data-sort-col="16" data-sort-type="num">$</th>
       <th class="col-fir">✓</th>
     </tr>
   </thead>
@@ -334,9 +334,9 @@
         <span class="muted">—</span>
         {% endif %}
       </td>
-      <td class="col-nombre name-edit" title="Doble clic para editar · {{ r.nombre }}"
+      <td class="col-nombre name-edit" data-sort-val="{{ r.nombre or '' }}" title="Doble clic para editar · {{ r.nombre }}"
           {% if not semana_cerrada %}ondblclick='openEditPlt({{ r.id }}, {{ row_data|tojson }})'{% endif %}>{{ r.nombre }}</td>
-      <td>{{ r.ubic }}</td>
+      <td class="col-ubic" data-sort-val="{{ r.ubic if r.ubic is not none else '' }}">{{ r.ubic }}</td>
       <td title="{{ r.folio or '' }}">{{ r.folio or '—' }}</td>
       <td title="{{ r.modelo or '' }}">{{ r.modelo or '—' }}</td>
       <td>{{ r.material or '—' }}</td>
@@ -664,7 +664,7 @@ function onMaterialChange_legacy_unused(sel) {
 </script>
 
 <script src="/static/folio_actions.js?v=3.40.6"></script>
-<script src="/static/table_sort.js?v=3180"></script>
+<script src="/static/table_sort.js?v=3411"></script>
 <script src="/static/capture_guard.js?v=3130"></script>
 
 <script src="/static/semana_ops.js?v=3122"></script>

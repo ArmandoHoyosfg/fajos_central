@@ -1,3 +1,10 @@
+## [3.41.11] — 2026-10-22
+
+### Plata: ordenamiento de columnas corregido
+- Los índices `data-sort-col` coinciden con las celdas reales (checkbox + menú).
+- Ubic / tarifas / días / totales se ordenan como números.
+- Orden estable y botón «Reset orden» fiable.
+
 ## [3.41.10] — 2026-10-13
 
 ### Por día: totales en tiempo real
