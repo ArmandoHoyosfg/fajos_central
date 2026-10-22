@@ -103,11 +103,14 @@
     <tr>
       <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
       <th class="col-nombre" data-sort-col="1">Nombre</th>
-      <th data-sort-col="2">Ubic</th><th data-sort-col="3">Puesto</th>
-      <th>Pitas</th>
-      <th title="Precio por pita (torcedores)">$/pita</th>
-      <th data-sort-col="4">Sueldo</th><th data-sort-col="5">Extras</th>
-      <th data-sort-col="6">Total</th><th>Firma</th>
+      <th data-sort-col="2" data-sort-type="num">Ubic</th>
+      <th data-sort-col="3">Puesto</th>
+      <th data-sort-col="4" data-sort-type="num">Pitas</th>
+      <th data-sort-col="5" data-sort-type="num" title="Precio por pita (torcedores)">$/pita</th>
+      <th data-sort-col="6" data-sort-type="num">Sueldo</th>
+      <th data-sort-col="7" data-sort-type="num">Extras</th>
+      <th data-sort-col="8" data-sort-type="num">Total</th>
+      <th>Firma</th>
     </tr>
   </thead>
   <tbody>
@@ -178,7 +181,7 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
-<script src="/static/table_sort.js?v=3178"></script>
+<script src="/static/table_sort.js?v=3411"></script>
 <style>
 .badge-fijo{background:#2e7d32;color:#fff;padding:0.1rem 0.35rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem}
 .badge-var{background:#5c6bc0;color:#fff;padding:0.1rem 0.35rem;border-radius:4px;font-size:0.7rem;margin-left:0.25rem}

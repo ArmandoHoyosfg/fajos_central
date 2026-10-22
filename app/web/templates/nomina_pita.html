@@ -76,9 +76,9 @@
     <tr>
       <th class="col-actions" title="Menú de fila (editar / eliminar)">⋯</th>
       <th class="col-nombre" data-sort-col="1">Nombre</th>
-      <th data-sort-col="2">Ubic</th><th data-sort-col="3">Modelo</th><th data-sort-col="4">Folio</th>
+      <th data-sort-col="2" data-sort-type="num">Ubic</th><th data-sort-col="3">Modelo</th><th data-sort-col="4">Folio</th>
       <th data-sort-col="5">Material</th><th data-sort-col="6">Producto</th>
-      <th data-sort-col="7">Pitas</th><th data-sort-col="8">Efectivo</th><th>Firma</th>
+      <th data-sort-col="7" data-sort-type="num">Pitas</th><th data-sort-col="8" data-sort-type="num">Efectivo</th><th>Firma</th>
     </tr>
   </thead>
   <tbody>
@@ -185,7 +185,7 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
-<script src="/static/table_sort.js?v=3178"></script>
+<script src="/static/table_sort.js?v=3411"></script>
 <script src="/static/semana_ops.js?v=3122"></script>
 <script>window.SEMANA_ID = {{ semana_id or "null" }}; window.AREA_ACTUAL = "pit";</script>
 
