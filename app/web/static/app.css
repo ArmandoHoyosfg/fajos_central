@@ -2921,3 +2921,6 @@ tr.row-pending-edit td {
     grid-template-columns: 1fr;
   }
 }
+
+tr.row-inactivo td { opacity: 0.78; }
+tr.row-inactivo td:first-child { box-shadow: inset 3px 0 0 #df8e1d; }

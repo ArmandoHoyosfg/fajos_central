@@ -43,41 +43,145 @@ router = APIRouter()
 @router.get("/api/export/estadisticas")
 async def api_export_estadisticas(
     request: Request,
-    vista: str = Query("trabajador"),
+    vista: str = Query("folio"),
     q: str = Query(""),
+    periodo: str = Query("semanas"),
+    n_dias: int = Query(14, ge=1, le=365),
+    fecha: str = Query(""),
+    fecha_desde: str = Query(""),
+    fecha_hasta: str = Query(""),
+    agrupar: str = Query("dia"),
 ):
-    from app.services.stats_service import StatsService
-    from openpyxl import Workbook
+    """Exporta la vista actual de Estadísticas (mismos filtros que /estadisticas)."""
+    from datetime import timedelta
     from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from app.services.stats_service import StatsService
+    from app.core.calendar_util import today
+    from app.utils.fechas_nomina import parse_fecha
+
     form_ids = request.query_params.getlist("semana_id")
     selected_ids = [int(x) for x in form_ids if str(x).isdigit()]
-    svc = StatsService()
-    if vista == "folio":
-        rows = svc.stats_folio(q=q, semana_ids=selected_ids or None)
-        headers = ["Folio", "Gramos", "Efectivo", "Semanas", "Inicio", "Materiales", "Trabajadores"]
-        def line(r):
-            return [r["folio"], r["total_gramos"], r["total_efectivo"], r["n_semanas"],
-                    r["inicio"], ", ".join(r["materiales"]), " · ".join(r["trabajadores"])]
+    fd = parse_fecha(fecha_desde) if fecha_desde else None
+    fh = parse_fecha(fecha_hasta) if fecha_hasta else None
+    if periodo == "un_dia":
+        d = parse_fecha(fecha) or today()
+        fd = fh = d
+        selected_ids = []
+    elif periodo == "n_dias":
+        fh = today()
+        fd = fh - timedelta(days=max(1, int(n_dias)) - 1)
+        selected_ids = []
+    elif periodo == "rango":
+        selected_ids = []
     else:
-        rows = svc.stats_trabajador(q=q, semana_ids=selected_ids or None)
-        headers = ["Nombre", "Ubic", "Gramos", "Efectivo", "Semanas", "Folios", "Primera", "Última"]
-        def line(r):
-            return [r["nombre"], r["ubic"], r["total_gramos"], r["total_efectivo"],
-                    r["n_semanas"], r["n_folios"], r["primera"], r["ultima"]]
+        fd = fh = None
+
+    svc = StatsService()
+    headers, lines, meta = svc.filas_para_export(
+        vista=vista,
+        q=q,
+        semana_ids=selected_ids or None,
+        fecha_desde=fd,
+        fecha_hasta=fh,
+        agrupar=agrupar,
+        limit=5000,
+    )
+
     wb = Workbook()
     ws = wb.active
-    ws.title = "Estadisticas"
-    for c, h in enumerate(headers, 1):
-        ws.cell(1, c, h)
-    for i, r in enumerate(rows, 2):
-        for c, v in enumerate(line(r), 1):
-            ws.cell(i, c, v)
+    ws.title = (vista or "stats")[:28]
+    thin = Border(
+        left=Side(style="thin", color="CCCCCC"),
+        right=Side(style="thin", color="CCCCCC"),
+        top=Side(style="thin", color="CCCCCC"),
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
+    header_fill = PatternFill("solid", fgColor="1F4E79")
+    header_font = Font(bold=True, color="FFFFFF", name="Calibri", size=10)
+    money = '"$"#,##0.00'
+    num = "#,##0.0"
+
+    # Meta
+    ws["A1"] = "Fajos Central — Estadísticas"
+    ws["A1"].font = Font(bold=True, size=13, color="1F4E79")
+    pref = meta.get("prefijo") or ""
+    ws["A2"] = (
+        f"Vista: {vista} · Buscar: {q or '—'} · "
+        + (f"Prefijo folio: {pref} · " if pref else "")
+        + f"Periodo: {periodo} · Filas: {len(lines)}"
+    )
+    ws["A2"].font = Font(size=9, color="666666")
+
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(4, col, h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin
+
+    sum_g = sum_e = 0.0
+    for ri, row in enumerate(lines, 5):
+        for ci, val in enumerate(row, 1):
+            cell = ws.cell(ri, ci, val)
+            cell.border = thin
+            hname = headers[ci - 1].lower() if ci <= len(headers) else ""
+            if "gramo" in hname:
+                try:
+                    sum_g += float(val or 0)
+                except (TypeError, ValueError):
+                    pass
+                cell.number_format = num
+            if "efectivo" in hname or hname == "$":
+                try:
+                    sum_e += float(val or 0)
+                except (TypeError, ValueError):
+                    pass
+                cell.number_format = money
+        if ri % 2 == 0:
+            for ci in range(1, len(headers) + 1):
+                if not ws.cell(ri, ci).fill or ws.cell(ri, ci).fill.fgColor is None:
+                    ws.cell(ri, ci).fill = PatternFill("solid", fgColor="F5F7FA")
+
+    # Totales
+    tot_row = 5 + len(lines)
+    ws.cell(tot_row, 1, "TOTAL").font = Font(bold=True)
+    for ci, h in enumerate(headers, 1):
+        hl = h.lower()
+        if "gramo" in hl:
+            c = ws.cell(tot_row, ci, round(sum_g, 1))
+            c.font = Font(bold=True)
+            c.number_format = num
+            c.fill = PatternFill("solid", fgColor="C6EFCE")
+        if "efectivo" in hl:
+            c = ws.cell(tot_row, ci, round(sum_e, 2))
+            c.font = Font(bold=True)
+            c.number_format = money
+            c.fill = PatternFill("solid", fgColor="C6EFCE")
+
+    for col in range(1, len(headers) + 1):
+        ws.column_dimensions[chr(64 + col) if col < 27 else "A"].width = 14
+    # anchos razonables
+    from openpyxl.utils import get_column_letter
+    for col in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(col)].width = min(28, max(10, len(headers[col - 1]) + 2))
+
     buf = BytesIO()
     wb.save(buf)
+    fname = "estadisticas"
+    if pref:
+        fname += "_" + pref.replace("-", "")
+    elif q:
+        safe = "".join(c for c in q if c.isalnum() or c in "-_")[:20]
+        if safe:
+            fname += "_" + safe
+    fname += f"_{vista}.xlsx"
+    from fastapi.responses import Response
     return Response(
         content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="estadisticas.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 
 

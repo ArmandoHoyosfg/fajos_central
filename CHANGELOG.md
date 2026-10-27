@@ -1,3 +1,12 @@
+## [3.42.0] — 2026-10-27
+
+### Estadísticas: grupos de folio, periodo activo y Excel
+- Prefijo de folio con guion (`F-`, `ST-`, `P-`) sin confundir nombres.
+- Inicio/fin activo: hueco > 7 días cierra el tramo de actividad.
+- Columnas Días activo y Fin activo en vista Por folio.
+- Botón **Excel** exporta la vista filtrada (hasta 5000 filas).
+- Agrupación por trabajador y diario conservada con mismos filtros.
+
 ## [3.41.11] — 2026-10-22
 
 ### Plata: ordenamiento de columnas corregido

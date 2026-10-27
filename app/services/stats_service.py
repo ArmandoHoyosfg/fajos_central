@@ -1,6 +1,7 @@
 """Estadísticas históricas por trabajador, folio y día."""
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any
@@ -51,6 +52,86 @@ class StatsService:
                 out.append(s)
             semanas = out
         return semanas
+
+    @staticmethod
+    def es_prefijo_folio(q: str) -> str | None:
+        """Si la búsqueda es un prefijo de folio (ej. F-, ST-, P-), devuelve el prefijo normalizado.
+        No confunde con nombres: exige letras + guion al final (o solo el patrón PREFIX-).
+        """
+        s = (q or "").strip().upper()
+        if not s:
+            return None
+        # F-, ST-, P-, F, ST-019 → solo si termina en - o es solo letras+guion
+        m = re.match(r"^([A-Z]{1,6})-$", s)
+        if m:
+            return m.group(1) + "-"
+        # También aceptar "F-" con espacios
+        m = re.match(r"^([A-Z]{1,6})\s*-\s*$", s)
+        if m:
+            return m.group(1) + "-"
+        return None
+
+    @staticmethod
+    def folio_coincide(folio: str, q: str) -> bool:
+        """Filtro de folio: prefijo PREFIX- o substring normal."""
+        folio = (folio or "").strip()
+        q = (q or "").strip()
+        if not q:
+            return True
+        if not folio:
+            return False
+        pref = StatsService.es_prefijo_folio(q)
+        if pref:
+            return folio.upper().startswith(pref)
+        return q.lower() in folio.lower()
+
+    def _dias_progreso_linea(self, r: dict, semana: dict) -> list[date]:
+        """Lista de fechas calendario con gramos > 0 en una línea de producción."""
+        fi = parse_fecha(semana.get("fecha_inicio"))
+        if not fi:
+            return []
+        out = []
+        for i, col in enumerate(_DAY_COLS):
+            g = float(r.get(col) or 0)
+            if g > 0:
+                out.append(fi + timedelta(days=i))
+        return out
+
+    @staticmethod
+    def periodo_activo(dias: list[date], gap_max: int = 7) -> dict:
+        """Calcula inicio/fin activos y días con avance.
+        Si hay un hueco > gap_max días entre progresos, el periodo activo
+        termina en el último progreso antes del hueco (tramo más largo).
+        """
+        if not dias:
+            return {
+                "inicio": None,
+                "fin": None,
+                "dias_con_avance": 0,
+                "dias_calendario": 0,
+                "cerrado_por_inactividad": False,
+            }
+        days = sorted(set(dias))
+        # Segmentar por huecos > gap_max
+        segments: list[list[date]] = [[days[0]]]
+        for d in days[1:]:
+            if (d - segments[-1][-1]).days > gap_max:
+                segments.append([d])
+            else:
+                segments[-1].append(d)
+        # Tramo principal = el de más días con avance; empate → el más reciente
+        seg = max(segments, key=lambda s: (len(s), s[-1]))
+        inicio, fin = seg[0], seg[-1]
+        cerrado = len(segments) > 1 or (today_fn() - fin).days > gap_max
+        return {
+            "inicio": inicio,
+            "fin": fin,
+            "dias_con_avance": len(seg),
+            "dias_calendario": (fin - inicio).days + 1,
+            "cerrado_por_inactividad": cerrado,
+            "n_tramos": len(segments),
+        }
+
 
     def stats_trabajador(
         self,
@@ -136,9 +217,12 @@ class StatsService:
         semana_ids: list[int] | None = None,
         fecha_desde: date | None = None,
         fecha_hasta: date | None = None,
-        limit: int = 80,
+        limit: int = 500,
+        gap_inactividad: int = 7,
     ) -> list[dict]:
+        """Agrega por folio. q='F-' o 'ST-' filtra por prefijo de folio (no nombres)."""
         semanas = self._semanas_filtradas(semana_ids, fecha_desde, fecha_hasta)
+        pref = self.es_prefijo_folio(q)
         agg: dict[str, dict] = {}
         for s in semanas:
             sid = int(s["id"])
@@ -146,14 +230,19 @@ class StatsService:
                 rows = self.prod.listar_por_semana(sid, incluir_terminados=True)
             except Exception:
                 continue
-            fi = parse_fecha(s.get("fecha_inicio"))
             for r in rows:
                 folio = (r.get("folio") or "").strip()
                 if not folio:
                     continue
-                if q and q.lower() not in folio.lower() and q.lower() not in str(r.get("nombre") or "").lower():
-                    continue
-                slot = agg.setdefault(folio.upper(), {
+                if pref:
+                    if not folio.upper().startswith(pref):
+                        continue
+                elif q:
+                    ql = q.lower()
+                    if ql not in folio.lower() and ql not in str(r.get("nombre") or "").lower():
+                        continue
+                key = folio.upper()
+                slot = agg.setdefault(key, {
                     "folio": folio,
                     "total_gramos": 0.0,
                     "total_efectivo": 0.0,
@@ -161,18 +250,13 @@ class StatsService:
                     "materiales": set(),
                     "modelos": set(),
                     "semanas": set(),
-                    "inicio": None,
-                    "dias_con_avance": 0,
+                    "dias_prog": [],  # fechas con avance
                 })
                 if fecha_desde or fecha_hasta:
-                    g, e, n_dias = self._sum_dias_rango(r, s, fecha_desde, fecha_hasta)
-                    slot["dias_con_avance"] += n_dias
+                    g, e, _n = self._sum_dias_rango(r, s, fecha_desde, fecha_hasta)
                 else:
                     g = float(r.get("total_gramos") or 0)
                     e = float(r.get("efectivo") or 0)
-                    for col in _DAY_COLS:
-                        if float(r.get(col) or 0) > 0:
-                            slot["dias_con_avance"] += 1
                 slot["total_gramos"] += g
                 slot["total_efectivo"] += e
                 slot["trabajadores"].add(f"{r.get('nombre')} ({r.get('ubic')})")
@@ -181,23 +265,33 @@ class StatsService:
                 if r.get("modelo"):
                     slot["modelos"].add(str(r.get("modelo")))
                 slot["semanas"].add(s.get("codigo") or str(sid))
-                if fi and (slot["inicio"] is None or fi < slot["inicio"]):
-                    slot["inicio"] = fi
+                # días con progreso (respetando rango de fechas)
+                for d in self._dias_progreso_linea(r, s):
+                    if fecha_desde and d < fecha_desde:
+                        continue
+                    if fecha_hasta and d > fecha_hasta:
+                        continue
+                    slot["dias_prog"].append(d)
         out = []
         for slot in agg.values():
+            per = self.periodo_activo(slot["dias_prog"], gap_max=gap_inactividad)
             out.append({
                 "folio": slot["folio"],
                 "total_gramos": round(slot["total_gramos"], 1),
                 "total_efectivo": round(slot["total_efectivo"], 2),
                 "n_semanas": len(slot["semanas"]),
-                "trabajadores": sorted(slot["trabajadores"])[:8],
+                "trabajadores": sorted(slot["trabajadores"])[:12],
                 "materiales": sorted(slot["materiales"]),
-                "modelos": sorted(slot["modelos"])[:6],
-                "inicio": fecha_es(slot["inicio"]) if slot["inicio"] else "—",
-                "dias_con_avance": slot["dias_con_avance"],
+                "modelos": sorted(slot["modelos"])[:8],
+                "inicio": fecha_es(per["inicio"]) if per["inicio"] else "—",
+                "fin": fecha_es(per["fin"]) if per["fin"] else "—",
+                "dias_con_avance": per["dias_con_avance"],
+                "dias_calendario": per["dias_calendario"],
+                "cerrado_por_inactividad": per["cerrado_por_inactividad"],
+                "prefijo": pref or "",
             })
         out.sort(key=lambda x: (-x["total_gramos"], x["folio"]))
-        return out[:limit]
+        return out[:limit] if limit else out
 
     def stats_diario(
         self,
@@ -552,3 +646,89 @@ class StatsService:
                 n += 1
         esum = gsum * tarifa if tarifa else 0.0
         return gsum, esum, n
+
+    def filas_para_export(
+        self,
+        vista: str = "folio",
+        q: str = "",
+        semana_ids: list[int] | None = None,
+        fecha_desde: date | None = None,
+        fecha_hasta: date | None = None,
+        agrupar: str = "dia",
+        limit: int = 5000,
+    ) -> tuple[list[str], list[list], dict]:
+        """Devuelve (headers, filas, meta) listos para Excel según la vista actual."""
+        vista = (vista or "folio").lower()
+        meta = {
+            "vista": vista,
+            "q": q or "",
+            "prefijo": self.es_prefijo_folio(q) or "",
+            "n_semanas": len(semana_ids or []),
+        }
+        if vista == "folio":
+            rows = self.stats_folio(
+                q=q, semana_ids=semana_ids,
+                fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
+                limit=limit,
+            )
+            headers = [
+                "Folio", "Gramos", "Efectivo", "Días c/avance", "Días calendario",
+                "Semanas", "Inicio activo", "Fin activo", "Inactivo>7d",
+                "Materiales", "Trabajadores",
+            ]
+            lines = []
+            for r in rows:
+                lines.append([
+                    r.get("folio"),
+                    r.get("total_gramos"),
+                    r.get("total_efectivo"),
+                    r.get("dias_con_avance"),
+                    r.get("dias_calendario"),
+                    r.get("n_semanas"),
+                    r.get("inicio"),
+                    r.get("fin"),
+                    "Sí" if r.get("cerrado_por_inactividad") else "No",
+                    ", ".join(r.get("materiales") or []),
+                    " · ".join(r.get("trabajadores") or []),
+                ])
+            return headers, lines, meta
+        if vista == "diario":
+            rows = self.stats_diario(
+                q=q, semana_ids=semana_ids,
+                fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
+                agrupar=agrupar, limit=limit,
+            )
+            headers = ["Fecha", "Grupo", "Gramos", "Efectivo", "Detalle"]
+            lines = []
+            for r in rows:
+                lines.append([
+                    r.get("fecha") or r.get("dia") or "",
+                    r.get("label") or r.get("nombre") or r.get("folio") or "",
+                    r.get("total_gramos"),
+                    r.get("total_efectivo"),
+                    r.get("detalle") or "",
+                ])
+            return headers, lines, meta
+        # trabajador
+        rows = self.stats_trabajador(
+            q=q, semana_ids=semana_ids,
+            fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
+            limit=limit,
+        )
+        headers = [
+            "Nombre", "Ubic", "Gramos", "Efectivo", "Folios", "N° folios",
+            "Semanas", "Inicio",
+        ]
+        lines = []
+        for r in rows:
+            lines.append([
+                r.get("nombre"),
+                r.get("ubic"),
+                r.get("total_gramos"),
+                r.get("total_efectivo"),
+                ", ".join(r.get("folios") or []) if isinstance(r.get("folios"), list) else r.get("folios"),
+                r.get("n_folios"),
+                r.get("n_semanas"),
+                r.get("inicio"),
+            ])
+        return headers, lines, meta

@@ -250,6 +250,7 @@ async def page_estadisticas(
             semana_ids=selected_ids or None,
             fecha_desde=fd,
             fecha_hasta=fh,
+            limit=500,
         )
     elif vista == "diario":
         rows = svc.stats_diario(

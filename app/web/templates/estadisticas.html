@@ -8,7 +8,7 @@
   </div>
 </div>
 
-<form method="get" action="/estadisticas" class="card" style="padding:1rem;margin-bottom:1rem">
+<form id="form-stats" method="get" action="/estadisticas" class="card" style="padding:1rem;margin-bottom:1rem">
   <div class="stats-filters">
     <label>Vista
       <select name="vista" id="est-vista">
@@ -45,7 +45,8 @@
       </select>
     </label>
     <label class="stats-search">Buscar
-      <input name="q" value="{{ q or '' }}" placeholder="Nombre, ubic o folio…">
+      <input name="q" value="{{ q or '' }}" placeholder="F- · ST- · P- · nombre · folio…"
+             title="Prefijo de folio: escriba F- o ST- (con guion). No confunde con nombres.">
     </label>
   </div>
 
@@ -62,11 +63,31 @@
     </div>
   </details>
 
-  <div class="stats-actions" style="margin-top:0.85rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+  <div class="stats-actions" style="margin-top:0.85rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
     <button type="submit" class="btn">Aplicar</button>
     <a class="btn btn-secondary" href="/estadisticas">Limpiar</a>
+    <button type="button" class="btn" id="btn-export-stats" title="Excel con los filtros actuales">Excel</button>
+    <span class="muted faint" style="font-size:0.8rem">Prefijo folio: <code>F-</code> <code>ST-</code> <code>P-</code> (con guion)</span>
   </div>
 </form>
+<script>
+(function(){
+  var btn = document.getElementById('btn-export-stats');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    var form = document.getElementById('form-stats') || document.querySelector('form.stats-filters') || document.querySelector('form');
+    if (!form) { location.href = '/api/export/estadisticas' + location.search; return; }
+    var fd = new FormData(form);
+    var params = new URLSearchParams();
+    fd.forEach(function(v, k){
+      if (v === null || v === undefined || v === '') return;
+      params.append(k, v);
+    });
+    // checkboxes semana_id ya van en FormData
+    window.location.href = '/api/export/estadisticas?' + params.toString();
+  });
+})();
+</script>
 
 <script>
 (function(){
@@ -333,29 +354,43 @@
 {% endif %}
 
 {% else %}
+{% if q and rows %}
+<p class="muted" style="margin:0 0 0.5rem;font-size:0.85rem">
+  {% set pref = namespace.StatsPrefijo if false else none %}
+  Filtro: <code>{{ q }}</code>
+  · {{ rows|length }} folios
+  · use <strong>Excel</strong> para exportar el histórico completo de este grupo
+</p>
+{% endif %}
 <div class="table-wrap">
 <table class="sortable" data-sortable="1">
   <thead>
     <tr>
-      <th>Folio</th><th>Gramos</th><th>$</th><th>Días c/avance</th><th>Semanas</th>
-      <th>Inicio</th><th>Materiales</th><th>Trabajadores</th><th></th>
+      <th>Folio</th><th>Gramos</th><th>$</th>
+      <th title="Días con gramos registrados">Días c/avance</th>
+      <th title="Del primer al último día activo (hueco máx. 7 días)">Días activo</th>
+      <th>Semanas</th>
+      <th>Inicio</th><th>Fin activo</th>
+      <th>Materiales</th><th>Trabajadores</th><th></th>
     </tr>
   </thead>
   <tbody>
   {% for r in rows %}
-    <tr>
+    <tr {% if r.cerrado_por_inactividad %}class="row-inactivo" title="Sin avance reciente (>7 días)"{% endif %}>
       <td><strong>{{ r.folio }}</strong></td>
       <td>{{ r.total_gramos }}</td>
-      <td>${{ '%.2f'|format(r.total_efectivo) }}</td>
+      <td>${{ '%.2f'|format(r.total_efectivo or 0) }}</td>
       <td>{{ r.dias_con_avance or '—' }}</td>
+      <td>{{ r.dias_calendario or '—' }}</td>
       <td>{{ r.n_semanas }}</td>
       <td>{{ r.inicio }}</td>
-      <td>{{ r.materiales|join(', ') }}</td>
-      <td style="font-size:0.82rem">{{ r.trabajadores|join(' · ') }}</td>
+      <td>{{ r.fin or '—' }}</td>
+      <td>{{ r.materiales|join(', ') if r.materiales else '—' }}</td>
+      <td style="font-size:0.82rem">{{ r.trabajadores|join(' · ') if r.trabajadores else '—' }}</td>
       <td><a class="btn btn-sm" href="/estadisticas?vista=folio&q={{ r.folio|urlencode }}&detalle=folio&folio={{ r.folio|urlencode }}&periodo={{ periodo or 'semanas' }}">Desglose</a></td>
     </tr>
   {% else %}
-    <tr><td colspan="8" class="muted">Sin datos.</td></tr>
+    <tr><td colspan="11" class="muted">Sin datos. Pruebe un prefijo como <code>F-</code> o <code>ST-</code>.</td></tr>
   {% endfor %}
   </tbody>
 </table>
