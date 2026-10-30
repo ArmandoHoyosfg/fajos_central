@@ -242,25 +242,33 @@ async def api_linea_reactivar(prod_id: int):
 
 @router.get("/api/produccion/folio-meta")
 async def api_folio_meta(
-    folio: str,
+    folio: str = "",
     semana_id: int | None = None,
-    repo: ProduccionRepo = Depends(get_produccion_repo),
+    trabajador_id: int | None = None,
+    nombre: str | None = None,
+    ubic: int | None = None,
+    material: str | None = None,
+    modelo: str | None = None,
 ):
-    """Características canónicas de un folio (modelo, material, tarifa)."""
+    """Sugerencias al crear/editar folio: plantilla, precio con confianza, multi-trabajador."""
+    from app.services.folio_learning import FolioLearningService
     folio = (folio or "").strip()
-    if not folio:
-        return {"ok": False, "error": "folio vacío"}
-    meta = repo.meta_por_folio(folio, semana_id=semana_id) or {}
-    if not meta.get("tarifa_gr") and meta.get("material"):
-        try:
-            from app.db.repository import HistorialPreciosRepo
-            sug = HistorialPreciosRepo().sugerir(meta.get("material"), meta.get("modelo"))
-            if sug is not None:
-                meta["tarifa_gr"] = sug
-                meta["tarifa_fuente"] = "historial"
-        except Exception:
-            pass
-    return {"ok": True, "folio": folio, **meta}
+    if not folio and not trabajador_id and not nombre:
+        return {"ok": False, "error": "Indique folio o trabajador"}
+    try:
+        ubic_i = int(ubic) if ubic not in (None, "") else None
+    except (TypeError, ValueError):
+        ubic_i = None
+    data = FolioLearningService().sugerir_formulario(
+        folio=folio,
+        material=material or "",
+        modelo=modelo or "",
+        semana_id=semana_id,
+        trabajador_id=trabajador_id,
+        nombre=nombre,
+        ubic=ubic_i,
+    )
+    return data
 
 
 

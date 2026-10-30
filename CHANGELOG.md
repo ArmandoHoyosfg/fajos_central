@@ -1,3 +1,12 @@
+## [3.42.1] — 2026-10-30
+
+### Aprendizaje modular al crear/editar folios
+- Nuevo paquete `app/services/folio_learning/` (prefijo, precio con confianza, hábitos trabajador, validadores).
+- No genera números de folio: plantillas por serie (F-, ST-), hermanos y detección de typos.
+- Folio compartido por varios trabajadores: aviso informativo (permitido).
+- Precio sugerido por moda + % de confianza.
+- UI: hint enriquecido en alta/edición de línea Plata.
+
 ## [3.42.0] — 2026-10-27
 
 ### Estadísticas: grupos de folio, periodo activo y Excel

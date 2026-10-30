@@ -192,38 +192,89 @@
     updateSelUI();
   }
 
+  function _hintHtml(data) {
+    var parts = [];
+    if (data.modelo || data.material || data.tarifa_gr != null) {
+      parts.push(
+        "<strong>" + (data.fuente === "folio_existente" ? "Folio conocido" : "Sugerido") + ":</strong> " +
+        (data.modelo || "—") + " · " + (data.material || "—") + " · $" +
+        (data.tarifa_gr != null ? data.tarifa_gr : "—")
+      );
+    }
+    if (data.tarifa_detalle) {
+      parts.push("<span class=\"muted\">" + data.tarifa_detalle + "</span>");
+    }
+    (data.avisos || []).forEach(function (a) {
+      var cls = a.nivel === "warn" ? "warn" : "muted";
+      parts.push("<span class=\"" + cls + "\">" + (a.texto || "") + "</span>");
+    });
+    if (data.similares && data.similares.length) {
+      parts.push(
+        "<span class=\"muted\">¿Quiso decir " +
+        data.similares.map(function (s) { return s.folio; }).join(", ") + "?</span>"
+      );
+    }
+    if (data.hermanos && data.hermanos.length && !data.existe) {
+      parts.push(
+        "<span class=\"muted\">Serie " + (data.prefijo || "") + ": " +
+        data.hermanos.slice(0, 4).map(function (h) { return h.folio; }).join(", ") + "</span>"
+      );
+    }
+    return parts.join("<br>");
+  }
+
   async function sugerirFolioMeta(el) {
     if (!el) return;
     var folio = String(el.value || "").trim();
-    var hint = document.getElementById("linea-folio-hint");
+    var form = el.form || document.getElementById("form-linea") || document.getElementById("form-edit-plt");
+    var hint =
+      document.getElementById("linea-folio-hint") ||
+      (form && form.querySelector(".folio-hint")) ||
+      document.getElementById("edit-folio-hint");
     if (!folio) {
-      if (hint) hint.textContent = "";
+      if (hint) hint.innerHTML = "";
       return;
     }
     try {
       var url = "/api/produccion/folio-meta?folio=" + encodeURIComponent(folio);
-      if (global.SEMANA_ID) url += "&semana_id=" + global.SEMANA_ID;
+      if (global.SEMANA_ID) url += "&semana_id=" + encodeURIComponent(global.SEMANA_ID);
+      if (form) {
+        var sel = form.querySelector("[name=trabajador_sel]");
+        if (sel && sel.value) {
+          var parts = String(sel.value).split("|");
+          if (parts[0]) url += "&nombre=" + encodeURIComponent(parts[0]);
+          if (parts[1]) url += "&ubic=" + encodeURIComponent(parts[1]);
+          if (parts[2]) url += "&trabajador_id=" + encodeURIComponent(parts[2]);
+        }
+        if (form.material && form.material.value)
+          url += "&material=" + encodeURIComponent(form.material.value);
+        if (form.modelo && form.modelo.value)
+          url += "&modelo=" + encodeURIComponent(form.modelo.value);
+      }
       var res = await fetch(url, { credentials: "same-origin" });
       var data = await res.json().catch(function () { return {}; });
       if (!data.ok) return;
-      var form = el.form || document.getElementById("form-linea");
-      if (!form) return;
-      if (data.modelo && form.modelo && !String(form.modelo.value || "").trim())
-        form.modelo.value = data.modelo;
-      if (data.material && form.material) {
-        form.material.value = data.material;
-        if (global.CatalogAssist) global.CatalogAssist.onMaterialInput(form.material);
+      if (!form) form = el.form;
+      if (form) {
+        if (data.modelo && form.modelo && !String(form.modelo.value || "").trim())
+          form.modelo.value = data.modelo;
+        if (data.material && form.material && !String(form.material.value || "").trim()) {
+          form.material.value = data.material;
+          if (global.CatalogAssist) global.CatalogAssist.onMaterialInput(form.material);
+        } else if (data.material && form.material && global.CatalogAssist) {
+          /* material ya puesto: solo refrescar tarifa si no editó el usuario */
+        }
+        if (data.tarifa_gr != null && form.tarifa_gr && form.tarifa_gr.dataset.userEdited !== "1") {
+          if (!String(form.tarifa_gr.value || "").trim() || form.tarifa_gr.value === "12")
+            form.tarifa_gr.value = data.tarifa_gr;
+          else if (!String(form.material.value || "").trim())
+            form.tarifa_gr.value = data.tarifa_gr;
+        }
       }
-      if (data.tarifa_gr != null && form.tarifa_gr && form.tarifa_gr.dataset.userEdited !== "1")
-        form.tarifa_gr.value = data.tarifa_gr;
-      if (hint) {
-        hint.textContent =
-          "Folio conocido: " +
-          (data.modelo || "—") + " · " +
-          (data.material || "—") + " · $" +
-          (data.tarifa_gr != null ? data.tarifa_gr : "—");
-      }
-    } catch (e) {}
+      if (hint) hint.innerHTML = _hintHtml(data);
+    } catch (e) {
+      if (hint) hint.textContent = "";
+    }
   }
 
   // Cerrar menú al clic fuera
