@@ -6,6 +6,18 @@ from typing import Any
 from app.db.connection import get_db
 
 
+def _es_cerrado(row: dict) -> bool:
+    notas = str(row.get("notas") or "").lower()
+    if "[terminado]" in notas or "[cerrado]" in notas:
+        return True
+    # trabajo inactivo si viene el join
+    if row.get("trabajo_activo") is not None and not row.get("trabajo_activo"):
+        return True
+    if row.get("terminado_en"):
+        return True
+    return False
+
+
 class FolioValidators:
     def __init__(self, db=None):
         self.db = db or get_db()
@@ -26,37 +38,74 @@ class FolioValidators:
         if not folio:
             return {"ok": False, "avisos": [], "portadores": [], "existe": False}
 
-        with self.db.cursor() as cur:
-            # Portadores en semana actual (o global reciente)
-            if semana_id:
-                cur.execute(
-                    """
-                    SELECT id, nombre, ubic, trabajador_id, material, modelo, tarifa_gr,
-                           COALESCE(terminado, 0) AS terminado,
-                           COALESCE(cerrado, 0) AS cerrado,
-                           COALESCE(total_gramos, 0) AS total_gramos
-                    FROM produccion_plata
-                    WHERE UPPER(TRIM(folio)) = UPPER(%s) AND semana_id = %s
-                    ORDER BY id
-                    """,
-                    (folio, int(semana_id)),
-                )
-            else:
-                cur.execute(
-                    """
-                    SELECT id, nombre, ubic, trabajador_id, material, modelo, tarifa_gr,
-                           COALESCE(terminado, 0) AS terminado,
-                           COALESCE(cerrado, 0) AS cerrado,
-                           COALESCE(total_gramos, 0) AS total_gramos, semana_id
-                    FROM produccion_plata
-                    WHERE UPPER(TRIM(folio)) = UPPER(%s)
-                    ORDER BY id DESC LIMIT 20
-                    """,
-                    (folio,),
-                )
-            rows = [dict(r) for r in (cur.fetchall() or [])]
+        try:
+            with self.db.cursor() as cur:
+                if semana_id:
+                    cur.execute(
+                        """
+                        SELECT p.id, p.nombre, p.ubic, p.trabajador_id, p.material, p.modelo,
+                               p.tarifa_gr, p.notas, p.total_gramos, p.semana_id,
+                               tj.terminado_en, tj.activo AS trabajo_activo
+                        FROM produccion_plata p
+                        LEFT JOIN trabajos tj ON tj.id = p.trabajo_id
+                        WHERE UPPER(TRIM(p.folio)) = UPPER(%s) AND p.semana_id = %s
+                        ORDER BY p.id
+                        """,
+                        (folio, int(semana_id)),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT p.id, p.nombre, p.ubic, p.trabajador_id, p.material, p.modelo,
+                               p.tarifa_gr, p.notas, p.total_gramos, p.semana_id,
+                               tj.terminado_en, tj.activo AS trabajo_activo
+                        FROM produccion_plata p
+                        LEFT JOIN trabajos tj ON tj.id = p.trabajo_id
+                        WHERE UPPER(TRIM(p.folio)) = UPPER(%s)
+                        ORDER BY p.id DESC
+                        LIMIT 20
+                        """,
+                        (folio,),
+                    )
+                rows = [dict(r) for r in (cur.fetchall() or [])]
+        except Exception:
+            # Fallback mínimo sin join trabajos
+            try:
+                with self.db.cursor() as cur:
+                    if semana_id:
+                        cur.execute(
+                            """
+                            SELECT id, nombre, ubic, trabajador_id, material, modelo,
+                                   tarifa_gr, notas, total_gramos, semana_id
+                            FROM produccion_plata
+                            WHERE UPPER(TRIM(folio)) = UPPER(%s) AND semana_id = %s
+                            ORDER BY id
+                            """,
+                            (folio, int(semana_id)),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            SELECT id, nombre, ubic, trabajador_id, material, modelo,
+                                   tarifa_gr, notas, total_gramos, semana_id
+                            FROM produccion_plata
+                            WHERE UPPER(TRIM(folio)) = UPPER(%s)
+                            ORDER BY id DESC LIMIT 20
+                            """,
+                            (folio,),
+                        )
+                    rows = [dict(r) for r in (cur.fetchall() or [])]
+            except Exception as e:
+                return {
+                    "ok": False,
+                    "existe": False,
+                    "portadores": [],
+                    "avisos": [{"nivel": "warn", "codigo": "db", "texto": "No se pudo consultar el folio."}],
+                    "error": str(e),
+                }
 
         for r in rows:
+            cerrado = _es_cerrado(r)
             portadores.append({
                 "prod_id": r.get("id"),
                 "nombre": r.get("nombre"),
@@ -65,8 +114,8 @@ class FolioValidators:
                 "material": r.get("material"),
                 "modelo": r.get("modelo"),
                 "tarifa_gr": float(r["tarifa_gr"]) if r.get("tarifa_gr") is not None else None,
-                "terminado": bool(r.get("terminado")),
-                "cerrado": bool(r.get("cerrado")),
+                "terminado": cerrado,
+                "cerrado": cerrado,
                 "total_gramos": float(r.get("total_gramos") or 0),
                 "semana_id": r.get("semana_id"),
             })
@@ -74,7 +123,6 @@ class FolioValidators:
         activos = [p for p in portadores if not p["terminado"] and not p["cerrado"]]
         cerrados = [p for p in portadores if p["terminado"] or p["cerrado"]]
 
-        # Mismo trabajador + mismo folio + misma semana → ya existe su línea
         if trabajador_id or (nombre is not None and ubic is not None):
             for p in portadores:
                 same = False
@@ -87,7 +135,10 @@ class FolioValidators:
                     avisos.append({
                         "nivel": "warn",
                         "codigo": "ya_tiene_linea",
-                        "texto": f"Este trabajador ya tiene línea del folio {folio} en la semana (material {p.get('material') or '—'}).",
+                        "texto": (
+                            f"Este trabajador ya tiene línea del folio {folio} en la semana "
+                            f"(material {p.get('material') or '—'})."
+                        ),
                     })
                     break
 
@@ -106,7 +157,6 @@ class FolioValidators:
                 "texto": f"El folio {folio} estaba cerrado/terminado; al guardar se puede reabrir en esta semana.",
             })
 
-        # Materiales distintos en el mismo folio (DOL vs AG3 es normal)
         mats = {str(p.get("material") or "").upper() for p in portadores if p.get("material")}
         if len(mats) > 1:
             avisos.append({
@@ -125,7 +175,7 @@ class FolioValidators:
         }
 
     def similares(self, folio: str, limit: int = 5) -> list[dict]:
-        """Folios parecidos (mismo prefijo + longitud cercana) para detectar typos — no genera números."""
+        """Folios parecidos (mismo prefijo) para detectar typos — no genera números."""
         import re
         folio = (folio or "").strip()
         if len(folio) < 3:
@@ -134,18 +184,22 @@ class FolioValidators:
         if not m:
             return []
         pref, rest = m.group(1).upper(), m.group(2)
-        with self.db.cursor() as cur:
-            cur.execute(
-                """
-                SELECT DISTINCT folio FROM produccion_plata
-                WHERE UPPER(TRIM(folio)) LIKE %s
-                  AND UPPER(TRIM(folio)) <> UPPER(%s)
-                ORDER BY id DESC LIMIT 40
-                """,
-                (pref + "%", folio),
-            )
-            cands = [str(r["folio"]).strip() for r in (cur.fetchall() or []) if r.get("folio")]
-        # Distancia simple: misma longitud o ±1 y muchos caracteres en común
+        if not rest:
+            return []  # solo prefijo "ST-" → no buscar typos
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT folio FROM produccion_plata
+                    WHERE UPPER(TRIM(folio)) LIKE %s
+                      AND UPPER(TRIM(folio)) <> UPPER(%s)
+                    ORDER BY id DESC LIMIT 40
+                    """,
+                    (pref + "%", folio),
+                )
+                cands = [str(r["folio"]).strip() for r in (cur.fetchall() or []) if r.get("folio")]
+        except Exception:
+            return []
         scored = []
         for c in cands:
             cu = c.upper()

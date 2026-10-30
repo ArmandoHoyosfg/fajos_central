@@ -1,3 +1,10 @@
+## [3.42.2] — 2026-10-30
+
+### Fix folio-meta 503
+- Validadores ya no consultan columnas inexistentes `terminado`/`cerrado` (usan notas `[terminado]`/`[cerrado]` y `trabajos`).
+- Consultas de plantilla por prefijo simplificadas.
+- El endpoint `/api/produccion/folio-meta` degrada en avisos suaves si falla la BD (no tumba el modal de agregar fila).
+
 ## [3.42.1] — 2026-10-30
 
 ### Aprendizaje modular al crear/editar folios

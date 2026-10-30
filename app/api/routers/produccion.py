@@ -252,6 +252,8 @@ async def api_folio_meta(
 ):
     """Sugerencias al crear/editar folio: plantilla, precio con confianza, multi-trabajador."""
     from app.services.folio_learning import FolioLearningService
+    from app.core.exceptions import AppError
+
     folio = (folio or "").strip()
     if not folio and not trabajador_id and not nombre:
         return {"ok": False, "error": "Indique folio o trabajador"}
@@ -259,16 +261,32 @@ async def api_folio_meta(
         ubic_i = int(ubic) if ubic not in (None, "") else None
     except (TypeError, ValueError):
         ubic_i = None
-    data = FolioLearningService().sugerir_formulario(
-        folio=folio,
-        material=material or "",
-        modelo=modelo or "",
-        semana_id=semana_id,
-        trabajador_id=trabajador_id,
-        nombre=nombre,
-        ubic=ubic_i,
-    )
-    return data
+    try:
+        data = FolioLearningService().sugerir_formulario(
+            folio=folio,
+            material=material or "",
+            modelo=modelo or "",
+            semana_id=semana_id,
+            trabajador_id=trabajador_id,
+            nombre=nombre,
+            ubic=ubic_i,
+        )
+        return data
+    except AppError as e:
+        # No tumbar el modal de captura: devolver vacío usable
+        return {
+            "ok": True,
+            "folio": folio,
+            "avisos": [{"nivel": "warn", "codigo": "db", "texto": "Sugerencias no disponibles temporalmente."}],
+            "error_soft": getattr(e, "message", str(e)),
+        }
+    except Exception as e:
+        return {
+            "ok": True,
+            "folio": folio,
+            "avisos": [{"nivel": "warn", "codigo": "error", "texto": "Sugerencias no disponibles."}],
+            "error_soft": str(e),
+        }
 
 
 

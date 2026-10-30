@@ -1,6 +1,7 @@
 """Plantillas por prefijo de folio (F-, ST-, P-…) a partir del historial real."""
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import Any
 
@@ -9,7 +10,6 @@ from app.db.connection import get_db
 
 def extraer_prefijo(folio: str) -> str | None:
     """ST-248 → ST- ; F-019-1 → F- ; vacío si no hay patrón letras+guion."""
-    import re
     s = (folio or "").strip().upper()
     m = re.match(r"^([A-Z]{1,8})-", s)
     return (m.group(1) + "-") if m else None
@@ -19,32 +19,32 @@ class PrefixPatternLearner:
     def __init__(self, db=None):
         self.db = db or get_db()
 
-    def plantilla(self, folio: str, limit_semanas: int = 16) -> dict[str, Any] | None:
+    def plantilla(self, folio: str, limit_rows: int = 400) -> dict[str, Any] | None:
         """Moda de material/modelo/tarifa para el prefijo del folio."""
         pref = extraer_prefijo(folio)
         if not pref:
             return None
-        with self.db.cursor() as cur:
-            cur.execute(
-                """
-                SELECT p.material, p.modelo, p.tarifa_gr
-                FROM produccion_plata p
-                INNER JOIN (
-                    SELECT id FROM semanas ORDER BY fecha_inicio DESC LIMIT %s
-                ) s ON s.id = p.semana_id
-                WHERE UPPER(TRIM(p.folio)) LIKE %s
-                  AND p.material IS NOT NULL AND TRIM(p.material) <> ''
-                ORDER BY p.id DESC
-                LIMIT 400
-                """,
-                (int(limit_semanas), pref + "%"),
-            )
-            rows = cur.fetchall() or []
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT material, modelo, tarifa_gr
+                    FROM produccion_plata
+                    WHERE UPPER(TRIM(folio)) LIKE %s
+                      AND material IS NOT NULL AND TRIM(material) <> ''
+                    ORDER BY id DESC
+                    LIMIT %s
+                    """,
+                    (pref + "%", int(limit_rows)),
+                )
+                rows = cur.fetchall() or []
+        except Exception:
+            return None
         if not rows:
             return None
         mats = Counter(str(r.get("material") or "").strip().upper() for r in rows if r.get("material"))
         mods = Counter(str(r.get("modelo") or "").strip() for r in rows if r.get("modelo"))
-        tars = Counter()
+        tars: Counter = Counter()
         for r in rows:
             if r.get("tarifa_gr") is None:
                 continue
@@ -66,7 +66,7 @@ class PrefixPatternLearner:
             "tarifa_confianza": round(tar_n / n, 2) if n and tar is not None else 0,
             "muestras": n,
             "fuente": "prefijo_historial",
-            "detalle": f"En {pref}* (últimas {limit_semanas} sem.): {mat or '—'} · {mod or '—'} · ${tar if tar is not None else '—'}",
+            "detalle": f"En {pref}* : {mat or '—'} · {mod or '—'} · ${tar if tar is not None else '—'}",
         }
 
     def hermanos(self, folio: str, limit: int = 8) -> list[dict]:
@@ -75,24 +75,25 @@ class PrefixPatternLearner:
         if not pref:
             return []
         folio_u = (folio or "").strip().upper()
-        with self.db.cursor() as cur:
-            cur.execute(
-                """
-                SELECT p.folio, p.material, p.modelo, p.tarifa_gr,
-                       COUNT(DISTINCT p.semana_id) AS n_semanas,
-                       MAX(p.id) AS max_id
-                FROM produccion_plata p
-                WHERE UPPER(TRIM(p.folio)) LIKE %s
-                  AND UPPER(TRIM(p.folio)) <> %s
-                GROUP BY p.folio, p.material, p.modelo, p.tarifa_gr
-                ORDER BY max_id DESC
-                LIMIT %s
-                """,
-                (pref + "%", folio_u, int(limit)),
-            )
-            rows = cur.fetchall() or []
+        try:
+            with self.db.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT folio, material, modelo, tarifa_gr, MAX(id) AS max_id
+                    FROM produccion_plata
+                    WHERE UPPER(TRIM(folio)) LIKE %s
+                      AND UPPER(TRIM(folio)) <> %s
+                    GROUP BY folio, material, modelo, tarifa_gr
+                    ORDER BY max_id DESC
+                    LIMIT %s
+                    """,
+                    (pref + "%", folio_u, int(limit) * 3),
+                )
+                rows = cur.fetchall() or []
+        except Exception:
+            return []
         out = []
-        seen = set()
+        seen: set[str] = set()
         for r in rows:
             f = str(r.get("folio") or "").strip()
             if not f or f.upper() in seen:
@@ -104,4 +105,6 @@ class PrefixPatternLearner:
                 "modelo": r.get("modelo"),
                 "tarifa_gr": float(r["tarifa_gr"]) if r.get("tarifa_gr") is not None else None,
             })
-        return out[:limit]
+            if len(out) >= limit:
+                break
+        return out
