@@ -46,6 +46,11 @@
 
     {% if s.es_actual %}
     <p class="sem-hint ok">Esta semana contiene la fecha de hoy.</p>
+    {% if s.uso.solo_estructura %}
+    <p class="sem-hint muted">Tiene líneas copiadas al duplicar (sin gramos aún). Puedes eliminarla si fue un error.</p>
+    {% endif %}
+    {% elif s.uso.total > 0 and s.uso.solo_estructura %}
+    <p class="sem-hint warn">Solo estructura ({{ s.uso.total }} líneas, 0 g). Si sobra, elimínala o usa <em>Alinear a actual</em>.</p>
     {% elif s.uso.total > 0 %}
     <p class="sem-hint warn">Tiene captura pero <strong>no es la de hoy</strong>. Si es un error de fechas, usa <em>Alinear a actual</em>.</p>
     {% else %}
@@ -62,11 +67,19 @@
       <a class="btn btn-secondary" href="/produccion?semana_id={{ s.id }}">Abrir Plata</a>
       <a class="btn btn-secondary" href="/nomina-pita?semana_id={{ s.id }}">Pita</a>
       <a class="btn btn-secondary" href="/nomina-taller?semana_id={{ s.id }}">Taller</a>
-      {% if s.uso.total == 0 %}
-      <button type="button" class="btn btn-danger" data-del="{{ s.id }}">Eliminar</button>
-      {% else %}
-      <button type="button" class="btn btn-secondary" disabled title="{{ s.uso.total }} línea(s) — no se borra">Con datos</button>
-      {% endif %}
+      <button type="button" class="btn btn-danger"
+              data-del="{{ s.id }}"
+              data-total="{{ s.uso.total }}"
+              data-plt="{{ s.uso.plt }}"
+              data-pit="{{ s.uso.pit }}"
+              data-tll="{{ s.uso.tll }}"
+              data-gramos="{{ s.uso.gramos_plt }}"
+              data-estructura="{{ 1 if s.uso.solo_estructura else 0 }}"
+              data-codigo="{{ s.codigo }}"
+              data-actual="{{ 1 if s.es_actual else 0 }}"
+              title="{% if s.uso.total == 0 %}Eliminar semana vacía{% elif s.uso.solo_estructura %}Eliminar estructura duplicada ({{ s.uso.total }} líneas){% else %}Eliminar semana y sus {{ s.uso.total }} líneas{% endif %}">
+        Eliminar
+      </button>
       {% if not s.cerrada %}
       <button type="button" class="btn btn-secondary" data-cerrar="{{ s.id }}">Cerrar semana</button>
       {% else %}
@@ -163,8 +176,35 @@
   document.querySelectorAll('[data-del]').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       var id = btn.getAttribute('data-del');
-      if (!confirm('¿Eliminar esta semana vacía?')) return;
-      var res = await fetch('/api/semanas/' + id, { method: 'DELETE' });
+      var total = parseInt(btn.getAttribute('data-total') || '0', 10) || 0;
+      var plt = btn.getAttribute('data-plt') || '0';
+      var pit = btn.getAttribute('data-pit') || '0';
+      var tll = btn.getAttribute('data-tll') || '0';
+      var gramos = parseFloat(btn.getAttribute('data-gramos') || '0') || 0;
+      var estr = btn.getAttribute('data-estructura') === '1';
+      var codigo = btn.getAttribute('data-codigo') || id;
+      var actual = btn.getAttribute('data-actual') === '1';
+      var msg;
+      if (total === 0) {
+        msg = '¿Eliminar la semana vacía «' + codigo + '»?';
+      } else if (estr) {
+        msg =
+          'La semana «' + codigo + '» tiene ' + total + ' línea(s) copiadas al duplicar\n' +
+          '(Plata ' + plt + ', Pita ' + pit + ', Taller ' + tll + ') y aún sin gramos en Plata.\n\n' +
+          'Se borrarán esas líneas y la semana. ¿Continuar?';
+      } else {
+        msg =
+          '¡Atención! La semana «' + codigo + '» tiene datos:\n' +
+          'Plata ' + plt + ' líneas (' + gramos + ' g), Pita ' + pit + ', Taller ' + tll + '.\n\n' +
+          'Se eliminarán TODAS esas líneas. Esta acción no se puede deshacer.\n¿Continuar?';
+      }
+      if (actual) {
+        msg = 'Esta es la semana ACTUAL (contiene hoy).\n\n' + msg;
+      }
+      if (!confirm(msg)) return;
+      if (total > 0 && !estr && !confirm('Confirma de nuevo: borrar semana «' + codigo + '» y todas sus líneas.')) return;
+      var url = '/api/semanas/' + id + (total > 0 ? '?force=1' : '');
+      var res = await fetch(url, { method: 'DELETE' });
       var data = await res.json().catch(function () { return {}; });
       if (!res.ok) { alert(parseDetail(data)); return; }
       location.reload();

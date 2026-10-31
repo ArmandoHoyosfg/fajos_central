@@ -1,3 +1,10 @@
+## [3.42.3] — 2026-10-31
+
+### Semanas: eliminar aunque vengan de duplicar
+- Al duplicar se copian líneas (aunque vayan en 0 g); ya no se bloquea con «Con datos».
+- Botón **Eliminar** siempre disponible, con confirmación y borrado en cascada (`force`).
+- Aviso si es solo estructura (sin gramos) vs. semana con captura real.
+
 ## [3.42.2] — 2026-10-30
 
 ### Fix folio-meta 503

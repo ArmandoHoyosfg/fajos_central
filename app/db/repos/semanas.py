@@ -85,47 +85,93 @@ class SemanasRepo(BaseRepo):
 
 
     def conteo_uso(self, semana_id: int) -> dict:
-        """Cuántas líneas hay en cada área (para impedir borrar semanas con datos)."""
-        out = {"plt": 0, "pit": 0, "tll": 0, "total": 0}
+        """Líneas y gramos/efectivo por área (para UI de borrado y avisos)."""
+        out = {
+            "plt": 0, "pit": 0, "tll": 0, "total": 0,
+            "gramos_plt": 0.0, "solo_estructura": False,
+        }
         with self.db.cursor() as cur:
-            for key, table in (
-                ("plt", "produccion_plata"),
-                ("pit", "produccion_pita"),
-                ("tll", "nomina_taller"),
-            ):
-                try:
-                    cur.execute(
-                        f"SELECT COUNT(*) AS n FROM {table} WHERE semana_id=%s",
-                        (semana_id,),
-                    )
-                    out[key] = int((cur.fetchone() or {}).get("n") or 0)
-                except Exception:
-                    out[key] = 0
+            try:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) AS n,
+                           COALESCE(SUM(total_gramos), 0) AS g
+                    FROM produccion_plata WHERE semana_id=%s
+                    """,
+                    (semana_id,),
+                )
+                row = cur.fetchone() or {}
+                out["plt"] = int(row.get("n") or 0)
+                out["gramos_plt"] = float(row.get("g") or 0)
+            except Exception:
+                out["plt"] = 0
+            try:
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM produccion_pita WHERE semana_id=%s",
+                    (semana_id,),
+                )
+                out["pit"] = int((cur.fetchone() or {}).get("n") or 0)
+            except Exception:
+                out["pit"] = 0
+            try:
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM nomina_taller WHERE semana_id=%s",
+                    (semana_id,),
+                )
+                out["tll"] = int((cur.fetchone() or {}).get("n") or 0)
+            except Exception:
+                out["tll"] = 0
         out["total"] = out["plt"] + out["pit"] + out["tll"]
+        # Duplicar semana crea líneas con 0g: no es "vacía" pero sí solo estructura
+        out["solo_estructura"] = out["total"] > 0 and out["gramos_plt"] <= 0.001
         return out
 
     def eliminar(self, semana_id: int, *, force: bool = False) -> dict:
         """
-        Elimina la semana. Por defecto solo si no tiene líneas.
-        force=True borra también líneas (peligroso).
+        Elimina la semana.
+        - Sin líneas: borra siempre.
+        - Con líneas: requiere force=True (borra en cascada Plata/Pita/Taller).
         """
-        from app.core.exceptions import ValidationAppError
+        from app.core.exceptions import ValidationAppError, NotFoundError
+        sem = self.obtener(semana_id) if hasattr(self, "obtener") else None
+        if sem is None:
+            with self.db.cursor() as cur:
+                cur.execute("SELECT id, codigo FROM semanas WHERE id=%s", (semana_id,))
+                sem = cur.fetchone()
+            if not sem:
+                raise NotFoundError(f"Semana id={semana_id} no existe.", details={"semana_id": semana_id})
         uso = self.conteo_uso(semana_id)
         if uso["total"] > 0 and not force:
-            raise ValidationAppError(
-                "La semana tiene datos (Plata/Pita/Taller). "
-                "No se puede eliminar. Corrige fechas o usa force solo si estás seguro.",
-                details=uso,
+            msg = (
+                f"La semana tiene {uso['total']} línea(s) "
+                f"(Plata {uso['plt']}, Pita {uso['pit']}, Taller {uso['tll']})"
             )
+            if uso.get("solo_estructura"):
+                msg += " — parecen copiadas al duplicar (sin gramos en Plata)."
+            msg += " Confirma el borrado forzado para eliminarlas junto con la semana."
+            raise ValidationAppError(msg, details=uso)
         with self.db.cursor() as cur:
-            if force and uso["total"] > 0:
-                for table in ("produccion_plata", "produccion_pita", "nomina_taller", "resumen_nominas"):
+            if uso["total"] > 0:
+                for table in (
+                    "produccion_plata",
+                    "produccion_pita",
+                    "nomina_taller",
+                    "resumen_nominas",
+                ):
                     try:
                         cur.execute(f"DELETE FROM {table} WHERE semana_id=%s", (semana_id,))
                     except Exception:
                         pass
             cur.execute("DELETE FROM semanas WHERE id=%s", (semana_id,))
-        return {"ok": True, "eliminada": semana_id, "uso_previo": uso}
+            if cur.rowcount == 0:
+                raise NotFoundError(f"Semana id={semana_id} no existe.", details={"semana_id": semana_id})
+        return {
+            "ok": True,
+            "eliminada": semana_id,
+            "codigo": (sem or {}).get("codigo"),
+            "uso_previo": uso,
+            "force": bool(force),
+        }
 
     def reabrir(self, semana_id: int) -> None:
         with self.db.cursor() as cur:
