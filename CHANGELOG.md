@@ -1,3 +1,9 @@
+## [3.42.4] — 2026-11-07
+
+### Export Taller: cantidad de pitas en torcedores
+- Sección Torcedores con encabezado propio: Nombre, Ubic, Puesto, **Pitas**, **Precio**, Total, Firma.
+- Total = Pitas × Precio (fórmula Excel). El precio unitario ya no se confunde con el sueldo.
+
 ## [3.42.3] — 2026-10-31
 
 ### Semanas: eliminar aunque vengan de duplicar
