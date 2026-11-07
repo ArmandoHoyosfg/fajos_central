@@ -1,3 +1,9 @@
+## [3.42.5] — 2026-11-07
+
+### Export Taller: sin precio por pita
+- Torcedores: Nombre, Ubic, Puesto, **Pitas**, Extras (si hay), Total, Firma.
+- Se elimina la columna de precio unitario ($/pita).
+
 ## [3.42.4] — 2026-11-07
 
 ### Export Taller: cantidad de pitas en torcedores

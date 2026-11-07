@@ -784,7 +784,7 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
         ws.merge_cells("A2:G2")
         ws["A3"] = (
             f"Semana {codigo_semana} · Periodo: {ley['periodo_captura'] or '—'} · "
-            f"{ley['cierre']} · Torcedores: columnas Pitas × Precio = Total"
+            f"{ley['cierre']} · Torcedores: Pitas y Total (sin precio unitario)"
         )
         ws["A3"].font = Font(name="Calibri", size=9, color="666666")
         ws["A3"].alignment = Alignment(wrap_text=True, vertical="center")
@@ -876,7 +876,9 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
             row_i += 1
 
         def _write_torcedor(r):
-            """Torcedor: Nombre, Ubic, Puesto, Pitas, Precio ($/pita), Total=pitas×precio, Firma."""
+            """Torcedor: Nombre, Ubic, Puesto, Pitas, (vacío), Total, Firma.
+            Sin columna de precio por pita.
+            """
             nonlocal row_i
             sueldo = float(r.get("sueldo") or 0)
             extras = float(r.get("extras") or 0)
@@ -885,50 +887,42 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
                 pitas = float(r.get("pitas") or 0)
             except (TypeError, ValueError):
                 pitas = 0.0
-            # Si no hay pitas registradas pero sí sueldo, intentar deducir
             if pitas <= 0 and sueldo > 0 and precio > 0:
                 pitas = round(sueldo / precio, 2)
 
-            # Columna D = cantidad de pitas; E = precio unitario; F = total
-            # (si hay extras raros > 0, se suman al total)
             col_d = pitas if pitas else ""
-            col_e = precio if precio else ""
-            if extras and extras > 0:
-                total_formula = (
-                    f'=IF(AND(OR(D{row_i}="",D{row_i}=0),OR(E{row_i}="",E{row_i}=0)),"",'
-                    f'IF(D{row_i}="",0,D{row_i})*IF(E{row_i}="",0,E{row_i})+{extras})'
-                )
+            # Columna E vacía (antes era precio); no se muestra $/pita
+            col_e = extras if extras and extras > 0 else ""
+            if col_e:
                 sum_extras_rows.append(row_i)
-            else:
-                total_formula = (
-                    f'=IF(OR(D{row_i}="",D{row_i}=0),"",'
-                    f'D{row_i}*IF(E{row_i}="",0,E{row_i}))'
-                )
-            # Si el sueldo guardado difiere y no hay pitas, mostrar sueldo como total de respaldo
-            if not pitas and sueldo:
-                total_formula = f'=IF(OR(D{row_i}="",D{row_i}=0),{sueldo},D{row_i}*IF(E{row_i}="",0,E{row_i}))'
+            # Total = sueldo calculado (pitas × precio ya resuelto en BD)
+            total_val = sueldo if sueldo else ""
+            if pitas and precio and not sueldo:
+                total_val = round(pitas * precio, 2)
+            if extras and extras > 0 and isinstance(total_val, (int, float)):
+                total_val = round(float(total_val) + extras, 2)
 
             vals = [
                 r.get("nombre") or "",
                 r.get("ubic"),
                 r.get("puesto") or "",
                 col_d,
-                col_e,
-                total_formula,
+                col_e if col_e else "",
+                total_val if total_val else "",
                 "" if not r.get("firmado") else "✓",
             ]
             for col, v in enumerate(vals, 1):
                 cell = ws.cell(row_i, col, v if v is not None else "")
                 cell.border = self.THIN
                 if col == 4 and isinstance(v, (int, float)):
-                    cell.number_format = "0.##"  # cantidad de pitas
-                elif col in (5, 6) and (isinstance(v, (int, float)) or (isinstance(v, str) and v.startswith("="))):
+                    cell.number_format = "0.##"
+                elif col in (5, 6) and isinstance(v, (int, float)):
                     cell.number_format = money_precio
                 if row_i % 2 == 0:
                     cell.fill = self.ALT_FILL
             data_rows_idx.append(row_i)
-            # El total (col F) entra al TOTAL TALLER; no sumar pitas ni precio unitario en D/E
-            sum_total_rows.append(row_i)
+            if isinstance(total_val, (int, float)) and total_val:
+                sum_total_rows.append(row_i)
             row_i += 1
 
         for r in normales:
@@ -940,9 +934,9 @@ class ExportService(SuministroExportMixin, CapturaExportMixin):
             cell.font = Font(name="Calibri", bold=True, size=11, color="1F4E79")
             ws.merge_cells(start_row=row_i, start_column=1, end_row=row_i, end_column=7)
             row_i += 1
-            # Encabezado propio: Pitas + Precio (en lugar de Sueldo + Extras)
+            # Pitas sí; precio por pita no
             for col, h in enumerate(
-                ["Nombre", "Ubic", "Puesto", "Pitas", "Precio", "Total", "Firma"], 1
+                ["Nombre", "Ubic", "Puesto", "Pitas", "Extras", "Total", "Firma"], 1
             ):
                 cell = ws.cell(row_i, col, h)
                 cell.fill = self.HEADER_FILL
