@@ -40,6 +40,43 @@ from app.services.export_service import ExportService, linea_tiene_gramos
 
 router = APIRouter()
 
+@router.get("/api/export/aguinaldo")
+async def api_export_aguinaldo(
+    n_semanas: int = Query(5, ge=1, le=52),
+    monto_fijo: float = Query(0, ge=0),
+    min_semanas: int = Query(1, ge=1, le=52),
+):
+    """Excel de elegibles a aguinaldo (actividad real en las últimas N semanas)."""
+    from app.services.aguinaldo_service import AguinaldoService
+    from fastapi.responses import Response
+
+    content, media, filename = AguinaldoService().export_excel(
+        n_semanas=n_semanas,
+        monto_fijo_piteador=monto_fijo,
+        min_semanas_activas=min_semanas,
+    )
+    return Response(
+        content=content,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/api/aguinaldo/preview")
+async def api_aguinaldo_preview(
+    n_semanas: int = Query(5, ge=1, le=52),
+    monto_fijo: float = Query(0, ge=0),
+    min_semanas: int = Query(1, ge=1, le=52),
+):
+    """JSON de previsualización (mismos criterios que el Excel)."""
+    from app.services.aguinaldo_service import AguinaldoService
+    return AguinaldoService().calcular(
+        n_semanas=n_semanas,
+        monto_fijo_piteador=monto_fijo,
+        min_semanas_activas=min_semanas,
+    )
+
+
 @router.get("/api/export/estadisticas")
 async def api_export_estadisticas(
     request: Request,

@@ -1,3 +1,29 @@
+## [3.43.2] — 2026-11-16
+
+### Aprendizaje: precio y modelo más acertados
+- Nueva capa `production_patterns`: aprende de capturas con gramos > 0 (ignora filas vacías).
+- Precio = moda reciente por material (/modelo), no solo el último valor del historial.
+- Sugiere modelo frecuente por material cuando el campo viene vacío.
+- Folio: prioriza historial que sí tenga modelo; trabajador: último patrón con gramos.
+- API `/api/catalogos/sugerir-tarifa` devuelve `modelos_sugeridos` y confianza.
+
+## [3.43.1] — 2026-11-16
+
+### Aguinaldo: refinamiento
+- Último pago: sábado legible (ej. sábado 25 de octubre de 2026) + código de semana.
+- Taller: 2× sueldo **solo si es sueldo fijo** con base; variable queda en blanco.
+- Área detalla Plata / Pita / Taller + puesto.
+- Script `scripts/export_muestra_anonima.py` para snapshot anónimo de BD.
+
+## [3.43.0] — 2026-11-16
+
+### Aguinaldo por actividad real
+- Nuevo `AguinaldoService`: elegibles con gramos/pagos > 0 en las últimas N semanas.
+- Piteador → monto fijo; Taller/Mixto → 2 × sueldo de referencia.
+- Excel esencial + criterios; no depende solo del flag `activo` del catálogo.
+- UI en Trabajadores: botón **Aguinaldo Excel**.
+- API: `GET /api/export/aguinaldo` y `GET /api/aguinaldo/preview`.
+
 ## [3.42.5] — 2026-11-07
 
 ### Export Taller: sin precio por pita

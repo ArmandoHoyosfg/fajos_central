@@ -160,8 +160,8 @@ async def api_sugerir_tarifa(
     modelo: str = Query(""),
 ):
     """
-    Predicción de $/g: catálogo de materiales → historial material+modelo → historial material.
-    El cliente puede sobrescribir el valor en el mismo campo de texto.
+    Predicción de $/g y modelos frecuentes.
+    Orden: producción real (moda) → historial material+modelo → catálogo.
     """
     material = (material or "").strip()
     modelo = (modelo or "").strip() or None
@@ -172,40 +172,68 @@ async def api_sugerir_tarifa(
         "tarifa_gr": None,
         "fuente": None,
         "detalle": None,
+        "confianza": None,
+        "modelos_sugeridos": [],
+        "modelo_sugerido": None,
     }
     if not material:
         return out
-    # 1) Catálogo
+
+    # 0) Modelos frecuentes para este material (aunque no haya tarifa aún)
     try:
-        from app.db.repository import CatalogosRepo
-        mats = CatalogosRepo().listar_materiales(solo_activos=True) or []
-        for m in mats:
-            nom = str(m.get("nombre") or m.get("material") or "").strip()
-            if nom.upper() == material.upper():
-                t = m.get("tarifa_por_gramo")
-                if t is None:
-                    t = m.get("tarifa_gr")
-                if t is not None and float(t) > 0:
-                    out["tarifa_gr"] = float(t)
-                    out["fuente"] = "catalogo"
-                    out["detalle"] = f"Precio de catálogo ({nom})"
-                    break
+        from app.services.folio_learning.production_patterns import ProductionPatterns
+        mods = ProductionPatterns().modelos_por_material(material, limit=5)
+        out["modelos_sugeridos"] = mods
+        if not modelo and mods:
+            top = mods[0]
+            if top.get("veces", 0) >= 5 or top.get("confianza", 0) >= 0.25:
+                out["modelo_sugerido"] = top.get("modelo")
     except Exception:
         pass
-    # 2) Historial (más específico gana si existe)
+
+    # 1) Producción real (moda con gramos > 0) — más acertada según uso actual
+    try:
+        from app.services.folio_learning.price_confidence import PriceConfidence
+        price = PriceConfidence().sugerir(material, modelo or out.get("modelo_sugerido"))
+        if price and price.get("tarifa_gr") is not None:
+            out["tarifa_gr"] = float(price["tarifa_gr"])
+            out["fuente"] = price.get("fuente")
+            out["detalle"] = price.get("detalle")
+            out["confianza"] = price.get("confianza")
+            out["alternativas"] = price.get("alternativas")
+    except Exception:
+        pass
+
+    # 2) Catálogo si aún no hay precio
+    if out["tarifa_gr"] is None:
+        try:
+            from app.db.repository import CatalogosRepo
+            mats = CatalogosRepo().listar_materiales(solo_activos=True) or []
+            for m in mats:
+                nom = str(m.get("nombre") or m.get("material") or "").strip()
+                if nom.upper() == material.upper():
+                    t = m.get("tarifa_por_gramo")
+                    if t is None:
+                        t = m.get("tarifa_gr")
+                    if t is not None and float(t) > 0:
+                        out["tarifa_gr"] = float(t)
+                        out["fuente"] = "catalogo"
+                        out["detalle"] = f"Precio de catálogo ({nom})"
+                        break
+        except Exception:
+            pass
+
+    # 3) Historial como refuerzo / detalle
     try:
         from app.db.repository import HistorialPreciosRepo
-        det = HistorialPreciosRepo().sugerir_detalle(material, modelo)
+        det = HistorialPreciosRepo().sugerir_detalle(material, modelo or out.get("modelo_sugerido"))
         if det and det.get("tarifa_gr") is not None:
-            # Prefer historial de modelo si hay; si solo catálogo, historial material también aporta aprendizaje
-            if det.get("fuente") == "historial_modelo" or out["tarifa_gr"] is None:
+            if out["tarifa_gr"] is None:
                 out["tarifa_gr"] = float(det["tarifa_gr"])
                 out["fuente"] = det.get("fuente")
                 out["detalle"] = det.get("detalle")
-            elif det.get("fuente") == "historial_material" and out.get("fuente") == "catalogo":
-                # Mostrar ambos: default catálogo, hint historial
+            elif det.get("fuente") == "historial_modelo":
                 out["historial_sugerido"] = float(det["tarifa_gr"])
-                out["detalle"] = (out.get("detalle") or "") + f" · historial reciente ${det['tarifa_gr']}"
     except Exception:
         pass
     return out

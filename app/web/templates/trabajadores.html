@@ -20,6 +20,8 @@
   <button type="button" class="btn btn-secondary" onclick="syncTodos()" title="Propaga nombre/ubic/puesto a nóminas y sueldo base (fijo) a Taller no firmado">Sincronizar nóminas</button>
   <a class="btn btn-secondary" href="/api/export/trabajadores" title="Descargar catálogo en Excel">Excel</a>
   <a class="btn btn-secondary" href="/api/export/trabajadores?activos=1" title="Solo activos">Excel activos</a>
+  <button type="button" class="btn btn-secondary" id="btn-aguinaldo"
+          title="Elegibles por actividad real (últimas N semanas)">Aguinaldo Excel</button>
   {% if duplicados %}
   <a class="btn btn-secondary" href="#unir-fichas">Fichas dobles ({{ duplicados|length }})</a>
   {% endif %}
@@ -461,4 +463,28 @@ function filterRows() {
 }
 document.addEventListener('DOMContentLoaded', filterRows);
 </script>
+
+<script>
+(function(){
+  var btn = document.getElementById('btn-aguinaldo');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var n = prompt('¿Últimas cuántas semanas? (actividad real)', '5');
+    if (n === null) return;
+    n = parseInt(n, 10);
+    if (!n || n < 1) n = 5;
+    var fijo = prompt('Monto FIJO para piteadores ($). Taller = 2 × sueldo ref.', '0');
+    if (fijo === null) return;
+    fijo = parseFloat(String(fijo).replace(',', '.')) || 0;
+    var minS = prompt('Mínimo de semanas con pago > 0', '1');
+    if (minS === null) return;
+    minS = parseInt(minS, 10) || 1;
+    window.location.href =
+      '/api/export/aguinaldo?n_semanas=' + encodeURIComponent(n) +
+      '&monto_fijo=' + encodeURIComponent(fijo) +
+      '&min_semanas=' + encodeURIComponent(minS);
+  });
+})();
+</script>
+
 {% endblock %}

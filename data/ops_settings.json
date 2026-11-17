@@ -1,0 +1,15 @@
+{
+  "anomaly_pct": 0.8,
+  "por_dia_solo_pendientes": true,
+  "por_dia_auto_sync": true,
+  "plata_solo_sin_firmar_avance": false,
+  "plata_solo_sin_firmar_sin_avance": false,
+  "plata_solo_sin_gramos_hoy": false,
+  "confirm_edit_past_days": true,
+  "gramos_step": 10,
+  "export_omit_zero": true,
+  "export_checklist": true,
+  "theme_default": "",
+  "remember_semana": true,
+  "hide_zeros_in_tables": true
+}

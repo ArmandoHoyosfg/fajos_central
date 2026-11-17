@@ -8,6 +8,7 @@ from app.db.connection import get_db
 from app.db.repos.produccion import ProduccionRepo
 from app.services.folio_learning.prefix_patterns import PrefixPatternLearner, extraer_prefijo
 from app.services.folio_learning.price_confidence import PriceConfidence
+from app.services.folio_learning.production_patterns import ProductionPatterns
 from app.services.folio_learning.worker_history import WorkerHistory
 from app.services.folio_learning.validators import FolioValidators
 
@@ -20,6 +21,7 @@ class FolioLearningService:
         self.prod = ProduccionRepo(self.db)
         self.prefix = PrefixPatternLearner(self.db)
         self.prices = PriceConfidence(self.db)
+        self.patterns = ProductionPatterns(self.db)
         self.workers = WorkerHistory(self.db)
         self.validators = FolioValidators(self.db)
 
@@ -66,12 +68,18 @@ class FolioLearningService:
 
         try:
             if folio and not solo_prefijo:
-                meta = self.prod.meta_por_folio(folio, semana_id=semana_id) or {}
+                # Preferir historial con modelo y gramos reales
+                meta = self.patterns.meta_folio_completa(folio) or {}
+                if not meta:
+                    meta = self.prod.meta_por_folio(folio, semana_id=semana_id) or {}
                 if meta:
-                    out["modelo"] = meta.get("modelo")
-                    out["material"] = meta.get("material")
-                    out["tarifa_gr"] = meta.get("tarifa_gr")
-                    out["fuente"] = "folio_existente"
+                    if meta.get("modelo"):
+                        out["modelo"] = meta.get("modelo")
+                    if meta.get("material"):
+                        out["material"] = meta.get("material")
+                    if meta.get("tarifa_gr") is not None:
+                        out["tarifa_gr"] = meta.get("tarifa_gr")
+                    out["fuente"] = meta.get("fuente") or "folio_existente"
         except Exception:
             logger.debug("meta_por_folio falló", exc_info=True)
 
@@ -122,8 +130,19 @@ class FolioLearningService:
                     out["tarifa_confianza"] = price.get("confianza")
                     out["tarifa_detalle"] = price.get("detalle")
                     out["tarifa_alternativas"] = price.get("alternativas")
+                # Modelos frecuentes para este material (ayuda cuando no los capturan)
+                mods = self.patterns.modelos_por_material(mat_eff, limit=5)
+                out["modelos_sugeridos"] = mods
+                if rellenar_vacios and not out.get("modelo") and mods:
+                    top = mods[0]
+                    # Solo auto-rellenar si hay señal clara (>=25% o >=5 usos)
+                    if top.get("veces", 0) >= 5 or top.get("confianza", 0) >= 0.25:
+                        out["modelo"] = top.get("modelo")
+                        out["modelo_sugerido"] = top
+                        if not out.get("fuente"):
+                            out["fuente"] = "modelo_material"
         except Exception:
-            logger.debug("precio falló", exc_info=True)
+            logger.debug("precio/modelo falló", exc_info=True)
 
         try:
             if trabajador_id or nombre:
@@ -133,12 +152,22 @@ class FolioLearningService:
                     ubic=ubic,
                 )
                 out["trabajador"] = wh
-                if rellenar_vacios and not folio:
-                    if not out.get("material") and wh.get("material_habitual"):
+                ult = self.patterns.ultimo_del_trabajador(
+                    trabajador_id=trabajador_id, nombre=nombre, ubic=ubic
+                )
+                if rellenar_vacios:
+                    if not out.get("material") and (ult or {}).get("material"):
+                        out["material"] = ult["material"]
+                        out["fuente"] = "trabajador_reciente"
+                    elif not out.get("material") and wh.get("material_habitual"):
                         out["material"] = wh["material_habitual"]
                         out["fuente"] = "trabajador_habitual"
-                    if not out.get("modelo") and wh.get("modelo_habitual"):
+                    if not out.get("modelo") and (ult or {}).get("modelo"):
+                        out["modelo"] = ult["modelo"]
+                    elif not out.get("modelo") and wh.get("modelo_habitual"):
                         out["modelo"] = wh["modelo_habitual"]
+                    if out.get("tarifa_gr") is None and (ult or {}).get("tarifa_gr") is not None:
+                        out["tarifa_gr"] = ult["tarifa_gr"]
         except Exception:
             logger.debug("worker history falló", exc_info=True)
 

@@ -132,6 +132,19 @@
             }
             return;
           }
+                    // Sugerir modelo si el campo está vacío y hay señal fuerte
+          var modEl = modeloField(form);
+          if (modEl && !String(modEl.value || "").trim()) {
+            var sugMod = d.modelo_sugerido;
+            if (!sugMod && d.modelos_sugeridos && d.modelos_sugeridos.length) {
+              var top = d.modelos_sugeridos[0];
+              if (top && (top.veces >= 5 || (top.confianza || 0) >= 0.25)) sugMod = top.modelo;
+            }
+            if (sugMod) {
+              modEl.value = sugMod;
+              modEl.title = "Modelo sugerido por uso frecuente con este material";
+            }
+          }
           applyTarifa(t, d.tarifa_gr, false);
           var src = d.fuente || "prediccion";
           var msg = (d.detalle || ("Sugerido $" + d.tarifa_gr + "/g")) + " · " + src;
